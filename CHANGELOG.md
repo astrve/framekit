@@ -16,8 +16,6 @@ Framekit currently follows an internal versioning approach focused on CLI stabil
   English, matching `DEFAULT_UI_LOCALE`.
 - The pipeline payload workflow test now avoids creating Windows-invalid file
   names while still checking release-name sanitisation separately.
-- The README now consistently references the GNU General Public License v3.0
-  instead of the former MIT wording.
 
 ### Changed
 
@@ -42,7 +40,7 @@ Framekit currently follows an internal versioning approach focused on CLI stabil
 
 ### Added
 - A clickable link to the official Framekit repository (`https://github.com/astrve/framekit`) and a credit line for the author in the main CLI banner.
-- Added an Apache 2.0 `LICENSE` file and declared authorship and license metadata in `pyproject.toml`.
+- Added project license metadata and repository information in `pyproject.toml`.
 - Added a README introduction with a clickable GitHub link, installation instructions, a quickstart, and a license notice.
 - Added project URLs (`Homepage`, `Repository`, `Issues`) and author metadata to `pyproject.toml` to improve PyPI metadata.
 
