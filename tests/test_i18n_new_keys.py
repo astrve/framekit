@@ -6,7 +6,6 @@ from __future__ import annotations
 # context manager to avoid polluting global locale state. Converting this module-level
 # documentation to comments ensures that imports remain at the top of the file, satisfying
 # the Ruff E402 rule without suppressing it.
-
 from framekit.core.i18n import temporary_locale, tr
 
 
@@ -29,7 +28,9 @@ def test_common_labels_are_translated_in_french_and_spanish() -> None:
         with temporary_locale(locale):
             for key, default in english_defaults.items():
                 result = tr(key, default=default)
-                assert result != default, f"Key {key} unexpectedly returned English default for locale {locale}: {result}"
+                assert result != default, (
+                    f"Key {key} unexpectedly returned English default for locale {locale}: {result}"
+                )
 
 
 def test_cleanmkv_and_pipeline_keys_are_translated() -> None:
@@ -42,7 +43,10 @@ def test_cleanmkv_and_pipeline_keys_are_translated() -> None:
         ("cleanmkv.audio_kept", "Audio tracks kept"),
         ("cleanmkv.subtitles_kept", "Subtitle tracks kept"),
         ("pipeline.success.completed", "Pipeline completed."),
-        ("selector.error.headless", "Interactive selection is not available in headless mode (no TTY)."),
+        (
+            "selector.error.headless",
+            "Interactive selection is not available in headless mode (no TTY).",
+        ),
         ("torrent.announce.none", "No announce URL configured."),
     ]
 

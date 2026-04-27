@@ -33,7 +33,8 @@ def test_settings_reset_restores_default(monkeypatch, temp_settings_store):
 
     assert settings_command_module.run_settings_reset("general.locale") == 0
 
-    assert temp_settings_store.get("general.locale") == "fr"
+    # The default UI locale for a fresh settings reset is English.
+    assert temp_settings_store.get("general.locale") == "en"
 
 
 def test_settings_set_nfo_locale(monkeypatch, temp_settings_store):

@@ -18,8 +18,6 @@ structures are handled gracefully.
 """
 
 
-
-
 def test_safe_release_folder_name_sanitises_invalid_chars() -> None:
     """release_name_from_mkv_paths should remove characters illegal on filesystems."""
     # The Path does not need to exist for release_name_from_mkv_paths to compute the name

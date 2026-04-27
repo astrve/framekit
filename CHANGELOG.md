@@ -4,6 +4,40 @@ All notable changes to Framekit are documented in this file.
 
 Framekit currently follows an internal versioning approach focused on CLI stability, media release preparation, and UX quality.
 
+## [1.1.1] - Hotfix release
+
+### Fixed
+
+- `fk --version` and `framekit --version` no longer create a user `settings.json`
+  file.
+- Fresh installs and settings resets now consistently use English (`en`) as the
+  default UI locale.
+- `tests/test_settings_command.py` now expects `general.locale` to reset to
+  English, matching `DEFAULT_UI_LOCALE`.
+- The pipeline payload workflow test now avoids creating Windows-invalid file
+  names while still checking release-name sanitisation separately.
+- The README now consistently references the GNU General Public License v3.0
+  instead of the former MIT wording.
+
+### Changed
+
+- Updated the project version to `1.1.1` in package metadata and runtime version
+  reporting.
+- Clarified in the README that `mediainfo` and `mkvmerge` are external tools
+  required for the full workflow and are not bundled with Framekit.
+- Kept the public PyPI distribution name as `framekit-cli`, with `fk` and
+  `framekit` as CLI entry points.
+
+### Documentation
+
+- Added clearer external-tool guidance for users installing Framekit from PyPI.
+- Cleaned up licensing wording so README, package metadata and `LICENSE` all
+  point to GPL-3.0.
+- Documented this release as a small corrective hotfix after the first public
+  `1.1.0` release.
+
+---
+
 ## [1.1.0] - Release v1.1.0
 
 ### Added
@@ -418,14 +452,6 @@ Framekit currently follows an internal versioning approach focused on CLI stabil
   - simplified displayed information;
   - logical subtitle deduplication for season packs.
 - Updated README documentation.
-
-### Removed
-- Removed downloader-related code and references.
-- Removed external tools that are not required by Framekit core:
-  - `ffmpeg`;
-  - `ffprobe`;
-  - `aria2c`;
-  - `n_m3u8dl_re`.
 
 ### Fixed
 - Fixed “Complete season” badge being displayed when episodes were missing.

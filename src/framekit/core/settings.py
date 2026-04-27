@@ -19,7 +19,7 @@ NFO_LOCALE_TO_METADATA_LANGUAGE = {
     "fr": "fr-FR",
     "es": "es-ES",
 }
-DEFAULT_UI_LOCALE = "fr"
+DEFAULT_UI_LOCALE = "en"
 DEFAULT_NFO_LOCALE = "auto"
 DEFAULT_METADATA_LANGUAGE = "en-US"
 METADATA_LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
