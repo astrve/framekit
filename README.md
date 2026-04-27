@@ -15,7 +15,7 @@ See the [LICENSE](LICENSE) file for details.
 Framekit requires **Python 3.11** or newer. Install the latest release from PyPI with:
 
 ```bash
-pip install framekit
+pip install framekit-cli
 ```
 
 If you want to use the latest development version directly from GitHub, install with:
