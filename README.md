@@ -159,12 +159,22 @@ fk inspect "Release folder"
 
 ## External tools
 
-Required for the full workflow:
+Some workflow steps also require external tools to be installed separately.
 
-- `mediainfo`
-- `mkvmerge`
+For the full workflow, install:
 
-Framekit does not require `ffmpeg`, `ffprobe`, `aria2c`, or `n_m3u8dl_re`.
+- `mkvmerge` from **MKVToolNix** — required for CleanMKV/remux workflows.
+- `mediainfo` / **libmediainfo** — required for detailed media inspection and technical metadata.
+
+On Windows, install MKVToolNix and MediaInfo separately, then make sure their command-line tools are available in your `PATH`.
+
+You can verify your setup with:
+
+```bash
+fk doctor
+```
+
+Framekit does not bundle these external binaries.
 
 
 ## Settings and security
