@@ -9,4 +9,4 @@ parse package metadata at runtime.
 """
 
 # Keep this value in sync with the version declared in pyproject.toml.
-__version__ = "1.1.0"
+__version__ = "1.1.1"

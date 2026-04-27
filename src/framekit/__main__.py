@@ -87,7 +87,39 @@ def _friendly_click_message(exc: click.ClickException) -> str:
 
 
 def main() -> int:
+    # Extract diagnostics flags such as --debug and --log-file without consuming other
+    # arguments. We do this early so that we can handle the --version flag
+    # ourselves before performing any I/O or creating user settings files.
     args, debug, log_file = _extract_diagnostics_args(sys.argv[1:])
+
+    # If the caller requested the version, print it immediately and exit.
+    # Avoid loading locale or settings, which would otherwise create the
+    # settings.json file on disk.
+    if "--version" in args or "-V" in args:
+        try:
+            from importlib import metadata as importlib_metadata
+
+            version = None
+            for distribution_name in ("framekit-cli", "framekit"):
+                try:
+                    version = importlib_metadata.version(distribution_name)
+                    if version:
+                        break
+                except importlib_metadata.PackageNotFoundError:
+                    continue
+                except Exception:
+                    continue
+
+            if not version:
+                from framekit import __version__ as fallback_version
+
+                version = fallback_version
+        except Exception:
+            version = "unknown"
+
+        sys.stdout.write(f"framekit, version {version}\n")
+        return 0
+
     configure_from_environment()
     configure_diagnostics(debug=debug, log_file=log_file)
 
