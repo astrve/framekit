@@ -186,9 +186,6 @@ Logs and debug output follow the same redaction rules.
 
 **Headless vs interactive**: When running commands in a non-interactive environment (such as in a CI pipeline), Framekit operates in headless mode. In headless mode, any operation that would normally prompt the user to make a selection (such as choosing between multiple detected payloads or selecting a template) will instead raise a clear error. To avoid ambiguity, you can explicitly choose the payload detection mode with `--content` (`auto`, `media` or `folder`) or enable interactive selection with `--select-content`. Use `--preview` to see planned changes without writing files, and `--apply` to commit the changes.
 
-## License
-
-Framekit is distributed under the terms of the **MIT License**. See the [LICENSE](LICENSE) file for the full license text.
 
 ### Important flags
 
