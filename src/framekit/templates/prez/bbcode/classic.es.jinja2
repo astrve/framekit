@@ -1,0 +1,58 @@
+[h1]{{ bb(data.title) }}[/h1]
+
+{% if data.season_label != '-' %}[h2]{{ bb(data.season_label) }}[/h2]
+
+{% endif %}
+{% if data.heading_subtitle != '-' %}[h2]{{ bb(data.heading_subtitle) }}[/h2]
+
+{% endif %}
+{% if data.season_episode_range != '-' %}[h3]{{ bb(data.season_episode_range) }}[/h3]
+
+{% endif %}
+{% if data.season_label == '-' and data.heading_subtitle == '-' and data.season_episode_range == '-' and data.year != '-' %}[h2]{{ bb(data.year) }}[/h2]
+
+{% endif %}
+{% if data.poster_url != '-' %}
+[center][img]{{ bb(data.poster_url) }}[/img][/center]
+{% endif %}
+[size=16][b]{{ tr('prez.section.infos', default='Informations') }}[/b][/size]
+{% for field in data.info_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
+{% endfor %}
+{% if data.overview != '-' %}
+[hr]
+
+[size=16][b]{{ tr('prez.section.synopsis', default='Synopsis') }}[/b][/size]
+
+{{ bb(data.overview) }}
+{% endif %}
+{% if data.has_metadata_section %}
+[hr]
+
+[size=16][b]{{ tr('prez.section.metadata', default='Metadata') }}[/b][/size]
+{% for field in data.metadata_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
+{% endfor %}{% if data.cast != '-' %}[b]{{ tr('prez.label.cast', default='Cast') }} :[/b] {{ bb(data.cast) }}
+{% endif %}{% if data.crew != '-' %}[b]{{ tr('prez.label.crew', default='Crew') }} :[/b] {{ bb(data.crew) }}
+{% endif %}{% endif %}
+[hr]
+
+[size=16][b]{{ tr('prez.section.release', default='Release') }}[/b][/size]
+{% for field in data.release_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
+{% endfor %}
+[hr]
+
+[size=16][b]{{ tr('prez.section.technical', default='Technical information') }}[/b][/size]
+
+{{ bb(data.technical_summary) }}
+
+[size=14][b]{{ tr('prez.section.video', default='Video') }}[/b][/size]
+{% for field in data.video_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
+{% endfor %}
+
+[size=14][b]{{ tr('prez.section.audio', default='Audio') }}[/b][/size]
+
+{{ audio_table_bbcode(data.audio_tracks) }}
+
+[size=14][b]{{ tr('prez.section.subtitles', default='Subtitles') }}[/b][/size]
+
+{{ subtitle_table_bbcode(data.subtitle_tracks) }}
+{{ mediainfo_spoiler(data.mediainfo_text) }}

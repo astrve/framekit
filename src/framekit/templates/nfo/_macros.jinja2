@@ -1,0 +1,39 @@
+{% macro section(title) -%}
+════════════ {{ title }} ════════════
+{%- endmacro %}
+
+{% macro sub_section(title) -%}
+──────────── {{ title }} ────────────
+{%- endmacro %}
+
+{% macro track_section(title, track_id) -%}
+════════════ {{ title }} {{ track_id }} ════════════
+{%- endmacro %}
+
+{% macro line(label, value, width=16) -%}
+{%- if value is not none and value != '' and value != [] -%}
+{{ "%-*s"|format(width, label) }} : {{ value }}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro yesno(value, yes_label="Yes", no_label="No") -%}
+{{ yes_label if value else no_label }}
+{%- endmacro %}
+
+{% macro format_and_codec(format_name, codec, label="Format") %}
+{% set value = none %}
+{% if format_name and codec and format_name != codec %}
+{% set value = format_name ~ " / " ~ codec %}
+{% elif format_name %}
+{% set value = format_name %}
+{% elif codec %}
+{% set value = codec %}
+{% endif %}
+{{ line(label, value) }}
+{% endmacro %}
+
+{% macro stream_size(size_bytes, size_percent, width=16, label="Stream Size") -%}
+{%- if size_bytes -%}
+{{ line(label, (size_bytes | filesize) ~ (" (" ~ (size_percent | percent) ~ ")" if size_percent is not none else ""), width) }}
+{%- endif -%}
+{%- endmacro %}

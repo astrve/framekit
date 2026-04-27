@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ data.title }}</title>
+  <style>
+    :root { color-scheme: dark; {{ style_css(template_name) }} }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #020f0b; color: var(--text); font: 16px/1.55 system-ui, -apple-system, Segoe UI, sans-serif; }
+    main { max-width: 1220px; margin: 0 auto; padding: 48px 24px; background: var(--bg); min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .hero, section { border: 1px solid color-mix(in srgb, var(--line) 78%, transparent); border-radius: 24px; background: var(--hero); padding: 28px; margin-bottom: 24px; box-shadow: 0 24px 60px rgba(0,0,0,.22); }
+    .badges span { display:inline-block; margin: 0 8px 10px 0; padding: 6px 14px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 800; font-size: .86rem; }
+    h1 { font-size: clamp(2.2rem, 4.5vw, 4rem); line-height: 1.02; margin: 18px 0 8px; letter-spacing: -.04em; }
+    h2 { color: var(--accent); text-transform: uppercase; letter-spacing: .14em; font-size: 1rem; margin-top: 0; }
+    .muted { color: var(--muted); }
+    .layout { display: grid; grid-template-columns: minmax(240px, 370px) 1fr; gap: 24px; align-items: start; }
+    .poster { width: 100%; border-radius: 18px; object-fit: cover; box-shadow: 0 18px 45px rgba(0,0,0,.35); }
+    .placeholder { border: 1px dashed color-mix(in srgb, var(--line) 55%, transparent); border-radius: 18px; min-height: 320px; display:grid; place-items:center; color:var(--muted); }
+    .info-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .info-card { border: 1px solid color-mix(in srgb, var(--line) 58%, transparent); border-radius: 14px; padding: 14px; background: rgba(5,18,34,.58); min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+    .info-card.wide { grid-column: span 2; }
+    .info-card span { display:block; color: var(--accent); font-size: .78rem; font-weight: 900; text-transform: uppercase; letter-spacing:.1em; margin-bottom: 6px; }
+    .info-card strong { display:block; overflow-wrap:anywhere; }
+    table { width:100%; border-collapse: collapse; margin-top: 12px; table-layout: fixed; }
+    th, td { border: 1px solid color-mix(in srgb, var(--line) 75%, transparent); padding: 12px; text-align:left; overflow-wrap:anywhere; }
+    th { background: color-mix(in srgb, var(--line) 32%, transparent); }
+    .flag { width:20px; height:15px; vertical-align:-2px; margin-right: 7px; border-radius:2px; }
+    pre { white-space: pre-wrap; overflow:auto; background:#071225; padding:16px; border-radius:14px; }
+    details { margin-top: 24px; border: 1px solid color-mix(in srgb, var(--line) 55%, transparent); border-radius: 18px; padding: 16px; background: rgba(0,0,0,.22); }
+    summary { cursor: pointer; color: var(--accent); font-weight: 800; text-transform: uppercase; letter-spacing: .12em; }
+    @media (max-width: 820px) { main { padding: 24px 14px; } .layout { grid-template-columns: 1fr; } .info-card.wide { grid-column: span 1; } }
+  </style>
+</head>
+<body class="{{ body_class(template_name) }}">
+<main>
+  <div class="hero">
+    <div class="badges">{% for badge in data.badges %}<span>{{ badge }}</span>{% endfor %}</div>
+    <h1>{{ data.title }}</h1>
+    {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+    {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+    {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+    {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+    <strong>{{ data.technical_summary }}</strong>
+  </div>
+  <div class="layout">
+    <aside>{% if data.poster_url != '-' %}<img class="poster" src="{{ data.poster_url }}" alt="poster">{% endif %}</aside>
+    <div>
+      {% if data.overview != '-' %}<section><h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2><p>{{ data.overview }}</p></section>{% endif %}
+      {% if data.info_fields %}<section><h2>{{ tr('prez.section.infos', default='Informations') }}</h2><div class="info-grid">{% for field in data.info_fields %}<div class="info-card{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></section>{% endif %}
+      {% if data.release_fields %}<section><h2>{{ tr('prez.section.release', default='Release') }}</h2><div class="info-grid">{% for field in data.release_fields %}<div class="info-card{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></section>{% endif %}
+    </div>
+  </div>
+  {% if data.has_metadata_section %}<section><h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>{% if data.metadata_fields %}<div class="info-grid">{% for field in data.metadata_fields %}<div class="info-card{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div>{% endif %}{% if data.cast != '-' %}<p><strong>{{ tr('prez.label.cast', default='Cast') }}:</strong> {{ data.cast }}</p>{% endif %}{% if data.crew != '-' %}<p><strong>{{ tr('prez.label.crew', default='Crew') }}:</strong> {{ data.crew }}</p>{% endif %}</section>{% endif %}
+  {% if data.video_fields %}<section><h2>{{ tr('prez.section.video', default='Video') }}</h2><div class="info-grid">{% for field in data.video_fields %}<div class="info-card{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></section>{% endif %}
+  <section><h2>{{ tr('prez.section.audio', default='Audio') }}</h2>{{ audio_table_html(data.audio_tracks)|safe }}</section>
+  <section><h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>{{ subtitle_table_html(data.subtitle_tracks)|safe }}</section>
+  {% if data.has_mediainfo %}<details><summary>{{ tr('prez.section.mediainfo', default='MediaInfo') }}</summary><pre>{{ data.mediainfo_text }}</pre></details>{% endif %}
+</main>
+</body>
+</html>

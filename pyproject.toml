@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "framekit"
+# Bump the version number for the 1.1.0 release.
+# This final pass aggregates the work from previous passes and prepares
+# the project for public release on GitHub.
+version = "1.1.0"
+description = "Headless-first media workflow toolkit"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "click",
+  "rich-click",
+  "rich",
+  "platformdirs",
+  "langcodes",
+  "language-data",
+  "PyYAML",
+  "babel",
+  "pathvalidate",
+  "filelock",
+  "bencode-open",
+  "jinja2",
+  "pymediainfo",
+]
+
+# Author and licensing metadata for publication. Added in pass 5 to acknowledge
+# the original creator and provide a proper license declaration.
+authors = [{ name = "astrve" }]
+license = { text = "GPL-3.0-only" }
+
+# Project URLs for the package metadata. These entries help tools like
+# pip and PyPI display the homepage, repository and issue tracker.
+[project.urls]
+Homepage = "https://github.com/astrve/framekit"
+Repository = "https://github.com/astrve/framekit"
+Issues = "https://github.com/astrve/framekit/issues"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-cov>=5.0.0",
+  "ruff>=0.6.0",
+  "pyright>=1.1.0",
+  "pip-audit>=2.7.0",
+]
+
+[project.scripts]
+framekit = "framekit.__main__:main"
+fk = "framekit.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "UP",
+  "B",
+  "SIM",
+]
+ignore = [
+  "E501",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+[tool.setuptools.package-data]
+"framekit.templates.nfo" = ["*.jinja2"]
+"framekit.templates.prez.html" = ["*.jinja2"]
+"framekit.templates.prez.bbcode" = ["*.jinja2"]
+"framekit.locales" = ["*.json"]

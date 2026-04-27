@@ -1,0 +1,93 @@
+{% import "_macros.jinja2" as ui %}
+
+{% if logo_text %}
+{{ logo_text }}
+
+{% endif %}
+
+{{ ui.section("GENERAL") }}
+{{ ui.line("Series", release.series_title) }}
+{{ ui.line("Year", release.year) }}
+{{ ui.line("Team", release.team) }}
+{{ ui.line("Source", release.source) }}
+{{ ui.line("Resolution", release.resolution) }}
+{{ ui.line("Video", release.video_tag) }}
+{{ ui.line("Audio", release.audio_tag) }}
+{{ ui.line("Language", release.language_tag) }}
+{{ ui.line("Audio Languages", release.audio_languages_display) }}
+{{ ui.line("HDR", release.hdr_display) }}
+{{ ui.line("Full Name", release.release_title) }}
+{{ ui.line("File Size", release.total_size_bytes | filesize) }}
+{{ ui.line("Total Duration", release.total_duration_ms | duration_ms) }}
+{% if metadata_episode %}
+{{ ui.section("METADATA") }}
+
+
+{{ ui.line("Episode Title", metadata_episode.episode_title) }}
+{{ ui.line("Air Date", metadata_episode.air_date) }}
+{{ ui.line("IMDb ID", metadata_episode.imdb_id) }}
+{{ ui.line("IMDb URL", metadata_episode.external_url) }}
+
+{% if metadata_episode.overview %}
+{{ ui.section("EPISODE OVERVIEW") }}
+
+
+{{ metadata_episode.overview }}
+{% endif %}
+{% endif %}
+{% if release.subtitle_summary_lines %}
+{{ ui.section("SUBTITLES") }}
+
+
+
+{{ "- " ~ (release.subtitle_summary_lines | join("\n- ")) }}
+{% endif %}
+{% set episode = episodes[0] if episodes else none %}
+{% if episode %}
+{{ ui.section("EPISODE") }}
+{{ ui.line("File", episode.file_name) }}
+{{ ui.line("Season/Episode", episode.episode_code) }}
+{{ ui.line("Title", episode.episode_title) }}
+{{ ui.line("Size", episode.size_bytes | filesize) }}
+{{ ui.line("Duration", episode.duration_ms | duration_ms) }}
+{{ ui.line("Overall Bitrate", episode.overall_bitrate_kbps | bitrate_kbps) }}
+{{ ui.line("Resolution", episode.resolution) }}
+{{ ui.line("Aspect", episode.aspect_ratio_display) }}
+{{ ui.line("Video", episode.video_codec) }}
+{{ ui.line("HDR", episode.hdr_display) }}
+
+{% for track in episode.video_tracks %}
+{{ ui.track_section("VIDEO TRACK", track.display_id) }}
+{{ ui.format_and_codec(track.format_name, track.codec) }}
+{{ ui.stream_size(track.size_bytes, track.size_percent) }}
+{{ ui.line("Bitrate", track.bitrate | bitrate) }}
+{{ ui.line("Bit Depth", track.bit_depth | bitdepth) }}
+{{ ui.line("FPS", track.frame_rate | fps) }}
+
+{% endfor %}
+{% for track in episode.audio_tracks %}
+{{ ui.track_section("AUDIO TRACK", track.display_id) }}
+{{ ui.line("Language", track.language_display) }}
+{{ ui.line("Language Tag", track.language_short.upper() if track.language_short else none) }}
+{{ ui.format_and_codec(track.format_name, track.codec) }}
+{{ ui.line("Channels", track.channels) }}
+{{ ui.stream_size(track.size_bytes, track.size_percent) }}
+{{ ui.line("Bitrate", track.bitrate | bitrate) }}
+{{ ui.line("Title", track.title) }}
+{{ ui.line("Default", ui.yesno(track.is_default)) }}
+
+{% endfor %}
+{% for track in episode.subtitle_tracks %}
+{{ ui.track_section("SUBTITLE TRACK", track.display_id) }}
+{{ ui.line("Language", track.language_display) }}
+{{ ui.line("Language Tag", track.language_short.upper() if track.language_short else none) }}
+{{ ui.line("Variant", track.subtitle_variant) }}
+{{ ui.format_and_codec(track.format_name, track.codec) }}
+{{ ui.stream_size(track.size_bytes, track.size_percent) }}
+{{ ui.line("Bitrate", track.bitrate | bitrate) }}
+{{ ui.line("Title", track.title) }}
+{{ ui.line("Default", ui.yesno(track.is_default)) }}
+{{ ui.line("Forced", ui.yesno(track.is_forced)) }}
+
+{% endfor %}
+{% endif %}

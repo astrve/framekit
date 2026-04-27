@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Framekit local artifacts
+*.zip
+*.patch
+*.diff
+*.rej
+*.log
+*.jsonl
+
+# Local settings / secrets
+settings.json
+.env
+.env.*
+*.local.json
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Development/tooling artefacts
+uv.lock
+pyrightconfig.json
+
+# Local generated folders
+project/
+scripts/

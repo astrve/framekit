@@ -1,0 +1,61 @@
+{% import "_macros.jinja2" as ui %}
+
+{% if logo_text %}
+{{ logo_text }}
+
+{% endif %}
+
+{{ ui.section("GÉNÉRAL") }}
+
+{{ ui.line("Série", release.series_title) }}
+{{ ui.line("Année", release.year) }}
+{{ ui.line("Groupe", release.team) }}
+{{ ui.line("Source", release.source) }}
+{{ ui.line("Résolution", release.resolution) }}
+{{ ui.line("Vidéo", release.video_tag) }}
+{{ ui.line("Audio", release.audio_tag) }}
+{{ ui.line("Langue", release.language_tag) }}
+{{ ui.line("Langues audio", release.audio_languages_display) }}
+{{ ui.line("HDR", release.hdr_display) }}
+{{ ui.line("Nom complet", release.release_title) }}
+{{ ui.line("Taille totale", release.total_size_bytes | filesize) }}
+{{ ui.line("Durée totale", release.total_duration_ms | duration_ms) }}
+{% if metadata_episode %}
+{{ ui.section("MÉTADONNÉES") }}
+
+
+{{ ui.line("Titre de l’épisode", metadata_episode.episode_title) }}
+{{ ui.line("Date de diffusion", metadata_episode.air_date) }}
+{{ ui.line("IMDb ID", metadata_episode.imdb_id) }}
+{{ ui.line("IMDb URL", metadata_episode.external_url) }}
+
+{% if metadata_episode.overview %}
+{{ ui.section("SYNOPSIS DE L’ÉPISODE") }}
+
+
+{{ metadata_episode.overview }}
+{% endif %}
+{% endif %}
+{% if release.subtitle_summary_lines %}
+{{ ui.section("SOUS-TITRES") }}
+
+
+
+{{ "- " ~ (release.subtitle_summary_lines | join("\n- ")) }}
+{% endif %}
+{% set episode = episodes[0] if episodes else none %}
+{% if episode %}
+{{ ui.section("ÉPISODE") }}
+{{ ui.line("Fichier", episode.file_name) }}
+{{ ui.line("Saison/Épisode", episode.episode_code) }}
+{{ ui.line("Titre", episode.episode_title) }}
+{{ ui.line("Taille", episode.size_bytes | filesize) }}
+{{ ui.line("Durée", episode.duration_ms | duration_ms) }}
+{{ ui.line("Débit global", episode.overall_bitrate_kbps | bitrate_kbps) }}
+{{ ui.line("Résolution", episode.resolution) }}
+{{ ui.line("Ratio d’image", episode.aspect_ratio_display) }}
+{{ ui.line("Vidéo", episode.video_codec) }}
+{{ ui.line("HDR", episode.hdr_display) }}
+{{ ui.line("Audio", episode.audio_summary | join(" | ")) }}
+{{ ui.line("Sous-titres", episode.subtitle_summary | join(" | ")) }}
+{% endif %}

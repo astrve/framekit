@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ data.title }}</title>
+  <style>
+    :root { color-scheme: dark; {{ style_css(template_name) }} }
+    * { box-sizing: border-box; }
+    body { margin:0; background:radial-gradient(circle at 18% 8%, color-mix(in srgb,var(--line) 24%,transparent), transparent 34%), var(--bg); color:var(--text); font:16px/1.62 Inter,system-ui,-apple-system,Segoe UI,sans-serif; }
+    a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+    main { max-width:1180px; margin:0 auto; padding:44px 22px 72px; }
+    .hero { display:grid; grid-template-columns:minmax(260px,0.95fr) minmax(0,1.25fr); gap:30px; align-items:stretch; padding:30px; border:1px solid color-mix(in srgb,var(--line) 54%,transparent); background:var(--hero); box-shadow:0 28px 90px rgba(0,0,0,.36); }
+    .eyebrow { color:var(--accent2); text-transform:uppercase; letter-spacing:.22em; font-size:.75rem; font-weight:900; }
+    h1 { margin:.1em 0 .18em; font-size:clamp(2.4rem,7vw,6.7rem); line-height:.9; letter-spacing:-.07em; }
+    .sub { display:flex; flex-wrap:wrap; gap:10px; margin:18px 0 0; }
+    .sub span { border-left:3px solid var(--accent); padding:5px 12px; background:color-mix(in srgb,var(--card) 68%,transparent); color:var(--muted); font-weight:800; }
+    .poster { display:block; width:100%; max-width:100%; max-height:420px; object-fit:contain; border-radius:24px; box-shadow:0 22px 70px rgba(0,0,0,.42); margin:0 auto; }
+    .hero aside { order:0; display:flex; align-items:center; justify-content:center; min-width:0; overflow:hidden; }
+    .placeholder { display:none; }
+    .timeline { position:relative; margin-top:38px; padding-left:34px; }
+    .timeline:before { content:""; position:absolute; left:7px; top:10px; bottom:10px; width:2px; background:linear-gradient(var(--accent), transparent); }
+    .step { position:relative; margin:0 0 26px; padding:0 0 26px 22px; border-bottom:1px solid color-mix(in srgb,var(--line) 36%,transparent); }
+    .step:before { content:""; position:absolute; left:-33px; top:.45em; width:15px; height:15px; border-radius:999px; background:var(--accent); box-shadow:0 0 0 7px color-mix(in srgb,var(--accent) 16%,transparent); }
+    h2 { margin:0 0 14px; color:var(--accent); text-transform:uppercase; letter-spacing:.16em; font-size:.82rem; }
+    .field-list { display:grid; grid-template-columns:repeat(12,1fr); gap:12px 18px; }
+    .field { grid-column:span 4; min-width:0; overflow-wrap:anywhere; padding:12px 0; }
+    .field.wide { grid-column:span 12; }
+    .field span { display:block; color:var(--muted); text-transform:uppercase; letter-spacing:.11em; font-size:.73rem; font-weight:900; }
+    .field strong { display:block; margin-top:4px; font-size:1.02rem; overflow-wrap:anywhere; }
+    .summary { font-size:1.08rem; color:var(--text); font-weight:800; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; margin-top:10px; }
+    th,td { padding:10px 8px; border-bottom:1px solid color-mix(in srgb,var(--line) 48%,transparent); text-align:left; overflow-wrap:anywhere; }
+    th { color:var(--accent2); text-transform:uppercase; font-size:.72rem; letter-spacing:.1em; }
+    .flag { width:20px; height:15px; vertical-align:-2px; margin-right:7px; border-radius:2px; }
+    details { margin-top:30px; border:1px solid color-mix(in srgb,var(--line) 55%,transparent); padding:18px; background:color-mix(in srgb,var(--card) 70%,transparent); }
+    summary { cursor:pointer; color:var(--accent); font-weight:900; text-transform:uppercase; letter-spacing:.12em; }
+    pre { white-space:pre-wrap; overflow:auto; }
+    @media (max-width: 840px) { .hero { grid-template-columns:1fr; padding:22px; } .field { grid-column:span 12; } main { padding:24px 14px; } .hero aside { order:-1; } .poster { max-height:360px; } }
+  </style>
+</head>
+<body class="{{ body_class(template_name) }}">
+<main>
+  <header class="hero">
+    <div>
+      <div class="eyebrow">{{ data.release_name }}</div>
+      <h1>{{ data.title }}</h1>
+      <div class="sub">
+        {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+        {% if data.heading_subtitle != '-' %}<span>{{ data.heading_subtitle }}</span>{% endif %}
+        {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+        {% if data.subtitle_line %}<span>{{ data.subtitle_line }}</span>{% endif %}
+      </div>
+      <p class="summary">{{ data.technical_summary }}</p>
+    </div>
+    <aside>{% if data.poster_url != '-' %}<img class="poster" src="{{ data.poster_url }}" alt="poster">{% endif %}</aside>
+  </header>
+
+  <section class="timeline">
+    {% if data.overview != '-' %}<article class="step"><h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2><p>{{ data.overview }}</p></article>{% endif %}
+    {% if data.info_fields %}<article class="step"><h2>{{ tr('prez.section.infos', default='Informations') }}</h2><div class="field-list">{% for field in data.info_fields %}<div class="field{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></article>{% endif %}
+    {% if data.has_metadata_section %}<article class="step"><h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>{% if data.metadata_fields %}<div class="field-list">{% for field in data.metadata_fields %}<div class="field{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div>{% endif %}{% if data.cast != '-' %}<p><strong>{{ tr('prez.label.cast', default='Cast') }}:</strong> {{ data.cast }}</p>{% endif %}{% if data.crew != '-' %}<p><strong>{{ tr('prez.label.crew', default='Crew') }}:</strong> {{ data.crew }}</p>{% endif %}</article>{% endif %}
+    {% if data.release_fields %}<article class="step"><h2>{{ tr('prez.section.release', default='Release') }}</h2><div class="field-list">{% for field in data.release_fields %}<div class="field{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></article>{% endif %}
+    {% if data.video_fields %}<article class="step"><h2>{{ tr('prez.section.video', default='Video') }}</h2><div class="field-list">{% for field in data.video_fields %}<div class="field{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></article>{% endif %}
+    <article class="step"><h2>{{ tr('prez.section.audio', default='Audio') }}</h2>{{ audio_table_html(data.audio_tracks)|safe }}</article>
+    <article class="step"><h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>{{ subtitle_table_html(data.subtitle_tracks)|safe }}</article>
+  </section>
+  {% if data.has_mediainfo %}<details><summary>{{ tr('prez.section.mediainfo', default='MediaInfo') }}</summary><pre>{{ data.mediainfo_text }}</pre></details>{% endif %}
+</main>
+</body>
+</html>

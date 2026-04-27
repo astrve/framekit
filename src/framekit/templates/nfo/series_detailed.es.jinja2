@@ -1,0 +1,104 @@
+{% import "_macros.jinja2" as ui %}
+
+{% if logo_text %}
+{{ logo_text }}
+
+{% endif %}
+
+{{ ui.section("GENERAL") }}
+
+{{ ui.line("Serie", release.series_title) }}
+{{ ui.line("Año", release.year) }}
+{{ ui.line("Grupo", release.team) }}
+{{ ui.line("Fuente", release.source) }}
+{{ ui.line("Resolución", release.resolution) }}
+{{ ui.line("Vídeo", release.video_tag) }}
+{{ ui.line("Audio", release.audio_tag) }}
+{{ ui.line("Idioma", release.language_tag) }}
+{{ ui.line("Idiomas de audio", release.audio_languages_display) }}
+{{ ui.line("HDR", release.hdr_display) }}
+{{ ui.line("Nombre completo", release.release_title) }}
+{{ ui.line("Tamaño total", release.total_size_bytes | filesize) }}
+{{ ui.line("Duración total", release.total_duration_ms | duration_ms) }}
+{{ ui.line("Completitud de episodios", episode_completeness) }}
+
+
+{% if metadata_season %}
+{{ ui.section("METADATOS") }}
+
+
+{{ ui.line("Temporada", metadata_season.season_number) }}
+{{ ui.line("IMDb ID", metadata_season.imdb_id) }}
+{{ ui.line("IMDb URL", metadata_season.external_url) }}
+
+{% if metadata_season.overview %}
+{{ ui.section("SINOPSIS DE LA SERIE") }}
+
+
+{{ metadata_season.overview }}
+{% endif %}
+{% endif %}
+{% if release.subtitle_summary_by_episode %}
+{{ ui.section("SUBTÍTULOS POR EPISODIO") }}
+
+
+{{ release.subtitle_summary_by_episode | join("\n\n") }}
+{% endif %}
+
+{{ ui.section("EPISODIOS") }}
+{% for episode in episodes %}
+{% set meta_episode = metadata_episode_map.get(episode.episode_code) if metadata_episode_map else none %}
+{{ ui.section(episode.episode_code or episode.file_name) }}
+{{ ui.line("Título", meta_episode.episode_title if meta_episode and meta_episode.episode_title else episode.episode_title) }}
+{{ ui.line("Fecha de emisión", meta_episode.air_date if meta_episode else none) }}
+
+{% if meta_episode and meta_episode.overview %}
+{{ ui.line("Sinopsis del episodio", meta_episode.overview) }}
+
+{% endif %}
+
+{{ ui.line("Archivo", episode.file_name) }}
+{{ ui.line("Temporada/Episodio", episode.episode_code) }}
+{{ ui.line("Tamaño", episode.size_bytes | filesize) }}
+{{ ui.line("Duración", episode.duration_ms | duration_ms) }}
+{{ ui.line("Tasa de bits global", episode.overall_bitrate_kbps | bitrate_kbps) }}
+{{ ui.line("Resolución", episode.resolution) }}
+{{ ui.line("Relación de aspecto", episode.aspect_ratio_display) }}
+{{ ui.line("Vídeo", episode.video_codec) }}
+{{ ui.line("HDR", episode.hdr_display) }}
+
+{% for track in episode.video_tracks %}
+{{ ui.track_section("PISTA DE VÍDEO", track.display_id) }}
+{{ ui.format_and_codec(track.format_name, track.codec, "Formato") }}
+{{ ui.stream_size(track.size_bytes, track.size_percent, label="Tamaño del flujo") }}
+{{ ui.line("Tasa de bits", track.bitrate | bitrate) }}
+{{ ui.line("Profundidad de bits", track.bit_depth | bitdepth) }}
+{{ ui.line("FPS", track.frame_rate | fps) }}
+
+{% endfor %}
+{% for track in episode.audio_tracks %}
+{{ ui.track_section("PISTA DE AUDIO", track.display_id) }}
+{{ ui.line("Idioma", track.language_display) }}
+{{ ui.line("Etiqueta de idioma", track.language_short.upper() if track.language_short else none) }}
+{{ ui.format_and_codec(track.format_name, track.codec, "Formato") }}
+{{ ui.line("Canales", track.channels) }}
+{{ ui.stream_size(track.size_bytes, track.size_percent, label="Tamaño del flujo") }}
+{{ ui.line("Tasa de bits", track.bitrate | bitrate) }}
+{{ ui.line("Título", track.title) }}
+{{ ui.line("Predeterminada", ui.yesno(track.is_default, "Sí", "No")) }}
+
+{% endfor %}
+{% for track in episode.subtitle_tracks %}
+{{ ui.track_section("PISTA DE SUBTÍTULOS", track.display_id) }}
+{{ ui.line("Idioma", track.language_display) }}
+{{ ui.line("Etiqueta de idioma", track.language_short.upper() if track.language_short else none) }}
+{{ ui.line("Variante", track.subtitle_variant) }}
+{{ ui.format_and_codec(track.format_name, track.codec, "Formato") }}
+{{ ui.stream_size(track.size_bytes, track.size_percent, label="Tamaño del flujo") }}
+{{ ui.line("Tasa de bits", track.bitrate | bitrate) }}
+{{ ui.line("Título", track.title) }}
+{{ ui.line("Predeterminada", ui.yesno(track.is_default, "Sí", "No")) }}
+{{ ui.line("Forzado", ui.yesno(track.is_forced, "Sí", "No")) }}
+
+{% endfor %}
+{% endfor %}

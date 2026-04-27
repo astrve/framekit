@@ -1,0 +1,32 @@
+[h1]{{ bb(data.title) }}[/h1]
+
+{% if data.season_label != '-' %}[h2]{{ bb(data.season_label) }}[/h2]
+
+{% endif %}
+{% if data.heading_subtitle != '-' %}[h2]{{ bb(data.heading_subtitle) }}[/h2]
+
+{% endif %}
+{% if data.season_episode_range != '-' %}[h3]{{ bb(data.season_episode_range) }}[/h3]
+
+{% endif %}
+{% if data.season_label == '-' and data.heading_subtitle == '-' and data.season_episode_range == '-' and data.year != '-' %}[h2]{{ bb(data.year) }}[/h2]
+
+{% endif %}
+{% if data.poster_url != '-' %}
+[center][img]{{ bb(data.poster_url) }}[/img][/center]
+{% endif %}
+[b]{{ tr('prez.section.technical', default='Technical information') }}[/b]
+{{ bb(data.technical_summary) }}
+
+[b]{{ tr('prez.section.video', default='Video') }}[/b]
+{% for field in data.video_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
+{% endfor %}
+[b]{{ tr('prez.section.audio', default='Audio') }}[/b]
+{{ audio_table_bbcode(data.audio_tracks) }}
+
+[b]{{ tr('prez.section.subtitles', default='Subtitles') }}[/b]
+{{ subtitle_table_bbcode(data.subtitle_tracks) }}
+
+[b]{{ tr('prez.section.release', default='Release') }}[/b]
+{% for field in data.release_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
+{% endfor %}{{ mediainfo_spoiler(data.mediainfo_text) }}

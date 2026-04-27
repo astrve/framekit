@@ -1,0 +1,59 @@
+{% import "_macros.jinja2" as ui %}
+
+{% if logo_text %}
+{{ logo_text }}
+
+{% endif %}
+
+{{ ui.section("GENERAL") }}
+
+{{ ui.line("Series", release.series_title) }}
+{{ ui.line("Year", release.year) }}
+{{ ui.line("Team", release.team) }}
+{{ ui.line("Source", release.source) }}
+{{ ui.line("Resolution", release.resolution) }}
+{{ ui.line("Video", release.video_tag) }}
+{{ ui.line("Audio", release.audio_tag) }}
+{{ ui.line("Language", release.language_tag) }}
+{{ ui.line("Audio Languages", release.audio_languages_display) }}
+{{ ui.line("HDR", release.hdr_display) }}
+{{ ui.line("Full Name", release.release_title) }}
+{{ ui.line("File Size", release.total_size_bytes | filesize) }}
+{{ ui.line("Total Duration", release.total_duration_ms | duration_ms) }}
+{% if metadata_season %}
+{{ ui.section("METADATA") }}
+{{ ui.line("Season", metadata_season.season_number) }}
+{{ ui.line("IMDb ID", metadata_season.imdb_id) }}
+{{ ui.line("IMDb URL", metadata_season.external_url) }}
+
+{% if metadata_season.overview %}
+{{ ui.section("SERIES OVERVIEW") }}
+
+
+{{ metadata_season.overview }}
+{% endif %}
+{% endif %}
+{% if release.subtitle_summary_lines %}
+{{ ui.section("SUBTITLES") }}
+
+
+{{ "- " ~ (release.subtitle_summary_lines | join("\n- ")) }}
+
+{% endif %}
+{{ ui.section("EPISODES") }}
+{% for episode in episodes %}
+{{ ui.sub_section(episode.episode_code or episode.file_name) }}
+{{ ui.line("File", episode.file_name) }}
+{{ ui.line("Season/Episode", episode.episode_code) }}
+{{ ui.line("Title", episode.episode_title) }}
+{{ ui.line("Size", episode.size_bytes | filesize) }}
+{{ ui.line("Duration", episode.duration_ms | duration_ms) }}
+{{ ui.line("Overall Bitrate", episode.overall_bitrate_kbps | bitrate_kbps) }}
+{{ ui.line("Resolution", episode.resolution) }}
+{{ ui.line("Aspect", episode.aspect_ratio_display) }}
+{{ ui.line("Video", episode.video_codec) }}
+{{ ui.line("HDR", episode.hdr_display) }}
+{{ ui.line("Audio", episode.audio_summary | join(" | ")) }}
+{{ ui.line("Subtitles", episode.subtitle_summary | join(" | ")) }}
+
+{% endfor %}

@@ -1,0 +1,60 @@
+{% import "_macros.jinja2" as ui %}
+
+{% if logo_text %}
+{{ logo_text }}
+
+{% endif %}
+
+{{ ui.section("GÉNÉRAL") }}
+
+{{ ui.line("Titre", release.title_display) }}
+{{ ui.line("Année", release.year) }}
+{{ ui.line("Groupe", release.team) }}
+{{ ui.line("Source", release.source) }}
+{{ ui.line("Résolution", release.resolution) }}
+{{ ui.line("Vidéo", release.video_tag) }}
+{{ ui.line("Audio", release.audio_tag) }}
+{{ ui.line("Langue", release.language_tag) }}
+{{ ui.line("Langues audio", release.audio_languages_display) }}
+{{ ui.line("HDR", release.hdr_display) }}
+{{ ui.line("Nom complet", release.release_title) }}
+{{ ui.line("Taille totale", release.total_size_bytes | filesize) }}
+{{ ui.line("Durée totale", release.total_duration_ms | duration_ms) }}
+{% if metadata_movie %}
+{{ ui.section("MÉTADONNÉES") }}
+
+
+{{ ui.line("Titre officiel", metadata_movie.title) }}
+{{ ui.line("IMDb ID", metadata_movie.imdb_id) }}
+{{ ui.line("IMDb URL", metadata_movie.external_url) }}
+{{ ui.line("Genres", metadata_movie.genres | join(", ")) }}
+{{ ui.line("Durée", (metadata_movie.runtime_minutes ~ " min") if metadata_movie.runtime_minutes else none) }}
+
+{% if metadata_movie.overview %}
+{{ ui.section("SYNOPSIS") }}
+
+
+{{ metadata_movie.overview }}
+{% endif %}
+{% endif %}
+{% if release.subtitle_summary_lines %}
+{{ ui.section("SOUS-TITRES") }}
+
+
+
+{{ "- " ~ (release.subtitle_summary_lines | join("\n- ")) }}
+{% endif %}
+{% set movie = episodes[0] if episodes else none %}
+{% if movie %}
+{{ ui.section("FICHIER") }}
+{{ ui.line("Fichier", movie.file_name) }}
+{{ ui.line("Taille", movie.size_bytes | filesize) }}
+{{ ui.line("Durée", movie.duration_ms | duration_ms) }}
+{{ ui.line("Débit global", movie.overall_bitrate_kbps | bitrate_kbps) }}
+{{ ui.line("Résolution", movie.resolution) }}
+{{ ui.line("Ratio d’image", movie.aspect_ratio_display) }}
+{{ ui.line("Vidéo", movie.video_codec) }}
+{{ ui.line("HDR", movie.hdr_display) }}
+{{ ui.line("Audio", movie.audio_summary | join(" | ")) }}
+{{ ui.line("Sous-titres", movie.subtitle_summary | join(" | ")) }}
+{% endif %}
