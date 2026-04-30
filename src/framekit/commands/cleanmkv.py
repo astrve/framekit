@@ -20,7 +20,9 @@ from framekit.modules.cleanmkv.presets import (
     save_named_preset,
     validate_preset,
 )
-from framekit.modules.cleanmkv.scanner import scan_folder
+# Import both folder and file scanners.  scan_mkv_file is used when the user
+# invokes CleanMKV on a single file instead of an entire folder.
+from framekit.modules.cleanmkv.scanner import scan_folder, scan_mkv_file
 from framekit.modules.cleanmkv.service import CleanMkvService
 from framekit.modules.cleanmkv.wizard import run_cleanmkv_track_selector, run_cleanmkv_wizard
 from framekit.ui.branding import print_module_banner
@@ -346,7 +348,11 @@ def run_cleanmkv_command(
     print_module_banner("CleanMKV")
 
     folder = resolver.resolve_start_folder("cleanmkv", path or None)
-    if not folder.exists() or not folder.is_dir():
+    # Support both directories and single MKV files.  When a file is
+    # provided ensure it is an MKV; otherwise report an error.  This avoids
+    # requiring callers to create a separate directory for each episode.
+    is_single_file = False
+    if not folder.exists():
         print_error(
             tr(
                 "cleanmkv.error.folder_not_found",
@@ -355,6 +361,35 @@ def run_cleanmkv_command(
             )
         )
         return 1
+    if folder.is_file():
+        # Validate that the provided file is an MKV.  CleanMKV operates on
+        # MKV containers only.
+        if folder.suffix.lower() != ".mkv":
+            print_error(
+                tr(
+                    "cleanmkv.error.invalid_file_type",
+                    default="File is not an MKV: {file}",
+                    file=folder,
+                )
+            )
+            return 1
+        is_single_file = True
+    elif not folder.is_dir():
+        # Neither a file nor a directory
+        print_error(
+            tr(
+                "cleanmkv.error.folder_not_found",
+                default="Folder not found: {folder}",
+                folder=folder,
+            )
+        )
+        return 1
+
+    # Determine the working folder used for output placement.  When a single
+    # file is processed the output directory should be created alongside that
+    # file, hence we use the file's parent directory.  Otherwise we use the
+    # folder itself.
+    work_folder = folder.parent if is_single_file else folder
 
     output_dir_name = settings["modules"]["cleanmkv"]["output_dir_name"]
     copy_unchanged_files = bool(settings["modules"]["cleanmkv"].get("copy_unchanged_files", True))
@@ -366,7 +401,14 @@ def run_cleanmkv_command(
 
     try:
         if use_track_selector:
-            scans = scan_folder(folder, registry)
+            # Scan either the single file or the directory, depending on
+            # invocation.  When operating on a single MKV file we construct a
+            # one‑element list; otherwise we collect all MKV files in the
+            # directory.
+            if is_single_file:
+                scans = [scan_mkv_file(folder, registry)]
+            else:
+                scans = scan_folder(folder, registry)
             if not scans:
                 print_error(
                     tr(
@@ -399,7 +441,7 @@ def run_cleanmkv_command(
     service = CleanMkvService()
     report, plans = _run_cleanmkv_service(
         service,
-        folder,
+        work_folder,
         preset=preset,
         output_dir_name=output_dir_name,
         apply_changes=False,
@@ -418,7 +460,7 @@ def run_cleanmkv_command(
         ) as advance:
             report, _plans = _run_cleanmkv_service(
                 service,
-                folder,
+                work_folder,
                 preset=preset,
                 output_dir_name=output_dir_name,
                 apply_changes=True,
@@ -482,7 +524,7 @@ def run_cleanmkv_command(
         ) as advance:
             report, _plans = _run_cleanmkv_service(
                 service,
-                folder,
+                work_folder,
                 preset=preset,
                 output_dir_name=output_dir_name,
                 apply_changes=True,

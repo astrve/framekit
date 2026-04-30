@@ -49,6 +49,14 @@ def track_reference_key(track: TrackInfo) -> str:
         ]
         return "|".join(parts)
 
+    # Build a reference key used to de‑duplicate tracks in the CleanMKV UI and
+    # planning logic.  For audio tracks we intentionally omit the bitrate when
+    # computing this key so that otherwise identical streams (same language,
+    # channel layout and codec) do not appear as separate choices.  Including
+    # the bitrate caused duplicate entries when a release contained multiple
+    # encodes of the same mix at different bitrates.  The track title remains
+    # part of the key so commentary or alternate mixes are still presented
+    # separately.
     parts = [
         track.kind,
         _clean_part(track.language),
@@ -57,7 +65,7 @@ def track_reference_key(track: TrackInfo) -> str:
         _clean_part(track.codec),
         _clean_part(track.codec_id),
         _clean_part(format_channel_layout(track.channels_count, track.channels)),
-        str(track.bitrate or ""),
+        # Bitrate deliberately omitted to avoid duplicate audio entries.
         _clean_part(track.title),
     ]
     return "|".join(parts)
