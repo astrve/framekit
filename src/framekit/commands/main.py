@@ -58,7 +58,7 @@ def _get_version() -> str:
 
         return __version__
     except Exception:
-        return "1.1.0"
+        return "1.1.2"
 
 
 @click.command(

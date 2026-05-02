@@ -135,6 +135,13 @@ def _pick_default_audio_track(tracks: list[TrackInfo], preset: CleanPreset) -> i
             ):
                 return track.track_id
 
+    # When the user has gone through an interactive flow (wizard or track
+    # selector) and explicitly picked no default, do not fall back to the
+    # source file's is_default flag. This avoids "ghost" defaults appearing
+    # silently in the remuxed output.
+    if preset.audio_default_explicit:
+        return None
+
     for track in tracks:
         if track.is_default:
             return track.track_id
@@ -165,6 +172,13 @@ def _pick_default_subtitle_track(tracks: list[TrackInfo], preset: CleanPreset) -
                 continue
 
             return track.track_id
+
+    # When the user has explicitly picked "no default subtitle" through the
+    # wizard or the interactive track selector, respect that choice instead
+    # of silently re-using the source file's is_default flag — which used to
+    # cause a random subtitle track to be marked default on some files.
+    if preset.subtitle_default_explicit:
+        return None
 
     for track in tracks:
         if track.is_default:

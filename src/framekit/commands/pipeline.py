@@ -197,6 +197,10 @@ def _run_step(label: str, callback: Callable[[], int]) -> int:
 
 
 def _renamer_step(root: Path, remove_terms: tuple[str, ...] = ()) -> int:
+    # Inside the pipeline, the term picker (if any) has already run upstream
+    # in `run_pipeline_command`. We force `select_terms=False` here so that
+    # `run_renamer_command` never re-opens the picker mid-pipeline, regardless
+    # of TTY state.
     return run_renamer_command(
         path=str(root),
         lang=None,
@@ -204,6 +208,7 @@ def _renamer_step(root: Path, remove_terms: tuple[str, ...] = ()) -> int:
         dry_run=False,
         force_lang=False,
         remove_terms=remove_terms,
+        select_terms=False,
     )
 
 
@@ -285,6 +290,7 @@ def _nfo_step(
     settings: dict | None = None,
     metadata_enabled: bool = True,
     output_folder: Path | None = None,
+    nfo_mode: str | None = None,
 ) -> int:
     if context is None or settings is None:
         return run_nfo_command(
@@ -304,6 +310,7 @@ def _nfo_step(
             set_logo=None,
             list_logos=False,
             clear_logo=False,
+            mode=nfo_mode,
         )
 
     release = _ensure_release_context(work_folder, context)
@@ -318,25 +325,64 @@ def _nfo_step(
     nfo_settings = settings.setdefault("modules", {}).setdefault("nfo", {})
     template_name = str(nfo_settings.get("active_template", "default") or "default")
     logo_path = str(nfo_settings.get("logo_path", "") or "")
+
+    # Resolve effective mode for the pipeline NFO step:
+    # explicit `nfo_mode` arg > settings.modules.nfo.mode > "global".
+    settings_mode = str(nfo_settings.get("mode", "global") or "global").lower()
+    if settings_mode not in ("global", "per_file", "both"):
+        settings_mode = "global"
+    if nfo_mode is None:
+        effective_mode = settings_mode
+    else:
+        effective_mode = nfo_mode if nfo_mode in ("global", "per_file", "both") else settings_mode
+
     service = NfoService()
-    report, release, rendered = service.build_from_release(
-        work_folder,
-        release=release,
-        template_name=template_name,
-        logo_path=logo_path,
-        template_locale=resolved_locale,
-        extra_context=metadata_context,
-    )
-    resolved_template = str(report.details[0].after.get("template", template_name))
-    _write_report, output_path = service.write_rendered(
-        output_folder or work_folder,
-        release=release,
-        rendered=rendered,
-        template_name=resolved_template,
-        template_locale=resolved_locale,
-    )
-    context.nfo_path = output_path
-    print_info(tr("nfo.success.written", default="NFO written: {path}", path=output_path))
+
+    written_global: Path | None = None
+    written_per_file: list[Path] = []
+
+    if effective_mode in ("global", "both"):
+        report, release, rendered = service.build_from_release(
+            work_folder,
+            release=release,
+            template_name=template_name,
+            logo_path=logo_path,
+            template_locale=resolved_locale,
+            extra_context=metadata_context,
+        )
+        resolved_template = str(report.details[0].after.get("template", template_name))
+        _write_report, written_global = service.write_rendered(
+            output_folder or work_folder,
+            release=release,
+            rendered=rendered,
+            template_name=resolved_template,
+            template_locale=resolved_locale,
+        )
+        print_info(tr("nfo.success.written", default="NFO written: {path}", path=written_global))
+
+    if effective_mode in ("per_file", "both"):
+        per_file_results = service.build_per_file(
+            work_folder,
+            template_name=template_name,
+            logo_path=logo_path,
+            template_locale=resolved_locale,
+            extra_context=metadata_context,
+        )
+        # `write_per_file` writes each NFO next to its source MKV — the
+        # `folder` argument is only used for reporting, so passing
+        # `work_folder` keeps log paths consistent.
+        _per_report, written_per_file = service.write_per_file(
+            work_folder,
+            results=per_file_results,
+            template_name=template_name,
+            template_locale=resolved_locale,
+        )
+        for path in written_per_file:
+            print_info(tr("nfo.success.written", default="NFO written: {path}", path=path))
+
+    # Keep `context.nfo_path` pointing to whichever output is most
+    # representative for downstream steps (torrent/prez look at it).
+    context.nfo_path = written_global or (written_per_file[0] if written_per_file else None)
     return 0
 
 
@@ -539,6 +585,10 @@ def _print_pipeline_report(folder: Path, results: list[tuple[str, str, str]]) ->
     )
 
 
+def print_warning(message: str) -> None:
+    print(f"Warning: {message}")
+
+
 def run_pipeline_command(
     *,
     path: str | None,
@@ -556,6 +606,8 @@ def run_pipeline_command(
     remove_terms: tuple[str, ...] = (),
     select_modules: bool | None = None,
     select_templates: bool | None = None,
+    select_terms: bool | None = None,
+    nfo_mode: str | None = None,
     enabled_modules: tuple[str, ...] | None = None,
 ) -> int:
     store = SettingsStore()
@@ -608,6 +660,49 @@ def run_pipeline_command(
     work_folder = _next_work_folder(root, settings)
     output_folder = _pipeline_output_folder(work_folder, root)
 
+    # Resolve the renamer's `remove_terms` once at pipeline level so the
+    # picker (if any) opens at most one time, before any step runs. We hand
+    # the resolved tuple down to `_renamer_step`, which itself instructs the
+    # underlying renamer command to skip its own picker.
+    effective_remove_terms = remove_terms
+    if "renamer" in selected_modules and select_terms is not False:
+        from framekit.commands.renamer import _run_term_selector
+
+        should_open_picker = select_terms is True or (
+            select_terms is None and bool(sys.stdin.isatty()) and not remove_terms
+        )
+        if should_open_picker:
+            try:
+                picker_result = _run_term_selector(root)
+            except Exception as exc:  # noqa: BLE001
+                # Picker failures should not abort the pipeline — log and fall
+                # back to whatever the caller passed via `--remove-term`.
+                print_warning(
+                    tr(
+                        "renamer.term_selector.failed",
+                        default="Term picker failed: {message}",
+                        message=str(exc),
+                    )
+                )
+                picker_result = ()
+            if picker_result is None:
+                print_error(
+                    tr(
+                        "renamer.term_selector.cancelled",
+                        default="Term selection cancelled.",
+                    )
+                )
+                return 1
+            seen: set[str] = set()
+            merged: list[str] = []
+            for term in (*remove_terms, *picker_result):
+                key = term.upper()
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(term)
+            effective_remove_terms = tuple(merged)
+
     if preview:
         context = PipelineContext()
         try:
@@ -640,9 +735,10 @@ def run_pipeline_command(
 
     steps: list[PipelineStep] = []
     if "renamer" in selected_modules:
-        if remove_terms:
+        if effective_remove_terms:
+            terms_for_step = effective_remove_terms
             steps.append(
-                ("renamer", _module_label("renamer"), lambda: _renamer_step(root, remove_terms))
+                ("renamer", _module_label("renamer"), lambda: _renamer_step(root, terms_for_step))
             )
         else:
             steps.append(("renamer", _module_label("renamer"), lambda: _renamer_step(root)))
@@ -671,6 +767,11 @@ def run_pipeline_command(
 
     output_steps: list[PipelineStep] = []
     if "nfo" in selected_modules:
+        # Capture `nfo_mode` in a local for the closure so it survives the
+        # `lambda` wrapping. The pipeline command always resolves the mode
+        # ahead of time (CLI > settings > "global"); `_nfo_step` itself
+        # falls back to settings if it receives `None`.
+        nfo_mode_for_step = nfo_mode
         output_steps.append(
             (
                 "nfo",
@@ -682,6 +783,7 @@ def run_pipeline_command(
                     settings,
                     metadata_enabled,
                     output_folder,
+                    nfo_mode_for_step,
                 ),
             )
         )
@@ -829,6 +931,25 @@ def run_pipeline_command(
     ),
 )
 @click.option(
+    "--select-terms/--no-select-terms",
+    "select_terms",
+    default=None,
+    help=tr(
+        "cli.pipeline.option.select_terms",
+        default="Open or bypass the interactive Renamer term picker before any step runs.",
+    ),
+)
+@click.option(
+    "--nfo-mode",
+    "nfo_mode",
+    type=click.Choice(["global", "per_file", "both"]),
+    default=None,
+    help=tr(
+        "cli.pipeline.option.nfo_mode",
+        default="NFO output mode: 'global' (single release NFO), 'per_file' (one NFO per file), or 'both'.",
+    ),
+)
+@click.option(
     "-m/-nm",
     "--with-metadata/--no-metadata",
     "with_metadata",
@@ -849,6 +970,8 @@ def pipeline_command(
     skip_prez: bool,
     select_modules: bool | None = None,
     select_templates: bool | None = None,
+    select_terms: bool | None = None,
+    nfo_mode: str | None = None,
     enabled_modules_option: str | None = None,
     preset: str | None = None,
     preview: bool = False,
@@ -872,6 +995,8 @@ def pipeline_command(
         remove_terms=remove_terms,
         select_modules=select_modules,
         select_templates=select_templates,
+        select_terms=select_terms,
+        nfo_mode=nfo_mode,
         enabled_modules=tuple(
             item.strip().lower()
             for item in (enabled_modules_option or "").split(",")

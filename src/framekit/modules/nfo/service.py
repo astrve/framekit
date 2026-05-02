@@ -113,6 +113,109 @@ class NfoService:
 
         return report, release, rendered
 
+    def build_per_file(
+        self,
+        folder: Path,
+        *,
+        template_name: str,
+        logo_path: str | None = None,
+        template_locale: str = "en",
+        extra_context: dict | None = None,
+    ) -> list[tuple[OperationReport, ReleaseNfoData, str, Path]]:
+        """
+        Build one NFO per `.mkv` file in `folder`. Each MKV is wrapped in its
+        own single-episode release, rendered through the
+        single-episode/movie template family (depending on whether the file
+        carries an episode code), and returned as a 4-tuple
+        `(report, release, rendered_text, source_mkv_path)`.
+
+        The metadata `extra_context` provided by the caller is reused as-is
+        for every file. For series, the per-episode metadata (`metadata_episode_map`)
+        is resolved from the global context if available so each rendered NFO
+        gets its own `metadata_episode` value matching the episode code.
+        """
+        episodes = scan_nfo_folder(folder)
+        if not episodes:
+            raise ValueError(
+                tr(
+                    "nfo.error.no_mkv",
+                    default="No MKV files found in folder: {folder}",
+                    folder=folder,
+                )
+            )
+
+        results: list[tuple[OperationReport, ReleaseNfoData, str, Path]] = []
+        episode_map = (extra_context or {}).get("metadata_episode_map") or {}
+
+        for episode in episodes:
+            single_release = build_release_nfo(folder, [episode])
+            # When the global context carries a per-episode map, scope it
+            # down to *this* episode's code so the template's
+            # `metadata_episode` slot reflects the right entry.
+            per_file_extra = dict(extra_context or {})
+            if episode.episode_code and episode.episode_code in episode_map:
+                per_file_extra["metadata_episode"] = episode_map[episode.episode_code]
+            # `metadata_episode_map` itself stays useful for templates that
+            # display the whole season — leave it intact.
+            report, release, rendered = self.build_from_release(
+                folder,
+                release=single_release,
+                template_name=template_name,
+                logo_path=logo_path,
+                template_locale=template_locale,
+                extra_context=per_file_extra,
+            )
+            results.append((report, release, rendered, episode.file_path))
+
+        return results
+
+    def write_per_file(
+        self,
+        folder: Path,
+        *,
+        results: list[tuple[OperationReport, ReleaseNfoData, str, Path]],
+        template_name: str,
+        template_locale: str = "en",
+    ) -> tuple[OperationReport, list[Path]]:
+        """
+        Persist a list of per-file NFOs returned by `build_per_file`.
+
+        Each NFO is written next to its source MKV using the MKV stem as the
+        base name (`<stem>.nfo`). A consolidated `OperationReport` is
+        returned with one detail line per file, suitable for surfacing in the
+        CLI summary table.
+        """
+        report = OperationReport(tool="nfo")
+        report.scanned = len(results)
+        report.processed = len(results)
+
+        outputs: list[Path] = []
+        for _per_file_report, release, rendered, source_path in results:
+            target = source_path.with_suffix(".nfo")
+            target.write_text(rendered, encoding="utf-8")
+            outputs.append(target)
+            report.outputs.append(str(target))
+            report.modified += 1
+            report.add_detail(
+                file=source_path.name,
+                action="nfo",
+                status="written",
+                message=tr(
+                    "nfo.message.written",
+                    default="NFO written with template '{template}'.",
+                    template=template_name,
+                ),
+                before={"folder": str(folder)},
+                after={
+                    "template": template_name,
+                    "locale": template_locale,
+                    "output": str(target),
+                    "release_title": release.release_title,
+                },
+            )
+
+        return report, outputs
+
     def build(
         self,
         folder: Path,

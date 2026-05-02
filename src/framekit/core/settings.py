@@ -98,6 +98,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "logo_path": "",
             "active_logo": "",
             "with_metadata": True,
+            "mode": "global",
         },
         "torrent": {
             "default_folder": "",
@@ -292,6 +293,8 @@ def normalize_settings(data: dict[str, Any]) -> dict[str, Any]:
                 str(nfo.get("active_template", "default") or "default").strip() or "default"
             )
             nfo["with_metadata"] = _as_bool(nfo.get("with_metadata"), True)
+            mode_value = str(nfo.get("mode", "global") or "global").strip().lower()
+            nfo["mode"] = mode_value if mode_value in {"global", "per_file", "both"} else "global"
 
         torrent = modules.setdefault("torrent", {})
         if isinstance(torrent, dict):

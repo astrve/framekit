@@ -164,6 +164,8 @@ def preset_from_dict(data: dict) -> CleanPreset:
             if data.get("default_subtitle_variant")
             else None
         ),
+        audio_default_explicit=bool(data.get("audio_default_explicit", False)),
+        subtitle_default_explicit=bool(data.get("subtitle_default_explicit", False)),
     )
     return validate_preset(preset)
 
@@ -218,6 +220,8 @@ def save_named_preset(preset: CleanPreset, name: str) -> Path:
             keep_subtitle_variants=preset.keep_subtitle_variants,
             default_subtitle_filter=preset.default_subtitle_filter,
             default_subtitle_variant=preset.default_subtitle_variant,
+            audio_default_explicit=preset.audio_default_explicit,
+            subtitle_default_explicit=preset.subtitle_default_explicit,
         ),
         target,
     )

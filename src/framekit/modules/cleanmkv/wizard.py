@@ -192,6 +192,12 @@ def run_cleanmkv_wizard() -> CleanPreset:
         keep_subtitle_variants=keep_subtitle_variants,
         default_subtitle_filter=default_subtitle_filter,
         default_subtitle_variant=default_subtitle_variant,
+        # Wizard prompts always include a "None" entry for the default
+        # subtitle track when subtitles are kept; treat a missing default
+        # as an explicit user decision instead of letting the planner
+        # fall back to the source file's is_default flag.
+        audio_default_explicit=True,
+        subtitle_default_explicit=bool(keep_subtitle_filters),
     )
 
 
@@ -214,6 +220,7 @@ def _track_entries(
     *,
     kind: str,
     enabled_values: tuple[str, ...] = (),
+    select_all: bool = False,
 ) -> list[SelectorOption[str]]:
     total = len(scans)
     entries: list[SelectorOption[str]] = []
@@ -226,7 +233,7 @@ def _track_entries(
                 value=ref,
                 label=track_reference_label(track),
                 hint=track_reference_hint(track, available_count=len(paths), total_count=total),
-                selected=False,
+                selected=bool(select_all),
             )
         )
     return entries
@@ -260,6 +267,8 @@ def run_cleanmkv_track_selector(scans: list[MkvFileScan]) -> CleanPreset:
     audio_defaults = _all_refs(scans, kind="audio")
     subtitle_defaults = _all_refs(scans, kind="subtitle")
 
+    # Pre-check every detected audio/subtitle track so the user only has to
+    # un-tick the ones to drop — typically faster than ticking each one in.
     keep_audio_refs = tuple(
         select_many(
             title=tr("cleanmkv.selector.audio_tracks", default="Audio Tracks Found"),
@@ -267,7 +276,9 @@ def run_cleanmkv_track_selector(scans: list[MkvFileScan]) -> CleanPreset:
                 SelectorDivider(
                     tr("cleanmkv.selector.current_audio", default="Current audio tracks")
                 ),
-                *_track_entries(scans, kind="audio", enabled_values=audio_defaults),
+                *_track_entries(
+                    scans, kind="audio", enabled_values=audio_defaults, select_all=True
+                ),
             ],
             page_size=12,
             minimal_count=1,
@@ -278,6 +289,12 @@ def run_cleanmkv_track_selector(scans: list[MkvFileScan]) -> CleanPreset:
         title=tr("cleanmkv.selector.default_audio", default="Default Audio Track"),
         entries=[
             SelectorDivider(tr("common.default", default="Default")),
+            SelectorOption(
+                value=None,
+                label=tr("common.none", default="None"),
+                hint=tr("cleanmkv.wizard.no_default_track", default="no default track"),
+                selected=False,
+            ),
             *[
                 SelectorOption(
                     value=option.value,
@@ -299,7 +316,9 @@ def run_cleanmkv_track_selector(scans: list[MkvFileScan]) -> CleanPreset:
                 SelectorDivider(
                     tr("cleanmkv.selector.current_subtitles", default="Current subtitle tracks")
                 ),
-                *_track_entries(scans, kind="subtitle", enabled_values=subtitle_defaults),
+                *_track_entries(
+                    scans, kind="subtitle", enabled_values=subtitle_defaults, select_all=True
+                ),
             ],
             page_size=12,
             minimal_count=0,
@@ -345,4 +364,9 @@ def run_cleanmkv_track_selector(scans: list[MkvFileScan]) -> CleanPreset:
         default_audio_track_ref=default_audio_ref,
         keep_subtitle_track_refs=keep_subtitle_refs,
         default_subtitle_track_ref=default_subtitle_ref,
+        # The track selector always exposes a "None" choice for both audio
+        # and subtitle defaults, so a missing reference here is always an
+        # explicit user decision — never an "I don't care".
+        audio_default_explicit=True,
+        subtitle_default_explicit=True,
     )

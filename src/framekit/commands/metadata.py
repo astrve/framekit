@@ -298,7 +298,40 @@ def run_metadata_command(
         return 0
 
     folder = resolver.resolve_start_folder("nfo", path or None)
-    if not folder.exists() or not folder.is_dir():
+    # Support both directories and single MKV files.  When a file is provided
+    # ensure it is an MKV; otherwise report an error.  This avoids requiring
+    # callers to create a separate folder for each episode when resolving
+    # metadata.
+    if not folder.exists():
+        print_error(
+            tr(
+                "cleanmkv.error.folder_not_found",
+                default="Folder not found: {folder}",
+                folder=folder,
+            )
+        )
+        return 1
+
+    is_single_file = False
+    selected_file: Path | None = None
+    scan_root = folder
+    if folder.is_file():
+        # Validate that the provided file is an MKV.  Metadata resolution
+        # operates only on MKV containers.
+        if folder.suffix.lower() != ".mkv":
+            print_error(
+                tr(
+                    "cleanmkv.error.invalid_file_type",
+                    default="File is not an MKV: {file}",
+                    file=folder,
+                )
+            )
+            return 1
+        is_single_file = True
+        selected_file = folder
+        scan_root = folder.parent
+    elif not folder.is_dir():
+        # Neither a file nor a directory
         print_error(
             tr(
                 "cleanmkv.error.folder_not_found",
@@ -309,7 +342,24 @@ def run_metadata_command(
         return 1
 
     try:
-        release = _build_release_from_folder(folder)
+        if is_single_file:
+            # Build a release using only the selected file.  Scan the parent
+            # directory for episodes then filter to the chosen file.  If no
+            # matching episode is found, report an error.
+            episodes = scan_nfo_folder(scan_root)
+            episodes = [ep for ep in episodes if ep.file_path == selected_file]
+            if not episodes:
+                print_error(
+                    tr(
+                        "nfo.error.no_mkv",
+                        default="No MKV files found in folder: {folder}",
+                        folder=folder,
+                    )
+                )
+                return 1
+            release = build_release_nfo(scan_root, episodes)
+        else:
+            release = _build_release_from_folder(folder)
     except Exception as exc:
         print_exception_error(exc)
         return 1

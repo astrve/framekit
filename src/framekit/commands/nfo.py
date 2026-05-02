@@ -46,6 +46,71 @@ from framekit.ui.console import (
     print_success,
     print_warning,
 )
+from framekit.ui.selector import SelectorOption, select_one
+
+# Valid NFO output modes:
+# - "global"   → single NFO for the whole release (default, legacy behavior).
+# - "per_file" → one NFO per .mkv, written next to each source file.
+# - "both"     → produce both at once.
+NFO_MODES = ("global", "per_file", "both")
+
+
+def _normalize_nfo_mode(value: str | None, default: str = "global") -> str:
+    if not value:
+        return default
+    candidate = str(value).strip().lower()
+    return candidate if candidate in NFO_MODES else default
+
+
+def _choose_nfo_mode(*, preferred: str = "global") -> str | None:
+    """
+    Open an interactive picker letting the user choose between
+    `global` / `per_file` / `both`. Returns the chosen value, or `None`
+    if the user cancelled.
+    """
+    options = [
+        SelectorOption(
+            value="global",
+            label=tr("nfo.mode.global", default="Global (one NFO for the release)"),
+            hint=tr(
+                "nfo.mode.global_hint",
+                default="Single NFO file at the release root — current default behaviour.",
+            ),
+            selected=(preferred == "global"),
+        ),
+        SelectorOption(
+            value="per_file",
+            label=tr("nfo.mode.per_file", default="Per file (one NFO per .mkv)"),
+            hint=tr(
+                "nfo.mode.per_file_hint",
+                default="Each MKV gets its own .nfo next to it. Useful for season packs.",
+            ),
+            selected=(preferred == "per_file"),
+        ),
+        SelectorOption(
+            value="both",
+            label=tr("nfo.mode.both", default="Both (global + per file)"),
+            hint=tr(
+                "nfo.mode.both_hint",
+                default="Generate the global NFO and one NFO per file in the same run.",
+            ),
+            selected=(preferred == "both"),
+        ),
+    ]
+    try:
+        result = select_one(
+            title=tr("nfo.mode.picker_title", default="Choose NFO output mode"),
+            entries=options,
+            page_size=4,
+        )
+    except KeyboardInterrupt:
+        return None
+    except RuntimeError:
+        # Headless: callers should pre-resolve the mode via settings or CLI.
+        return None
+    if result is None:
+        return None
+    return str(result)
 
 
 def _join_path_parts(parts: tuple[str, ...]) -> str:
@@ -283,6 +348,7 @@ def _print_nfo_preflight(
     metadata_enabled: bool,
     template_locale: str,
     metadata_language: str | None = None,
+    output_mode: str | None = None,
 ) -> None:
     table = Table(
         title=tr("nfo.build_setup", default="NFO Build Setup"),
@@ -302,6 +368,11 @@ def _print_nfo_preflight(
         metadata_language if metadata_enabled and metadata_language else "-",
     )
     table.add_row(tr("nfo.selection_mode", default="Selection Mode"), selection_mode or "-")
+    if output_mode:
+        table.add_row(
+            tr("nfo.output_mode", default="Output Mode"),
+            tr(f"nfo.mode.{output_mode}_short", default=output_mode),
+        )
     table.add_row(
         tr("common.metadata", default="Metadata"),
         tr("common.enabled", default="Enabled")
@@ -348,6 +419,7 @@ def run_nfo_command(
     set_logo: str | None,
     list_logos: bool,
     clear_logo: bool,
+    mode: str | None = None,
 ) -> int:
     store = SettingsStore()
     settings = store.load()
@@ -468,7 +540,10 @@ def run_nfo_command(
         print_exception_error(exc)
         return 1
 
-    if not folder.exists() or not folder.is_dir():
+    # Support both directories and single MKV files for NFO generation.  When a file
+    # is provided ensure it is an MKV; otherwise report an error.  This avoids
+    # requiring callers to create a separate folder for each episode.
+    if not folder.exists():
         print_error(
             tr(
                 "cleanmkv.error.folder_not_found",
@@ -478,8 +553,54 @@ def run_nfo_command(
         )
         return 1
 
+    is_single_file = False
+    selected_file: Path | None = None
+    scan_root = folder
+    # Determine whether the target is a single MKV file or a folder.
+    if folder.is_file():
+        # Validate that the provided file is an MKV.  NFO generation
+        # operates only on MKV containers.
+        if folder.suffix.lower() != ".mkv":
+            print_error(
+                tr(
+                    "cleanmkv.error.invalid_file_type",
+                    default="File is not an MKV: {file}",
+                    file=folder,
+                )
+            )
+            return 1
+        is_single_file = True
+        selected_file = folder
+        scan_root = folder.parent
+    elif not folder.is_dir():
+        # Neither a file nor a directory
+        print_error(
+            tr(
+                "cleanmkv.error.folder_not_found",
+                default="Folder not found: {folder}",
+                folder=folder,
+            )
+        )
+        return 1
+
+    # Build a probe release for template selection.  When operating on a
+    # single file we scan the parent folder and filter to the chosen file.
     try:
-        release_probe = _build_release_from_folder(folder)
+        if is_single_file:
+            episodes = scan_nfo_folder(scan_root)
+            episodes = [ep for ep in episodes if ep.file_path == selected_file]
+            if not episodes:
+                print_error(
+                    tr(
+                        "nfo.error.no_mkv",
+                        default="No MKV files found in folder: {folder}",
+                        folder=folder,
+                    )
+                )
+                return 1
+            release_probe = build_release_nfo(scan_root, episodes)
+        else:
+            release_probe = _build_release_from_folder(folder)
     except Exception as exc:
         print_exception_error(exc)
         return 1
@@ -508,6 +629,24 @@ def run_nfo_command(
     logo_path = nfo_settings.get("logo_path", "")
     service = NfoService()
 
+    # Resolve the NFO output mode. CLI flag wins, then settings, then an
+    # interactive picker (when running in a TTY without an explicit mode and
+    # not in a single-file run). Single-file mode always behaves as "global"
+    # because there is exactly one file to write.
+    settings_mode = _normalize_nfo_mode(nfo_settings.get("mode"), default="global")
+    if mode is not None:
+        resolved_mode = _normalize_nfo_mode(mode, default=settings_mode)
+    elif is_single_file:
+        resolved_mode = "global"
+    elif sys.stdin.isatty() and not write_requested:
+        picked = _choose_nfo_mode(preferred=settings_mode)
+        if picked is None:
+            print_warning(tr("nfo.action_cancelled", default="NFO action cancelled."))
+            return 1
+        resolved_mode = picked
+    else:
+        resolved_mode = settings_mode
+
     _print_nfo_preflight(
         folder=folder,
         template_name=template_name,
@@ -516,6 +655,7 @@ def run_nfo_command(
         metadata_enabled=with_metadata,
         template_locale=resolved_nfo_locale,
         metadata_language=metadata_language,
+        output_mode=resolved_mode,
     )
 
     extra_context: dict = {}
@@ -535,14 +675,65 @@ def run_nfo_command(
                 message=_format_metadata_exception(exc),
             )
 
+    # Build the NFO. When operating on a single file we always behave as
+    # `global` (one output, single-file scope). For folders we honour the
+    # resolved mode: `global` builds one release-wide NFO, `per_file` builds
+    # one NFO per .mkv, `both` does both.
     try:
-        report, release, rendered = service.build(
-            folder,
-            template_name=template_name,
-            logo_path=logo_path,
-            template_locale=resolved_nfo_locale,
-            extra_context=extra_context,
-        )
+        if is_single_file:
+            report, release, rendered = service.build_from_release(
+                scan_root,
+                release=release_probe,
+                template_name=template_name,
+                logo_path=logo_path,
+                template_locale=resolved_nfo_locale,
+                extra_context=extra_context,
+            )
+            per_file_results: list = []
+        else:
+            if resolved_mode in ("global", "both"):
+                report, release, rendered = service.build(
+                    folder,
+                    template_name=template_name,
+                    logo_path=logo_path,
+                    template_locale=resolved_nfo_locale,
+                    extra_context=extra_context,
+                )
+            else:
+                # `per_file` only — still build a global release for the
+                # preview/summary table so the user sees what is being processed.
+                release = release_probe
+                rendered = ""
+                report = type(release_probe).__class__  # placeholder, replaced below
+                from framekit.core.reporting import OperationReport as _OperationReport
+
+                report = _OperationReport(tool="nfo")
+                report.scanned = len(release.episodes)
+                report.processed = len(release.episodes)
+                report.modified = 0
+                report.add_detail(
+                    file=None,
+                    action="nfo",
+                    status="planned",
+                    message=tr(
+                        "nfo.message.per_file_planned",
+                        default="Per-file NFOs will be generated ({count}).",
+                        count=len(release.episodes),
+                    ),
+                    before={"folder": str(folder)},
+                    after={"template": template_name, "locale": resolved_nfo_locale},
+                )
+
+            if resolved_mode in ("per_file", "both"):
+                per_file_results = service.build_per_file(
+                    folder,
+                    template_name=template_name,
+                    logo_path=logo_path,
+                    template_locale=resolved_nfo_locale,
+                    extra_context=extra_context,
+                )
+            else:
+                per_file_results = []
     except Exception as exc:
         print_exception_error(exc)
         return 1
@@ -560,21 +751,64 @@ def run_nfo_command(
         )
     print_info(tr("nfo.info.scanned", default="Scanned: {count}", count=report.scanned))
     print_info(tr("nfo.info.processed", default="Processed: {count}", count=report.processed))
+    if not is_single_file and resolved_mode != "global":
+        print_info(
+            tr(
+                "nfo.info.per_file_planned",
+                default="Per-file NFOs planned: {count}",
+                count=len(per_file_results),
+            )
+        )
+
+    def _write_global() -> Path | None:
+        target_folder = scan_root if is_single_file else folder
+        _write_report, output_path = service.write_rendered(
+            target_folder,
+            release=release,
+            rendered=rendered,
+            template_name=template_name,
+            template_locale=resolved_nfo_locale,
+        )
+        return output_path
+
+    def _write_per_file() -> list[Path]:
+        if not per_file_results:
+            return []
+        _per_report, outputs = service.write_per_file(
+            folder,
+            results=per_file_results,
+            template_name=template_name,
+            template_locale=resolved_nfo_locale,
+        )
+        return outputs
 
     if write_requested:
         try:
-            _write_report, output_path = service.write_rendered(
-                folder,
-                release=release,
-                rendered=rendered,
-                template_name=template_name,
-                template_locale=resolved_nfo_locale,
-            )
+            written_global: Path | None = None
+            written_per_file: list[Path] = []
+            if resolved_mode in ("global", "both") or is_single_file:
+                written_global = _write_global()
+            if resolved_mode in ("per_file", "both") and not is_single_file:
+                written_per_file = _write_per_file()
         except Exception as exc:
             print_exception_error(exc)
             return 1
 
-        print_success(tr("nfo.success.written", default="NFO written: {path}", path=output_path))
+        if written_global is not None:
+            print_success(
+                tr("nfo.success.written", default="NFO written: {path}", path=str(written_global))
+            )
+        for nfo_path in written_per_file:
+            print_success(
+                tr("nfo.success.written", default="NFO written: {path}", path=str(nfo_path))
+            )
+        if not written_global and not written_per_file:
+            print_warning(
+                tr(
+                    "nfo.warning.nothing_written",
+                    default="No NFO files were written.",
+                )
+            )
         settings["modules"]["nfo"]["last_folder"] = str(folder)
         store.save(settings)
         return 0
@@ -594,7 +828,13 @@ def run_nfo_command(
         return 1
 
     if show_full_preview:
-        _print_rendered_nfo(rendered)
+        # In `per_file`-only mode there is no global rendered text, so show
+        # the first per-file preview instead. This gives the user a concrete
+        # sample of what every file will look like.
+        if rendered:
+            _print_rendered_nfo(rendered)
+        elif per_file_results:
+            _print_rendered_nfo(per_file_results[0][2])
 
     generate_nfo = choose_yes_no(
         tr("nfo.confirm.generate_file", default="Do you want to generate the NFO file?"),
@@ -609,37 +849,50 @@ def run_nfo_command(
 
     if generate_nfo:
         try:
-            _write_report, output_path = service.write_rendered(
-                folder,
-                release=release,
-                rendered=rendered,
-                template_name=template_name,
-                template_locale=resolved_nfo_locale,
-            )
+            written_global: Path | None = None
+            written_per_file: list[Path] = []
+            if resolved_mode in ("global", "both") or is_single_file:
+                written_global = _write_global()
+            if resolved_mode in ("per_file", "both") and not is_single_file:
+                written_per_file = _write_per_file()
         except Exception as exc:
             print_exception_error(exc)
             return 1
 
-        print_success(tr("nfo.success.written", default="NFO written: {path}", path=output_path))
-
-        open_folder = choose_yes_no(
-            tr("nfo.confirm.open_output_folder", default="Do you want to open the output folder?"),
-            yes_label=tr("common.yes", default="Yes"),
-            no_label=tr("common.no", default="No"),
-            default_yes=False,
+        first_output: Path | None = written_global or (
+            written_per_file[0] if written_per_file else None
         )
+        if written_global is not None:
+            print_success(
+                tr("nfo.success.written", default="NFO written: {path}", path=str(written_global))
+            )
+        for nfo_path in written_per_file:
+            print_success(
+                tr("nfo.success.written", default="NFO written: {path}", path=str(nfo_path))
+            )
 
-        if open_folder:
-            try:
-                _open_folder(output_path)
-            except Exception as exc:
-                print_warning(
-                    tr(
-                        "nfo.warning.open_output_failed",
-                        default="Could not open output folder: {message}",
-                        message=exc,
+        if first_output is not None:
+            open_folder = choose_yes_no(
+                tr(
+                    "nfo.confirm.open_output_folder",
+                    default="Do you want to open the output folder?",
+                ),
+                yes_label=tr("common.yes", default="Yes"),
+                no_label=tr("common.no", default="No"),
+                default_yes=False,
+            )
+
+            if open_folder:
+                try:
+                    _open_folder(first_output)
+                except Exception as exc:
+                    print_warning(
+                        tr(
+                            "nfo.warning.open_output_failed",
+                            default="Could not open output folder: {message}",
+                            message=exc,
+                        )
                     )
-                )
     else:
         print_success(
             tr(
@@ -749,6 +1002,16 @@ def run_nfo_command(
     is_flag=True,
     help=tr("cli.nfo.option.clear_logo", default="Disable the active logo."),
 )
+@click.option(
+    "--mode",
+    "mode",
+    type=click.Choice(["global", "per_file", "both"]),
+    default=None,
+    help=tr(
+        "cli.nfo.option.mode",
+        default="NFO output mode: 'global' (single release NFO), 'per_file' (one NFO per file), or 'both'.",
+    ),
+)
 def nfo_command(
     path_parts: tuple[str, ...],
     template: str | None,
@@ -766,6 +1029,7 @@ def nfo_command(
     set_logo: str | None,
     list_logos: bool,
     clear_logo: bool,
+    mode: str | None,
 ) -> int:
     return run_nfo_command(
         path=_join_path_parts(path_parts) or None,
@@ -784,4 +1048,5 @@ def nfo_command(
         set_logo=set_logo,
         list_logos=list_logos,
         clear_logo=clear_logo,
+        mode=mode,
     )

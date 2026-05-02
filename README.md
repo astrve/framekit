@@ -149,6 +149,20 @@ fk nfo "Release folder" -nm
 fk pipe "Release folder" -nm
 ```
 
+## TMDb credentials
+
+Framekit uses [The Movie Database](https://www.themoviedb.org/) (TMDb) to fetch movie and TV metadata. To enable these features you must provide a TMDb **read access token** (v4) or an **API key** (v3). Without valid credentials you may encounter errors like “Invalid API key: You must be granted a valid key.”
+
+To get started:
+
+1. Create a free TMDb account at [themoviedb.org](https://www.themoviedb.org/) and navigate to your account settings → *API*.
+2. Generate a **API Read Access Token (v4 auth)** or obtain your existing **API Key (v3 auth)**.
+3. Run `fk md -t` or `fk setup` and paste the token when prompted. Framekit will store the token securely in your settings and clear any previously stored API key.
+4. To remove stored credentials, run `fk md --clear`.
+
+Always keep your TMDb credentials private and do not share them publicly.
+
+
 ## Diagnostics
 
 ```bash
