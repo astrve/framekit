@@ -19,6 +19,14 @@ class CleanPreset:
     keep_subtitle_track_refs: tuple[str, ...] = ()
     default_subtitle_track_ref: str | None = None
 
+    # When True, the absence of a default audio/subtitle reference means
+    # "the user explicitly chose no default" rather than "the preset does not
+    # care". The planner will then refuse to fall back to the source file's
+    # is_default flag — fixing a long-standing bug where some files ended up
+    # with a random default subtitle track even though the user picked None.
+    audio_default_explicit: bool = False
+    subtitle_default_explicit: bool = False
+
 
 @dataclass(slots=True)
 class TrackInfo:

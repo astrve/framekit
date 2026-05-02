@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -25,10 +26,43 @@ TOOL_COMMANDS: dict[str, list[str]] = {
 }
 
 
-TOOL_BINARIES: dict[str, str] = {
-    "mkvmerge": "mkvmerge",
-    "mediainfo": "mediainfo",
+# Some tools ship multiple binaries — typically a CLI binary and a GUI binary
+# (especially on macOS where the GUI version is bundled inside a `.app` package).
+# We try CLI-friendly names first to avoid accidentally launching the GUI when
+# probing the version (e.g. running `MediaInfo` from `MediaInfo.app/Contents/MacOS`
+# would open the GUI on macOS instead of returning a version string).
+TOOL_BINARY_CANDIDATES: dict[str, tuple[str, ...]] = {
+    "mkvmerge": ("mkvmerge",),
+    "mediainfo": ("mediainfo", "mediainfo-cli", "MediaInfoCLI"),
 }
+
+
+# Backward-compatible alias kept for any external caller relying on a single
+# binary name per tool. Prefer ``TOOL_BINARY_CANDIDATES`` for new code.
+TOOL_BINARIES: dict[str, str] = {
+    name: candidates[0] for name, candidates in TOOL_BINARY_CANDIDATES.items()
+}
+
+
+def _is_macos_app_bundle(path: str) -> bool:
+    """Return True when *path* points inside a macOS ``.app`` bundle.
+
+    Running such a binary typically launches a GUI application rather than a
+    CLI process — that's the root cause of the historical ``fk doctor`` bug
+    that opened MediaInfo's window on macOS.
+    """
+
+    return ".app/" in path.replace("\\", "/")
+
+
+def _subprocess_creation_flags() -> int:
+    """Avoid spawning a console window on Windows when probing tools."""
+
+    if os.name == "nt":
+        # ``CREATE_NO_WINDOW`` exists on Windows; on POSIX we return 0 so the
+        # call site can pass it unconditionally.
+        return getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return 0
 
 
 def _run_version_command(
@@ -42,6 +76,7 @@ def _run_version_command(
             encoding="utf-8",
             errors="replace",
             timeout=5,
+            creationflags=_subprocess_creation_flags(),
         )
     except FileNotFoundError:
         return None, tr("tools.binary_not_found", default="binary not found")
@@ -73,9 +108,25 @@ class ToolRegistry:
             if configured_path.exists():
                 return str(configured_path.resolve())
 
-        fallback_binary = TOOL_BINARIES.get(tool_name, tool_name)
-        found = shutil.which(fallback_binary)
-        return found
+        # Try CLI-friendly candidates in order. We deliberately skip macOS
+        # ``.app`` bundle paths because invoking the GUI binary they wrap
+        # opens a window instead of returning a version string (this is the
+        # root cause of the historical ``fk doctor`` opening MediaInfo bug).
+        candidates = TOOL_BINARY_CANDIDATES.get(tool_name, (tool_name,))
+        for candidate in candidates:
+            found = shutil.which(candidate)
+            if found and not _is_macos_app_bundle(found):
+                return found
+
+        # As a last resort, accept a ``.app`` bundle path so we at least
+        # report the tool as configured — but the version probe below will
+        # still skip the version call to avoid launching the GUI.
+        for candidate in candidates:
+            found = shutil.which(candidate)
+            if found:
+                return found
+
+        return None
 
     def get_status(self, tool_name: str) -> ToolStatus:
         configured = self.settings.get(f"tools.{tool_name}")
@@ -90,6 +141,23 @@ class ToolRegistry:
                 available=False,
                 version=None,
                 error=tr("tools.not_found", default="not found"),
+            )
+
+        # If the only resolvable binary points inside a macOS ``.app`` bundle,
+        # skip the version probe — invoking the GUI executable would launch a
+        # window. We still surface the path so the user can install the CLI.
+        if _is_macos_app_bundle(resolved):
+            return ToolStatus(
+                name=tool_name,
+                configured_path=configured or None,
+                resolved_path=resolved,
+                available=False,
+                version=None,
+                error=tr(
+                    "tools.gui_only",
+                    default="GUI-only binary detected; install the CLI version of {tool}.",
+                    tool=tool_name,
+                ),
             )
 
         version_args = TOOL_COMMANDS.get(tool_name, ["--version"])

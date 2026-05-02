@@ -55,6 +55,7 @@
 {{ ui.line("Aspect", movie.aspect_ratio_display) }}
 {{ ui.line("Video", movie.video_codec) }}
 {{ ui.line("HDR", movie.hdr_display) }}
+{{ ui.line("Encode Settings", movie.video_encoding_settings) }}
 
 {% for track in movie.video_tracks %}
 {{ ui.track_section("VIDEO TRACK", track.display_id) }}

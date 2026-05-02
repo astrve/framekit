@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "framekit-cli"
-# Bump the version number for the 1.1.1 release.
+# Bump the version number for the 1.1.2 release.
 # This final pass aggregates the work from previous passes and prepares
 # the project for public release on GitHub.
-version = "1.1.1"
+version = "1.1.2"
 description = "Headless-first media workflow toolkit"
 readme = "README.md"
 requires-python = ">=3.11"

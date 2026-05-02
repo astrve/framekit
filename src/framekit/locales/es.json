@@ -673,4 +673,7 @@
   "torrent.selector.announce": "URL de announce del torrent",
   "torrent.success.announce_saved": "URL de announce guardada: {url}",
   "torrent.success.announce_selected": "URL de announce seleccionada: {url}"
+  ,
+  "cleanmkv.error.invalid_file_type": "El archivo no es un MKV: {file}",
+  "cleanmkv.warning.different_bitrates": "Se detectaron varias pistas de audio con el mismo idioma, códec y canales pero con bitrates diferentes. Solo se mostrará una; selecciona manualmente el bitrate deseado."
 }

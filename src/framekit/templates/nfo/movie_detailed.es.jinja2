@@ -55,6 +55,7 @@
 {{ ui.line("Relación de aspecto", movie.aspect_ratio_display) }}
 {{ ui.line("Vídeo", movie.video_codec) }}
 {{ ui.line("HDR", movie.hdr_display) }}
+{{ ui.line("Ajustes de codificación", movie.video_encoding_settings) }}
 
 {% for track in movie.video_tracks %}
 {{ ui.track_section("PISTA DE VÍDEO", track.display_id) }}

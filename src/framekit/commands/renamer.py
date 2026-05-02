@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import sys
+
 # Prefer rich_click if available; fall back to click when the rich integration is not installed.
 try:
     import rich_click as click  # type: ignore[import-not-found]
 except Exception:
     import click  # type: ignore[import-not-found]
+from pathlib import Path
+
 from rich import box
 from rich.table import Table
 
@@ -12,9 +16,20 @@ from framekit.core.i18n import tr
 from framekit.core.paths import PathResolver
 from framekit.core.settings import SettingsStore
 from framekit.modules.renamer.service import RenamerService
+from framekit.modules.renamer.term_selector import (
+    TermInventory,
+    collect_terms,
+    derive_remove_terms,
+)
 from framekit.ui.branding import print_module_banner
 from framekit.ui.console import console, print_error, print_info, print_success, print_warning
-from framekit.ui.selector import confirm_choice
+from framekit.ui.selector import (
+    SelectorDivider,
+    SelectorEntry,
+    SelectorOption,
+    confirm_choice,
+    select_many,
+)
 
 
 def _join_path_parts(parts: tuple[str, ...]) -> str:
@@ -105,6 +120,178 @@ def _print_rename_preview(report, *, details: bool = False, applied: bool = Fals
         console.print(table)
 
 
+def _category_label(category: str) -> str:
+    return tr(
+        f"renamer.term_selector.category.{category}",
+        default={
+            "episode_code": "Episode codes",
+            "year": "Year",
+            "language": "Language",
+            "resolution": "Resolution",
+            "source": "Source",
+            "video_codec": "Video codec",
+            "audio_codec": "Audio codec",
+            "hdr": "HDR",
+            "team": "Team",
+            "other": "Other",
+        }.get(category, category.replace("_", " ").title()),
+    )
+
+
+def _print_term_inventory_summary(inventory: TermInventory, folder: Path) -> None:
+    """Render the read-only summary of the detected terms before the picker."""
+    table = Table(
+        title=tr("renamer.term_selector.summary_title", default="Detected Terms"),
+        expand=True,
+        box=box.HEAVY,
+        border_style="white",
+    )
+    table.add_column(tr("common.category", default="Category"), width=18, no_wrap=True)
+    table.add_column(tr("common.value", default="Value"), ratio=2, overflow="fold")
+    table.add_column(tr("common.count", default="Count"), width=8, no_wrap=True)
+    table.add_column(tr("common.status", default="Status"), width=10, no_wrap=True)
+
+    if inventory.episode_codes.count:
+        table.add_row(
+            _category_label("episode_code"),
+            inventory.episode_codes.label,
+            str(inventory.episode_codes.count),
+            f"[cyan]{tr('renamer.term_selector.locked', default='locked')}[/cyan]",
+        )
+
+    for entry in inventory.entries:
+        status = (
+            f"[cyan]{tr('renamer.term_selector.locked', default='locked')}[/cyan]"
+            if entry.locked
+            else f"[green]{tr('renamer.term_selector.selectable', default='selectable')}[/green]"
+        )
+        table.add_row(_category_label(entry.category), entry.value, str(entry.count), status)
+
+    console.print(table)
+    print_info(
+        tr(
+            "renamer.term_selector.scanned_files",
+            default="Scanned {count} file(s)",
+            count=len(inventory.files),
+        )
+    )
+
+
+def _build_term_selector_entries(inventory: TermInventory) -> list[SelectorEntry]:
+    """
+    Build the entries for the interactive term selector. Locked entries are
+    rendered as `disabled` SelectorOption rows so the user can see them but
+    cannot toggle them off.
+    """
+    entries: list[SelectorEntry] = []
+
+    locked_label = tr("renamer.term_selector.locked", default="locked")
+
+    # Episode codes — always locked, single grouped row.
+    if inventory.episode_codes.count:
+        entries.append(SelectorDivider(_category_label("episode_code")))
+        entries.append(
+            SelectorOption(
+                value=f"__locked__:episode_code:{inventory.episode_codes.label}",
+                label=f"{inventory.episode_codes.label} (×{inventory.episode_codes.count})",
+                hint=locked_label,
+                selected=True,
+                disabled=True,
+                disabled_reason=locked_label,
+            )
+        )
+
+    # Group remaining entries by category, dividers between categories.
+    last_category: str | None = None
+    for entry in inventory.entries:
+        if entry.category != last_category:
+            entries.append(SelectorDivider(_category_label(entry.category)))
+            last_category = entry.category
+
+        if entry.locked:
+            entries.append(
+                SelectorOption(
+                    value=f"__locked__:{entry.category}:{entry.value}",
+                    label=f"{entry.value} (×{entry.count})",
+                    hint=locked_label,
+                    selected=True,
+                    disabled=True,
+                    disabled_reason=locked_label,
+                )
+            )
+        else:
+            entries.append(
+                SelectorOption(
+                    value=entry.value,
+                    label=f"{entry.value} (×{entry.count})",
+                    hint=tr(
+                        "renamer.term_selector.option_hint",
+                        default="Untick to remove this term from file names",
+                    ),
+                    selected=entry.selected_by_default,
+                )
+            )
+
+    return entries
+
+
+def _run_term_selector(folder: Path) -> tuple[str, ...] | None:
+    """
+    Open the interactive term picker for `folder` and return the resulting
+    `remove_terms` tuple. Returns `None` if the user cancelled or if there
+    are no selectable terms (no point asking).
+
+    `RuntimeError` raised by the underlying selector in headless mode is
+    caught and surfaced as a regular warning so the caller can fall back to
+    the explicit `--remove-term` flag without crashing.
+    """
+    inventory = collect_terms(folder)
+    if inventory.is_empty() and inventory.episode_codes.count == 0:
+        print_warning(
+            tr(
+                "renamer.term_selector.no_terms",
+                default="No terms detected in this folder.",
+            )
+        )
+        return ()
+
+    _print_term_inventory_summary(inventory, folder)
+
+    selectable = inventory.selectable()
+    if not selectable:
+        print_info(
+            tr(
+                "renamer.term_selector.nothing_selectable",
+                default="Nothing to pick — all detected terms are locked.",
+            )
+        )
+        return ()
+
+    entries = _build_term_selector_entries(inventory)
+
+    try:
+        kept_values = select_many(
+            title=tr("renamer.term_selector.title", default="Choose terms to keep"),
+            entries=entries,
+            page_size=12,
+            minimal_count=0,
+        )
+    except KeyboardInterrupt:
+        return None
+    except RuntimeError as exc:
+        print_warning(str(exc))
+        return ()
+
+    # Filter out locked sentinel values; only string values from selectable
+    # entries should reach `derive_remove_terms`.
+    kept = {
+        str(value)
+        for value in kept_values
+        if isinstance(value, str) and not value.startswith("__locked__:")
+    }
+    return derive_remove_terms(inventory, kept)
+
+
 def run_renamer_command(
     *,
     path: str | None,
@@ -114,6 +301,7 @@ def run_renamer_command(
     force_lang: bool,
     show_details: bool = False,
     remove_terms: tuple[str, ...] = (),
+    select_terms: bool | None = None,
 ) -> int:
     if apply_changes and dry_run:
         print_error(
@@ -152,13 +340,57 @@ def run_renamer_command(
             )
         )
 
+    # Resolve whether to open the interactive term picker. Explicit flag wins;
+    # otherwise we offer the picker only when we are *interactive* AND the
+    # caller did not already supply explicit `--remove-term` values nor a
+    # non-interactive mode (`--apply` / `--dry-run`).
+    if select_terms is True:
+        run_picker = True
+    elif select_terms is False:
+        run_picker = False
+    else:
+        run_picker = (
+            bool(sys.stdin.isatty()) and not remove_terms and not apply_changes and not dry_run
+        )
+
+    effective_remove_terms = tuple(remove_terms)
+    if run_picker:
+        picker_result = _run_term_selector(folder)
+        if picker_result is None:
+            print_warning(
+                tr(
+                    "renamer.term_selector.cancelled",
+                    default="Term selection cancelled.",
+                )
+            )
+            return 1
+        # Picker output is *additive* to any explicit `--remove-term` values.
+        # Deduplicate while keeping the order: CLI terms first, then picker.
+        seen: set[str] = set()
+        merged: list[str] = []
+        for term in (*remove_terms, *picker_result):
+            key = term.upper()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(term)
+        effective_remove_terms = tuple(merged)
+        if effective_remove_terms:
+            print_info(
+                tr(
+                    "renamer.term_selector.removing",
+                    default="Removing terms: {terms}",
+                    terms=", ".join(effective_remove_terms),
+                )
+            )
+
     interactive_confirmation = not apply_changes and not dry_run
     report = service.run(
         folder,
         default_lang=default_lang,
         apply_changes=apply_changes,
         force_lang=force_lang,
-        remove_terms=tuple(remove_terms),
+        remove_terms=effective_remove_terms,
     )
 
     _print_rename_preview(report, details=show_details, applied=apply_changes)
@@ -200,7 +432,7 @@ def run_renamer_command(
             default_lang=default_lang,
             apply_changes=True,
             force_lang=force_lang,
-            remove_terms=tuple(remove_terms),
+            remove_terms=effective_remove_terms,
         )
         _print_rename_preview(report, details=show_details, applied=True)
 
@@ -267,6 +499,15 @@ def run_renamer_command(
         default="Remove a term from source names before normalization.",
     ),
 )
+@click.option(
+    "--select-terms/--no-select-terms",
+    "select_terms",
+    default=None,
+    help=tr(
+        "cli.renamer.option.select_terms",
+        default="Open or bypass the interactive 'terms to keep' picker before previewing.",
+    ),
+)
 def renamer_command(
     path_parts: tuple[str, ...],
     lang: str | None,
@@ -275,6 +516,7 @@ def renamer_command(
     force_lang: bool,
     show_details: bool,
     remove_terms: tuple[str, ...],
+    select_terms: bool | None,
 ) -> int:
     return run_renamer_command(
         path=_join_path_parts(path_parts) or None,
@@ -284,4 +526,5 @@ def renamer_command(
         force_lang=force_lang,
         show_details=show_details,
         remove_terms=remove_terms,
+        select_terms=select_terms,
     )
