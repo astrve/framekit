@@ -1,13 +1,10 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-# Prefer rich_click if available; fall back to click when the rich integration is not installed.
-try:
-    import rich_click as click  # type: ignore[import-not-found]
-except Exception:
-    import click  # type: ignore[import-not-found]
-
+from framekit.core.cli_helpers import join_path_parts
+from framekit.core.http import redact_url
 from framekit.core.i18n import tr
 from framekit.core.paths import PathResolver
 from framekit.core.settings import SettingsStore
@@ -23,13 +20,93 @@ from framekit.modules.torrent.service import (
     is_valid_announce_url,
 )
 from framekit.ui.branding import print_module_banner
-from framekit.ui.console import print_error, print_exception_error, print_info, print_success
+
+# Prefer rich_click if available; fall back to click when the rich integration is not installed.
+from framekit.ui.click_helper import click
+from framekit.ui.console import (
+    print_error,
+    print_exception_error,
+    print_info,
+    print_success,
+    print_warning,
+)
 from framekit.ui.progress import framekit_progress
-from framekit.ui.selector import SelectorOption, select_one
+from framekit.ui.unified_selector import SelectorOption, confirm_choice
+from framekit.ui.unified_selector import select_one as _select_one
 
 
-def _join_path_parts(parts: tuple[str, ...]) -> str:
-    return " ".join(part for part in parts if part).strip()
+def _read_piece_length_from_torrent(torrent_path: Path) -> int | None:
+    """Read piece length from an existing .torrent file for cross-seeding."""
+    try:
+        raw = torrent_path.read_bytes()
+    except OSError:
+        return None
+    try:
+        decoded = _bdecode(raw)
+    except (ValueError, KeyError):
+        return None
+    # Bencoded payloads are heterogeneous (int / bytes / list / dict). A
+    # well-formed .torrent file has a top-level dict; defensively bail out
+    # otherwise so static type checkers and runtime both treat the function
+    # as "best-effort, returns None on any malformed input".
+    if not isinstance(decoded, dict):
+        return None
+    info = decoded.get(b"info") or decoded.get("info")
+    if not isinstance(info, dict):
+        return None
+    piece_length = info.get(b"piece length") or info.get("piece length")
+    if isinstance(piece_length, int) and piece_length > 0:
+        return piece_length
+    return None
+
+
+def _bdecode(data: bytes):
+    """Minimal bencoding decoder for reading .torrent metadata."""
+
+    def _decode(data: bytes, idx: int):
+        if idx >= len(data):
+            raise ValueError("Unexpected end of bencode payload")
+        if data[idx : idx + 1] == b"i":
+            end = data.index(b"e", idx + 1)
+            return int(data[idx + 1 : end]), end + 1
+        elif data[idx : idx + 1] == b"l":
+            result = []
+            idx += 1
+            if idx >= len(data):
+                raise ValueError("Unterminated bencode list")
+            while data[idx : idx + 1] != b"e":
+                val, idx = _decode(data, idx)
+                result.append(val)
+                if idx >= len(data):
+                    raise ValueError("Unterminated bencode list")
+            return result, idx + 1
+        elif data[idx : idx + 1] == b"d":
+            result = {}
+            idx += 1
+            if idx >= len(data):
+                raise ValueError("Unterminated bencode dict")
+            while data[idx : idx + 1] != b"e":
+                key, idx = _decode(data, idx)
+                val, idx = _decode(data, idx)
+                result[key] = val
+                if idx >= len(data):
+                    raise ValueError("Unterminated bencode dict")
+            return result, idx + 1
+        elif data[idx : idx + 1].isdigit():
+            colon = data.index(b":", idx)
+            length = int(data[idx:colon])
+            start = colon + 1
+            end = start + length
+            if end > len(data):
+                raise ValueError("Truncated bencode byte string")
+            return data[start:end], end
+        else:
+            raise ValueError(f"Invalid bencode at position {idx}")
+
+    result, consumed = _decode(data, 0)
+    if consumed != len(data):
+        raise ValueError("Trailing bytes after valid bencode payload")
+    return result
 
 
 def _parse_piece_length(value: str | None) -> int | None:
@@ -92,28 +169,200 @@ def _select_payload_interactively(target: Path) -> TorrentPayload:
 
 
 def _resolve_payload_or_error(
-    target: Path, *, content_mode: str, select_content: bool
-) -> TorrentPayload:
+    target: Path, *, content_mode: str, select_content: bool, allow_ambiguous: bool = False
+) -> tuple[TorrentPayload, str | None]:
+    """Resolve torrent payload with optional ambiguity handling.
+
+    Returns:
+        A tuple of (TorrentPayload, warning_message).
+    """
     if select_content:
-        return _select_payload_interactively(target)
-    return resolve_torrent_payload(target, content_mode=content_mode)
+        return (_select_payload_interactively(target), None)
+    return resolve_torrent_payload(
+        target, content_mode=content_mode, allow_ambiguous=allow_ambiguous
+    )
+
+
+_ENCRYPTED = "<encrypted>"
+
+
+class _PayloadSelectionCancelled(RuntimeError):
+    """Raised when user cancels interactive multi-group selection."""
+
+
+def _raw_announce_urls(settings: dict) -> list[str]:
+    torrent_settings = settings.setdefault("modules", {}).setdefault("torrent", {})
+    urls = torrent_settings.get("announce_urls", [])
+    if not isinstance(urls, list):
+        return []
+    return [str(item).strip() for item in urls if str(item).strip()]
+
+
+def _print_vault_fix_hint() -> None:
+    print_info(
+        tr(
+            "torrent.info.vault_fix",
+            default="Solutions:\n"
+            "  1. Run 'fk settings security status' to check vault status\n"
+            "  2. Run 'fk settings security set-announces <url>' to reconfigure\n"
+            "  3. Run 'fk setup' to restore vault access",
+        )
+    )
+
+
+def _decrypt_torrent_announces() -> list[str]:
+    try:
+        from framekit.core.settings import Settings
+
+        decrypted = Settings().get_torrent_announces()
+        if not decrypted:
+            print_error(
+                tr(
+                    "torrent.error.vault_announces_unavailable",
+                    default="Announce URLs are encrypted but vault is unavailable.",
+                )
+            )
+            _print_vault_fix_hint()
+        return decrypted
+    except Exception as exc:
+        print_error(
+            tr(
+                "torrent.error.announce_decrypt_failed",
+                default="Failed to decrypt announce URLs: {error}",
+                error=str(exc),
+            )
+        )
+        _print_vault_fix_hint()
+        return []
 
 
 def _announce_urls(settings: dict) -> list[str]:
     torrent_settings = settings.setdefault("modules", {}).setdefault("torrent", {})
-    urls = torrent_settings.get("announce_urls", [])
-    result: list[str] = []
-    if isinstance(urls, list):
-        result = [str(item).strip() for item in urls if str(item).strip()]
+    result = _raw_announce_urls(settings)
+
+    if result and len(result) == 1 and result[0] == _ENCRYPTED:
+        result = _decrypt_torrent_announces()
+
     legacy = str(torrent_settings.get("announce", "") or "").strip()
-    if legacy and legacy not in result:
+    # Don't add legacy announce if it's the encrypted placeholder
+    if legacy and legacy != _ENCRYPTED and legacy not in result:
         result.insert(0, legacy)
     return result
+
+
+def _prompt_for_announce_and_save(settings: dict) -> str:
+    """Interactively ask for an announce URL and persist it.
+
+    Triggered when the user runs ``framekit torrent`` without any announce
+    configured. On a non-TTY (CI/headless) prints the error path the previous
+    behaviour used and returns ``""``. On a TTY, prompts for a URL, validates
+    it, saves it via ``Settings`` (vault or plaintext depending on
+    ``security.enabled``), and returns the saved value so the calling
+    command can continue without restarting.
+
+    Args:
+        settings: Loaded settings dict from ``SettingsStore.load()``. The
+            dict is mutated in place to reflect the saved announce so the
+            rest of the command sees the new value.
+
+    Returns:
+        The validated announce URL, or ``""`` when the user cancelled, the
+        terminal is non-interactive, or the saved value is unusable.
+    """
+    if not sys.stdin.isatty():
+        print_error(
+            tr(
+                "torrent.error.no_announce",
+                default=(
+                    "No announce URL configured. Run "
+                    "'framekit settings security set-announces' (with security "
+                    "enabled) or pass '--announce <url>' on the command line."
+                ),
+            )
+        )
+        return ""
+
+    print_warning(
+        tr(
+            "torrent.warning.no_announce_prompt",
+            default=(
+                "No announce URL is configured yet. Enter one now to continue "
+                "(leave blank to abort)."
+            ),
+        )
+    )
+    raw = click.prompt(
+        tr("torrent.prompt.announce", default="Announce URL"),
+        default="",
+        show_default=False,
+    )
+    url = raw.strip()
+    if not url:
+        print_info(
+            tr("torrent.info.no_announce_aborted", default="No announce provided. Aborting.")
+        )
+        return ""
+
+    if not is_valid_announce_url(url):
+        print_error(
+            tr(
+                "torrent.error.invalid_announce",
+                default="Tracker announce must be a valid http(s) or udp URL.",
+            )
+        )
+        return ""
+
+    store = SettingsStore()
+    try:
+        _save_announce_selection(store, settings, url)
+    except Exception as exc:
+        print_error(
+            tr(
+                "torrent.error.save_announce_failed",
+                default="Could not save announce URL: {error}",
+                error=str(exc),
+            )
+        )
+        return ""
+
+    print_success(
+        tr(
+            "torrent.success.announce_saved",
+            default="Announce URL saved. Continuing.",
+        )
+    )
+    return url
 
 
 def _selected_announce(settings: dict) -> str:
     torrent_settings = settings.setdefault("modules", {}).setdefault("torrent", {})
     selected = str(torrent_settings.get("selected_announce", "") or "").strip()
+
+    if selected == _ENCRYPTED:
+        try:
+            from framekit.core.settings import Settings
+
+            url = Settings().get_selected_announce()
+            if not url:
+                print_error(
+                    tr(
+                        "torrent.error.vault_announce_unavailable",
+                        default="Selected announce URL is encrypted but vault returned empty value.",
+                    )
+                )
+                _print_vault_fix_hint()
+            return url
+        except Exception as exc:
+            print_error(
+                tr(
+                    "torrent.error.announce_decrypt_failed",
+                    default="Failed to decrypt announce URL: {error}",
+                    error=str(exc),
+                )
+            )
+            _print_vault_fix_hint()
+            return ""
+
     if selected:
         return selected
     urls = _announce_urls(settings)
@@ -121,6 +370,16 @@ def _selected_announce(settings: dict) -> str:
 
 
 def _save_announce_selection(store: SettingsStore, settings: dict, url: str) -> None:
+    from framekit.core.settings import Settings
+
+    settings_obj = Settings()
+    if settings_obj.is_security_enabled():
+        settings_obj.set_selected_announce(url)
+        # Reload mutated YAML into the caller's dict so subsequent reads see placeholder
+        settings.clear()
+        settings.update(store.load())
+        return
+
     torrent_settings = settings.setdefault("modules", {}).setdefault("torrent", {})
     urls = _announce_urls(settings)
     if url not in urls:
@@ -132,14 +391,40 @@ def _save_announce_selection(store: SettingsStore, settings: dict, url: str) -> 
 
 
 def _print_announces(settings: dict) -> None:
+    torrent_settings = settings.get("modules", {}).get("torrent", {})
+    raw_urls = torrent_settings.get("announce_urls", [])
+    raw_selected = str(torrent_settings.get("selected_announce", "") or "").strip()
+    is_encrypted = (
+        isinstance(raw_urls, list) and len(raw_urls) == 1 and raw_urls[0] == _ENCRYPTED
+    ) or raw_selected == _ENCRYPTED
+
     selected = _selected_announce(settings)
     urls = _announce_urls(settings)
+
     if not urls:
-        print_info(tr("torrent.announce.none", default="No announce URL configured."))
+        if is_encrypted:
+            print_error(
+                tr(
+                    "torrent.error.vault_announces_locked",
+                    default="Announce URLs are encrypted but vault is unavailable. Run `fk setup` to restore access.",
+                )
+            )
+        else:
+            print_info(tr("torrent.announce.none", default="No announce URL configured."))
         return
+
+    if is_encrypted:
+        print_info(
+            tr(
+                "torrent.announce.encrypted_ok",
+                default="Announce URLs are encrypted (vault unlocked).",
+            )
+        )
     for url in urls:
         marker = "*" if url == selected else "-"
-        print_info(f"{marker} {url}")
+        # SECURITY: Redact sensitive query parameters (passkey, authkey, etc.)
+        redacted = redact_url(url)
+        print_info(f"{marker} {redacted}")
 
 
 def run_torrent_config_command(
@@ -149,6 +434,7 @@ def run_torrent_config_command(
     list_announces: bool,
     select_announce: bool,
 ) -> int:
+    """Run torrent config command."""
     store = SettingsStore()
     settings = store.load()
     print_module_banner("Torrent")
@@ -160,7 +446,7 @@ def run_torrent_config_command(
     requested = add_announce or set_announce
     if requested:
         url = requested.strip()
-        if not is_valid_announce_url(url):
+        if url != _ENCRYPTED and not is_valid_announce_url(url):
             print_error(
                 tr(
                     "torrent.error.invalid_announce",
@@ -175,113 +461,185 @@ def run_torrent_config_command(
         return 0
 
     if select_announce:
-        urls = _announce_urls(settings)
-        if not urls:
-            print_error(tr("torrent.error.no_announces", default="No announce URL configured yet."))
-            return 1
-        try:
-            chosen = select_one(
-                title=tr("torrent.selector.announce", default="Torrent announce URL"),
-                entries=[SelectorOption(value=url, label=url, selected=False) for url in urls],
-                page_size=8,
-            )
-        except KeyboardInterrupt:
-            return 1
-        if chosen:
-            _save_announce_selection(store, settings, str(chosen))
-            print_success(
-                tr(
-                    "torrent.success.announce_selected",
-                    default="Selected announce URL: {url}",
-                    url=chosen,
-                )
-            )
-            return 0
+        return _handle_select_announce(store, settings)
 
     _print_announces(settings)
     return 0
 
 
-def run_torrent_command(
+def _handle_select_announce(store: SettingsStore, settings: dict) -> int:
+    urls = _announce_urls(settings)
+    if not urls:
+        print_error(tr("torrent.error.no_announces", default="No announce URL configured yet."))
+        return 1
+    try:
+        chosen = select_one(
+            title=tr("torrent.selector.announce", default="Torrent announce URL"),
+            entries=[SelectorOption(value=url, label=url, selected=False) for url in urls],
+            page_size=8,
+        )
+    except KeyboardInterrupt:
+        return 1
+    if not chosen:
+        return 0
+    _save_announce_selection(store, settings, str(chosen))
+    print_success(
+        tr(
+            "torrent.success.announce_selected",
+            default="Selected announce URL: {url}",
+            url=chosen,
+        )
+    )
+    return 0
+
+
+def _resolve_payload_for_mode(
     *,
-    path: str | None,
-    output: str | None,
-    announce: str | None,
-    private: bool | None,
-    piece_length: str | None,
-    dry_run: bool,
-    content_mode: str = "auto",
-    select_content: bool = False,
-    add_announce: str | None = None,
-    set_announce: str | None = None,
-    list_announces: bool = False,
-    select_announce: bool = False,
-) -> int:
-    if add_announce or set_announce or list_announces or select_announce:
-        return run_torrent_config_command(
-            add_announce=add_announce,
-            set_announce=set_announce,
-            list_announces=list_announces,
-            select_announce=select_announce,
+    target: Path,
+    content_mode: str,
+    select_content: bool,
+    is_headless: bool,
+) -> tuple[TorrentPayload, str | None]:
+    try:
+        return _resolve_payload_or_error(
+            target, content_mode=content_mode, select_content=select_content, allow_ambiguous=False
+        )
+    except ValueError as exc:
+        error_msg = str(exc)
+        if "Multiple media groups detected" not in error_msg:
+            raise
+
+        if is_headless:
+            print_warning(error_msg)
+            print_warning(
+                tr(
+                    "torrent.warning.proceeding_headless",
+                    default="Proceeding with first group in headless mode.",
+                )
+            )
+            return _resolve_payload_or_error(
+                target,
+                content_mode=content_mode,
+                select_content=select_content,
+                allow_ambiguous=True,
+            )
+
+        print_error(error_msg)
+        print_info(
+            tr(
+                "torrent.info.multi_group_prompt",
+                default="The first group will be used if you proceed.",
+            )
+        )
+        confirmed = confirm_choice(
+            title=tr(
+                "torrent.confirm.proceed_anyway",
+                default="Do you want to proceed anyway?",
+            ),
+            default=False,
+        )
+        if not confirmed:
+            print_info(tr("common.cancelled", default="Cancelled."))
+            raise _PayloadSelectionCancelled("cancelled") from None
+        return _resolve_payload_or_error(
+            target,
+            content_mode=content_mode,
+            select_content=select_content,
+            allow_ambiguous=True,
         )
 
-    store = SettingsStore()
-    settings = store.load()
-    resolver = PathResolver(settings)
 
-    print_module_banner("Torrent")
+def _resolve_effective_piece_length(
+    *,
+    cross_seed_torrent: str | None,
+    piece_length: str | None,
+    torrent_settings: dict,
+) -> int | None:
+    if cross_seed_torrent:
+        cs_path = Path(cross_seed_torrent)
+        effective_piece_length = _read_piece_length_from_torrent(cs_path)
+        if effective_piece_length is None:
+            raise ValueError(
+                tr(
+                    "torrent.error.cross_seed_read_failed",
+                    default="Could not read piece length from: {path}",
+                    path=cs_path,
+                )
+            )
+        print_info(
+            tr(
+                "torrent.info.cross_seed_piece_length",
+                default="Cross-seed: using piece length {size} from {path}",
+                size=format_bytes_human(effective_piece_length),
+                path=cs_path.name,
+            )
+        )
+        return effective_piece_length
 
-    target = resolver.resolve_start_folder("torrent", path or None)
-    if path:
-        target = Path(path)
+    return _parse_piece_length(
+        piece_length or str(torrent_settings.get("piece_length", "auto") or "auto")
+    )
+
+
+def _resolve_torrent_target(path: str | None, resolver: PathResolver) -> Path:
+    target = Path(path) if path else resolver.resolve_start_folder("torrent", path or None)
     if not target.exists():
-        print_error(
+        raise FileNotFoundError(
             tr("torrent.error.path_not_found", default="Path not found: {path}", path=target)
         )
-        return 1
+    return target
 
+
+def _resolve_announce_and_private(
+    *,
+    settings: dict,
+    announce: str | None,
+    private: bool | None,
+) -> tuple[str, bool, dict]:
     torrent_settings = settings.setdefault("modules", {}).setdefault("torrent", {})
     final_announce = announce.strip() if announce is not None else _selected_announce(settings)
-    if final_announce and not is_valid_announce_url(final_announce):
-        print_error(
-            tr(
-                "torrent.error.invalid_announce",
-                default="Tracker announce must be a valid http(s) or udp URL.",
-            )
-        )
-        return 1
+    if not final_announce:
+        final_announce = _prompt_for_announce_and_save(settings)
+    if not final_announce:
+        raise ValueError("missing_announce")
+    if not is_valid_announce_url(final_announce):
+        raise ValueError("invalid_announce")
+
     final_private = bool(torrent_settings.get("private", True)) if private is None else private
+    return final_announce, final_private, torrent_settings
 
-    try:
-        payload = _resolve_payload_or_error(
-            target, content_mode=content_mode, select_content=select_content
+
+def _build_torrent_with_progress(
+    *,
+    payload: TorrentPayload,
+    output: str | None,
+    final_announce: str,
+    final_private: bool,
+    effective_piece_length: int | None,
+    dry_run: bool,
+):
+    payload_files = list(payload.files)
+    total_size = sum(path.stat().st_size for path in payload_files)
+    with framekit_progress(
+        tr("torrent.progress.hashing", default="Hashing torrent payload"),
+        total=total_size,
+        unit="bytes",
+        total_files=len(payload_files) if len(payload_files) > 1 else None,
+    ) as advance:
+        options = TorrentBuildOptions(
+            announce=final_announce,
+            private=final_private,
+            piece_length=effective_piece_length,
+            output_path=Path(output) if output else None,
+            progress_callback=advance,
+            payload_files=tuple(payload_files),
+            payload_name=payload.name,
         )
-        payload_files = list(payload.files)
-        total_size = sum(path.stat().st_size for path in payload_files)
-        with framekit_progress(
-            tr("torrent.progress.hashing", default="Hashing torrent payload"),
-            total=total_size,
-            unit="bytes",
-            total_files=len(payload_files) if len(payload_files) > 1 else None,
-        ) as advance:
-            options = TorrentBuildOptions(
-                announce=final_announce,
-                private=final_private,
-                piece_length=_parse_piece_length(
-                    piece_length or str(torrent_settings.get("piece_length", "auto") or "auto")
-                ),
-                output_path=Path(output) if output else None,
-                progress_callback=advance,
-                payload_files=tuple(payload_files),
-                payload_name=payload.name,
-            )
-            _report, result = TorrentService().build(
-                payload.path, options=options, write=not dry_run
-            )
-    except Exception as exc:
-        print_exception_error(exc)
-        return 1
+        _report, result = TorrentService().build(payload.path, options=options, write=not dry_run)
+    return result, total_size
 
+
+def _print_torrent_result(payload: TorrentPayload, result, total_size: int, dry_run: bool) -> None:
     print_info(tr("common.source", default="Source") + f": {payload.path}")
     print_info(tr("torrent.info.content_mode", default="Content mode") + f": {payload.mode}")
     if payload.ignored_files:
@@ -299,7 +657,6 @@ def run_torrent_command(
         + f": {format_bytes_human(result.piece_length)}"
     )
     print_info(tr("torrent.info.pieces", default="Pieces") + f": {result.pieces_count}")
-
     if dry_run:
         print_success(tr("torrent.success.dry_run", default="Torrent dry-run completed."))
     else:
@@ -311,14 +668,268 @@ def run_torrent_command(
             )
         )
 
-    torrent_settings["last_folder"] = str(
-        payload.path if payload.path.is_dir() else payload.path.parent
+
+def _try_resolve_torrent_target(
+    path: str | None, resolver: PathResolver
+) -> tuple[int | None, Path | None]:
+    try:
+        return None, _resolve_torrent_target(path, resolver)
+    except FileNotFoundError as exc:
+        print_error(str(exc))
+        return 1, None
+
+
+def _try_resolve_announce_and_private(
+    *,
+    settings: dict,
+    announce: str | None,
+    private: bool | None,
+):
+    try:
+        final_announce, final_private, torrent_settings = _resolve_announce_and_private(
+            settings=settings,
+            announce=announce,
+            private=private,
+        )
+        return None, final_announce, final_private, torrent_settings
+    except ValueError as exc:
+        if str(exc) != "missing_announce":
+            print_error(
+                tr(
+                    "torrent.error.invalid_announce",
+                    default="Tracker announce must be a valid http(s) or udp URL.",
+                )
+            )
+        return 1, "", False, {}
+
+
+def _try_resolve_payload(
+    *,
+    target: Path,
+    content_mode: str,
+    select_content: bool,
+):
+    try:
+        payload, warning = _resolve_payload_for_mode(
+            target=target,
+            content_mode=content_mode,
+            select_content=select_content,
+            is_headless=not sys.stdin.isatty(),
+        )
+        return None, payload, warning
+    except (KeyboardInterrupt, _PayloadSelectionCancelled):
+        return 1, None, None
+    except Exception as exc:
+        print_exception_error(exc)
+        return 1, None, None
+
+
+def _try_resolve_piece_length(
+    *,
+    cross_seed_torrent: str | None,
+    piece_length: str | None,
+    torrent_settings: dict,
+) -> tuple[int | None, int | None]:
+    try:
+        resolved = _resolve_effective_piece_length(
+            cross_seed_torrent=cross_seed_torrent,
+            piece_length=piece_length,
+            torrent_settings=torrent_settings,
+        )
+        return None, resolved
+    except ValueError as exc:
+        print_error(str(exc))
+        return 1, None
+
+
+def _try_build_torrent(
+    *,
+    payload: TorrentPayload,
+    output: str | None,
+    final_announce: str,
+    final_private: bool,
+    effective_piece_length: int | None,
+    dry_run: bool,
+):
+    try:
+        result, total_size = _build_torrent_with_progress(
+            payload=payload,
+            output=output,
+            final_announce=final_announce,
+            final_private=final_private,
+            effective_piece_length=effective_piece_length,
+            dry_run=dry_run,
+        )
+        return None, result, total_size
+    except Exception as exc:
+        print_exception_error(exc)
+        return 1, None, None
+
+
+def _handle_torrent_config_request(
+    *,
+    add_announce: str | None,
+    set_announce: str | None,
+    list_announces: bool,
+    select_announce: bool,
+) -> int | None:
+    if not any([add_announce, set_announce, list_announces, select_announce]):
+        return None
+    return run_torrent_config_command(
+        add_announce=add_announce,
+        set_announce=set_announce,
+        list_announces=list_announces,
+        select_announce=select_announce,
     )
-    store.save(settings)
+
+
+def _is_build_failed(build_code: int | None, result, total_size: int | None) -> bool:
+    return build_code is not None or result is None or total_size is None
+
+
+def _execute_torrent_pipeline(
+    *,
+    settings: dict,
+    resolver: PathResolver,
+    path: str | None,
+    output: str | None,
+    announce: str | None,
+    private: bool | None,
+    piece_length: str | None,
+    dry_run: bool,
+    content_mode: str,
+    select_content: bool,
+    cross_seed_torrent: str | None,
+) -> int:
+    target_code, target = _try_resolve_torrent_target(path, resolver)
+    if target_code is not None:
+        return 1
+    if target is None:
+        return 1
+
+    announce_code, final_announce, final_private, torrent_settings = (
+        _try_resolve_announce_and_private(
+            settings=settings,
+            announce=announce,
+            private=private,
+        )
+    )
+    if announce_code is not None:
+        return 1
+
+    payload_code, payload, warning = _try_resolve_payload(
+        target=target,
+        content_mode=content_mode,
+        select_content=select_content,
+    )
+    if payload_code is not None:
+        return 1
+    assert payload is not None, "payload should be available on successful resolution"  # nosec B101
+    if warning:
+        print_warning(warning)
+
+    piece_code, effective_piece_length = _try_resolve_piece_length(
+        cross_seed_torrent=cross_seed_torrent,
+        piece_length=piece_length,
+        torrent_settings=torrent_settings,
+    )
+    if piece_code is not None:
+        return 1
+
+    build_code, result, total_size = _try_build_torrent(
+        payload=payload,
+        output=output,
+        final_announce=final_announce,
+        final_private=final_private,
+        effective_piece_length=effective_piece_length,
+        dry_run=dry_run,
+    )
+    if _is_build_failed(build_code, result, total_size):
+        return 1
+
+    assert total_size is not None, "total_size should be set on successful torrent build"  # nosec B101
+    _print_torrent_result(payload, result, total_size, dry_run)
     return 0
 
 
-@click.command("torrent", help=tr("cli.torrent.help", default="Create a .torrent file."))
+def run_torrent_command(
+    *,
+    path: str | None,
+    output: str | None,
+    announce: str | None,
+    private: bool | None,
+    piece_length: str | None,
+    dry_run: bool,
+    content_mode: str = "auto",
+    select_content: bool = False,
+    add_announce: str | None = None,
+    set_announce: str | None = None,
+    list_announces: bool = False,
+    select_announce: bool = False,
+    cross_seed_torrent: str | None = None,
+) -> int:
+    """Run torrent command."""
+    config_result = _handle_torrent_config_request(
+        add_announce=add_announce,
+        set_announce=set_announce,
+        list_announces=list_announces,
+        select_announce=select_announce,
+    )
+    if config_result is not None:
+        return config_result
+
+    store = SettingsStore()
+    settings = store.load()
+    resolver = PathResolver(settings)
+    print_module_banner("Torrent")
+    return _execute_torrent_pipeline(
+        settings=settings,
+        resolver=resolver,
+        path=path,
+        output=output,
+        announce=announce,
+        private=private,
+        piece_length=piece_length,
+        dry_run=dry_run,
+        content_mode=content_mode,
+        select_content=select_content,
+        cross_seed_torrent=cross_seed_torrent,
+    )
+
+
+@click.command(
+    "torrent",
+    help=tr(
+        "cli.torrent.help",
+        default=(
+            "Create .torrent files with intelligent payload detection and tracker configuration.\n\n"
+            "The torrent command automatically detects media files, creates optimized piece sizes, "
+            "and generates .torrent files ready for tracker upload.\n\n"
+            "Quick examples:\n"
+            "  fk torrent <folder>                     # Auto-detect media payload\n"
+            "  fk tor <folder> --announce <url>        # Specify tracker URL\n"
+            "  fk torrent <folder> --select-content    # Interactive payload selection\n"
+            "  fk tor <folder> --content media         # Force media-only mode\n"
+            "  fk torrent --set-announce <url>         # Save default announce URL\n\n"
+            "Setup:\n"
+            "  1. Add tracker announce URL: fk tor --add-announce <url>\n"
+            "  2. Select default: fk tor --select-announce\n"
+            "  3. Create torrent: fk tor <folder>\n\n"
+            "Features:\n"
+            "  • Automatic media file detection\n"
+            "  • Multi-group handling\n"
+            "  • Optimal piece size calculation\n"
+            "  • Private/public flag support\n"
+            "  • Multiple announce URL profiles\n\n"
+            "Best practices:\n"
+            "  • Use --select-content for ambiguous folders\n"
+            "  • Save announce URLs for quick reuse\n"
+            "  • Use --dry-run to preview without creating\n"
+            "  • Check piece size for optimal seeding\n\n"
+            "Related commands: pipeline, batch"
+        ),
+    ),
+)
 @click.argument("path_parts", nargs=-1)
 @click.option(
     "-o", "--output", help=tr("cli.torrent.option.output", default="Output .torrent path.")
@@ -333,10 +944,12 @@ def run_torrent_command(
     help=tr("cli.torrent.option.private", default="Set private flag."),
 )
 @click.option(
+    "-p",
     "--piece-length",
     help=tr("cli.torrent.option.piece_length", default="Piece length: auto, 512K, 1M, 2097152."),
 )
 @click.option(
+    "-d",
     "--dry-run",
     is_flag=True,
     help=tr("cli.torrent.option.dry_run", default="Hash and preview without writing."),
@@ -350,6 +963,7 @@ def run_torrent_command(
     help=tr("cli.torrent.option.content", default="Torrent content resolution mode."),
 )
 @click.option(
+    "-s",
     "--select-content",
     is_flag=True,
     help=tr(
@@ -376,11 +990,22 @@ def run_torrent_command(
     help=tr("cli.torrent.option.list_announces", default="List configured announce URLs."),
 )
 @click.option(
+    "-S",
     "--select-announce",
     is_flag=True,
     help=tr(
         "cli.torrent.option.select_announce",
         default="Choose the default announce URL interactively.",
+    ),
+)
+@click.option(
+    "-x",
+    "--cross-seed",
+    "cross_seed_torrent",
+    type=click.Path(exists=True),
+    help=tr(
+        "cli.torrent.option.cross_seed",
+        default="Match piece length from an existing .torrent file for cross-seeding.",
     ),
 )
 def torrent_command(
@@ -396,9 +1021,11 @@ def torrent_command(
     set_announce: str | None = None,
     list_announces: bool = False,
     select_announce: bool = False,
+    cross_seed_torrent: str | None = None,
 ) -> int:
+    """Handle torrent command."""
     return run_torrent_command(
-        path=_join_path_parts(path_parts) or None,
+        path=join_path_parts(path_parts) or None,
         output=output,
         announce=announce,
         private=private,
@@ -410,4 +1037,8 @@ def torrent_command(
         set_announce=set_announce,
         list_announces=list_announces,
         select_announce=select_announce,
+        cross_seed_torrent=cross_seed_torrent,
     )
+
+
+select_one = _select_one  # backwards-compatible patch target for tests

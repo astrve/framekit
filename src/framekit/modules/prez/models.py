@@ -7,6 +7,8 @@ from framekit.core.models.nfo import ReleaseNfoData
 
 @dataclass(frozen=True, slots=True)
 class PrezTrack:
+    """Prez track."""
+
     language: str
     language_code: str | None
     flag_url: str | None
@@ -20,7 +22,19 @@ class PrezTrack:
 
 
 @dataclass(frozen=True, slots=True)
+class PrezTrackGroup:
+    """Group of tracks sharing the same language."""
+
+    language: str
+    language_code: str | None
+    flag_url: str | None
+    tracks: tuple[PrezTrack, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class PrezField:
+    """Prez field."""
+
     key: str
     label: str
     value: str
@@ -30,6 +44,8 @@ class PrezField:
 
 @dataclass(frozen=True, slots=True)
 class PrezData:
+    """Prez data."""
+
     release: ReleaseNfoData
     title: str
     original_title: str
@@ -66,12 +82,23 @@ class PrezData:
     video_fields: tuple[PrezField, ...] = ()
     audio_tracks: tuple[PrezTrack, ...] = ()
     subtitle_tracks: tuple[PrezTrack, ...] = ()
+    audio_track_groups: tuple[PrezTrackGroup, ...] = ()
+    subtitle_track_groups: tuple[PrezTrackGroup, ...] = ()
     badges: tuple[str, ...] = field(default_factory=tuple)
+    banner_audio: str = ""
+    banner_information: str = ""
+    banner_metadata: str = ""
+    banner_release: str = ""
+    banner_subtitles: str = ""
+    banner_synopsis: str = ""
+    banner_technical: str = ""
 
     @property
     def has_metadata_section(self) -> bool:
+        """Return ``True`` if has metadata section."""
         return bool(self.metadata_fields or self.cast != "-" or self.crew != "-")
 
     @property
     def has_mediainfo(self) -> bool:
+        """Return ``True`` if has mediainfo."""
         return bool(self.mediainfo_text and self.mediainfo_text.strip())

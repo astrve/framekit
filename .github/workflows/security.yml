@@ -1,0 +1,180 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Run weekly on Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pip-audit
+      
+      - name: Run pip-audit
+        id: pip-audit
+        run: |
+          # Generate both reports; if pip-audit exits non-zero (vulns found)
+          # we still want the artifacts uploaded so the later threshold check
+          # can act on them. We capture the exit code instead of swallowing it
+          # so a genuine tool error (network, missing deps) still surfaces.
+          set +e
+          pip-audit --desc --format json --output pip-audit-report.json
+          json_rc=$?
+          pip-audit --desc --format markdown --output pip-audit-report.md
+          md_rc=$?
+          set -e
+          if [ "$json_rc" -gt 1 ] || [ "$md_rc" -gt 1 ]; then
+            echo "::error::pip-audit failed to run (exit codes: json=$json_rc md=$md_rc)"
+            exit 1
+          fi
+      
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: |
+            pip-audit-report.json
+            pip-audit-report.md
+      
+      - name: Check for critical vulnerabilities
+        run: |
+          if [ -f pip-audit-report.json ]; then
+            CRITICAL=$(jq '[.dependencies[] | select(.vulns[].severity == "CRITICAL")] | length' pip-audit-report.json)
+            HIGH=$(jq '[.dependencies[] | select(.vulns[].severity == "HIGH")] | length' pip-audit-report.json)
+            
+            echo "Critical vulnerabilities: $CRITICAL"
+            echo "High vulnerabilities: $HIGH"
+            
+            if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+              echo "::error::Found $CRITICAL critical and $HIGH high severity vulnerabilities"
+              exit 1
+            fi
+          fi
+
+  code-security:
+    name: Code Security Analysis (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install Bandit
+        run: pip install bandit[toml]
+      
+      - name: Run Bandit
+        run: |
+          bandit -r src -f json -o bandit-report.json -ll
+          bandit -r src -f txt -o bandit-report.txt -ll || true
+      
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: |
+            bandit-report.json
+            bandit-report.txt
+      
+      - name: Check for high severity issues
+        run: |
+          if [ -f bandit-report.json ]; then
+            HIGH=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit-report.json)
+            MEDIUM=$(jq '[.results[] | select(.issue_severity == "MEDIUM")] | length' bandit-report.json)
+            
+            echo "High severity issues: $HIGH"
+            echo "Medium severity issues: $MEDIUM"
+            
+            if [ "$HIGH" -gt 0 ]; then
+              echo "::error::Found $HIGH high severity security issues"
+              exit 1
+            fi
+          fi
+
+  sast-scan:
+    name: SAST Scanning (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/python
+            p/bandit
+          generateSarif: true
+      
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, code-security, sast-scan, secret-scan]
+    if: always()
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+      
+      - name: Generate security summary
+        run: |
+          echo "# Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependency Scan: ${{ needs.dependency-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Code Security: ${{ needs.code-security.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SAST Scan: ${{ needs.sast-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Secret Scan: ${{ needs.secret-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.dependency-scan.result }}" != "success" ] || \
+             [ "${{ needs.code-security.result }}" != "success" ]; then
+            echo "⚠️ **Security issues detected!** Review the reports above." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ **All security checks passed!**" >> $GITHUB_STEP_SUMMARY
+          fi

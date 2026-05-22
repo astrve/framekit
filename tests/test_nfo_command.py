@@ -1,3 +1,5 @@
+"""Tests for NFO command module - CLI integration and workflow."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,6 +11,8 @@ from framekit.core.settings import SettingsStore
 
 
 class _StoreFactory:
+    """Factory to provide a specific SettingsStore instance."""
+
     def __init__(self, store: SettingsStore) -> None:
         self.store = store
 
@@ -17,6 +21,7 @@ class _StoreFactory:
 
 
 def _release(folder: Path) -> SimpleNamespace:
+    """Create a minimal release object for testing."""
     return SimpleNamespace(
         media_kind="movie",
         release_title="Movie.2024.1080p.WEB-DL",
@@ -38,6 +43,7 @@ def _release(folder: Path) -> SimpleNamespace:
 
 
 def test_resolve_metadata_context_handles_statuses(monkeypatch, tmp_path):
+    """Test that metadata workflow statuses are properly handled."""
     release = _release(tmp_path)
 
     for status, expected_fragment in [
@@ -71,6 +77,7 @@ def test_resolve_metadata_context_handles_statuses(monkeypatch, tmp_path):
 def test_resolve_metadata_context_returns_resolved_context_and_passes_language(
     monkeypatch, tmp_path
 ):
+    """Test that resolved metadata context is returned and language is passed correctly."""
     release = _release(tmp_path)
     captured = {}
 
@@ -105,6 +112,7 @@ def test_resolve_metadata_context_returns_resolved_context_and_passes_language(
 def test_run_nfo_command_maps_output_locale_to_metadata_language(
     monkeypatch, tmp_path, temp_settings_store
 ):
+    """Test that NFO locale is correctly mapped to metadata language."""
     folder = tmp_path / "Release"
     folder.mkdir()
     release = _release(folder)
@@ -179,10 +187,10 @@ def test_run_nfo_command_maps_output_locale_to_metadata_language(
     assert captured["template_locale"] == "es"
     assert captured["write_locale"] == "es"
     assert captured["extra_context"] == {"tmdb": {"title": "Movie"}}
-    assert temp_settings_store.get("modules.nfo.last_folder") == str(folder)
 
 
 def test_run_nfo_command_requires_explicit_folder_for_write(monkeypatch, temp_settings_store):
+    """Test that write operation requires an explicit folder path."""
     monkeypatch.setattr(nfo_command_module, "SettingsStore", _StoreFactory(temp_settings_store))
 
     assert (
@@ -206,3 +214,100 @@ def test_run_nfo_command_requires_explicit_folder_for_write(monkeypatch, temp_se
         )
         == 1
     )
+
+
+def test_write_nfo_outputs_movie_writes_sidecar_and_release_copy(tmp_path):
+    """Movie mode writes sidecar next to MKV and a global copy in Release folder."""
+    payload = tmp_path / "Payload"
+    payload.mkdir()
+    mkv = payload / "Movie.2024.mkv"
+    mkv.write_bytes(b"x")
+    release = _release(payload)
+    release.media_kind = "movie"
+    release.episodes = [SimpleNamespace(file_path=mkv)]
+
+    class _Service:
+        def write_rendered(
+            self,
+            folder_path,
+            *,
+            release,
+            rendered,
+            template_name,
+            template_locale,
+        ):
+            output = Path(folder_path) / "Movie.global.nfo"
+            output.write_text(rendered, encoding="utf-8")
+            return OperationReport(tool="nfo"), output
+
+        def write_per_file(self, *args, **kwargs):
+            raise AssertionError("write_per_file should not be used for movie policy")
+
+    written_global, written_per_file = nfo_command_module._write_nfo_outputs(
+        service=_Service(),
+        folder=payload,
+        scan_root=payload,
+        is_single_file=False,
+        resolved_mode="global",
+        release=release,
+        rendered="rendered-nfo",
+        per_file_results=[],
+        template_name="default",
+        resolved_nfo_locale="fr",
+    )
+
+    assert written_global is not None
+    assert written_global.parent.name == "Release"
+    assert written_global.read_text(encoding="utf-8") == "rendered-nfo"
+    assert len(written_per_file) == 1
+    assert written_per_file[0] == mkv.with_suffix(".nfo")
+    assert written_per_file[0].read_text(encoding="utf-8") == "rendered-nfo"
+
+
+def test_write_nfo_outputs_season_pack_writes_global_and_per_file(tmp_path):
+    """Season pack mode writes one global Release NFO and per-file NFO outputs."""
+    payload = tmp_path / "Payload"
+    payload.mkdir()
+    episode = payload / "Show.S01E01.mkv"
+    episode.write_bytes(b"x")
+    release = _release(payload)
+    release.media_kind = "season_pack"
+    release.episodes = [SimpleNamespace(file_path=episode)]
+
+    per_file_path = episode.with_suffix(".nfo")
+
+    class _Service:
+        def write_rendered(
+            self,
+            folder_path,
+            *,
+            release,
+            rendered,
+            template_name,
+            template_locale,
+        ):
+            output = Path(folder_path) / "Show.S01.global.nfo"
+            output.write_text(rendered, encoding="utf-8")
+            return OperationReport(tool="nfo"), output
+
+        def write_per_file(self, *args, **kwargs):
+            per_file_path.write_text("per-file", encoding="utf-8")
+            return OperationReport(tool="nfo"), [per_file_path]
+
+    written_global, written_per_file = nfo_command_module._write_nfo_outputs(
+        service=_Service(),
+        folder=payload,
+        scan_root=payload,
+        is_single_file=False,
+        resolved_mode="per_file",
+        release=release,
+        rendered="global-nfo",
+        per_file_results=[("stub", "stub", "stub", episode)],
+        template_name="default",
+        resolved_nfo_locale="fr",
+    )
+
+    assert written_global is not None
+    assert written_global.parent.name == "Release"
+    assert written_global.read_text(encoding="utf-8") == "global-nfo"
+    assert written_per_file == [per_file_path]

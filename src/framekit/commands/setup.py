@@ -5,11 +5,6 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
-# Prefer rich_click if available; fall back to click when the rich integration is not installed.
-try:
-    import rich_click as click  # type: ignore[import-not-found]
-except Exception:
-    import click  # type: ignore[import-not-found]
 from rich import box
 from rich.panel import Panel
 from rich.table import Table
@@ -18,14 +13,12 @@ from framekit.core.i18n import set_locale, tr
 from framekit.core.paths import get_config_dir
 from framekit.core.settings import DEFAULT_SETTINGS, SettingsStore, normalize_ui_locale
 from framekit.modules.metadata.config import (
-    looks_like_tmdb_api_key,
     looks_like_tmdb_read_access_token,
     normalize_secret_input,
 )
 from framekit.modules.nfo.logo_registry import NfoLogoRegistry
 from framekit.modules.nfo.logo_tools import import_logo_file
 from framekit.modules.nfo.selector import choose_yes_no
-from framekit.modules.nfo.template_registry import builtin_template_records
 from framekit.modules.nfo.template_selector import build_template_options, choose_template
 from framekit.modules.prez.service import (
     available_bbcode_templates,
@@ -36,6 +29,9 @@ from framekit.modules.prez.service import (
 from framekit.modules.setup.selector import ChoiceOption, choose_option
 from framekit.modules.torrent.service import is_valid_announce_url
 from framekit.ui.branding import print_module_banner
+
+# Prefer rich_click if available; fall back to click when the rich integration is not installed.
+from framekit.ui.click_helper import click
 from framekit.ui.console import (
     console,
     print_error,
@@ -111,10 +107,54 @@ def _metadata_language_options() -> list[ChoiceOption]:
 
 
 class SetupCancelled(Exception):
-    pass
+    """Setup cancelled."""
 
 
-def _show_step(title: str, text: str) -> None:
+# Global variable to track if timeline has been displayed
+_timeline_displayed = False
+
+
+def _show_step_timeline(current_step: str, all_steps: list[str]) -> None:
+    """Display a visual timeline of setup steps that updates in place."""
+    from rich.text import Text
+
+    global _timeline_displayed
+
+    timeline = Text()
+    for i, step in enumerate(all_steps):
+        if i > 0:
+            timeline.append(" → ", style="dim white")
+
+        if step == current_step:
+            # Current step: bold and bright
+            timeline.append(step, style="bold cyan")
+        elif all_steps.index(step) < all_steps.index(current_step):
+            # Completed steps: green with checkmark
+            timeline.append(f"✓ {step}", style="green")
+        else:
+            # Upcoming steps: dim
+            timeline.append(step, style="dim white")
+
+    if _timeline_displayed:
+        # Move cursor up 3 lines (empty + timeline + empty) and erase to end of screen
+        console.file.write("\033[3A\033[J")
+        console.file.flush()
+
+    console.print()
+    console.print(timeline)
+    console.print()
+
+    if not _timeline_displayed:
+        _timeline_displayed = True
+
+
+def _show_step(
+    title: str, text: str, current_step: str | None = None, all_steps: list[str] | None = None
+) -> None:
+    """Display a step panel with optional timeline."""
+    if current_step and all_steps:
+        _show_step_timeline(current_step, all_steps)
+
     console.print(
         Panel(
             text,
@@ -147,7 +187,6 @@ def _ensure_setup_shape(settings: dict) -> dict:
     settings["metadata"].setdefault("interactive_confirmation", True)
     settings["metadata"].setdefault("cache_ttl_hours", 168)
     settings["metadata"].setdefault("language", "en-US")
-    settings["metadata"].setdefault("tmdb_api_key", "")
     settings["metadata"].setdefault("tmdb_read_access_token", "")
     settings["metadata"].setdefault("enabled_by_default", True)
 
@@ -510,15 +549,6 @@ def _prompt_tmdb_token(current_token: str) -> str | None:
 
         token = normalize_secret_input(raw)
 
-        if looks_like_tmdb_api_key(token):
-            print_error(
-                tr(
-                    "metadata.error.api_key_instead_token",
-                    default="That looks like a TMDb API key, not a TMDb read access token.",
-                )
-            )
-            continue
-
         if not looks_like_tmdb_read_access_token(token):
             print_error(
                 tr(
@@ -536,18 +566,23 @@ def _prompt_tmdb_token(current_token: str) -> str | None:
 
 def _choose_builtin_template(current_template: str) -> str:
     _show_step(
-        tr("setup.preferred_template_title", default="Preferred built-in NFO template"),
+        tr("setup.preferred_template_title", default="Preferred NFO template"),
         tr(
             "setup.preferred_template_body",
             default=(
-                "Built-in templates are simplified here.\n\n"
-                "Default: lighter output.\n"
-                "Detailed: richer output for tracker-style releases."
+                "Choose from built-in and custom templates.\n\n"
+                "Built-in templates: default (lighter) and detailed (richer).\n"
+                "Custom templates: imported by users for specific needs."
             ),
         ),
     )
 
-    records = builtin_template_records()
+    # Load all templates (builtin + custom)
+    from framekit.modules.nfo.template_registry import NfoTemplateRegistry
+
+    registry = NfoTemplateRegistry()
+    records = registry.list_all()
+
     options = build_template_options(records)
     chosen = choose_template(options, preferred_name=current_template or "default")
     if chosen is None:
@@ -649,14 +684,14 @@ def _choose_logo(current_logo_name: str) -> tuple[str, str]:
             tr("setup.logo.no_logo_hint", default="Disable logo rendering"),
         )
     ]
-    for logo in logos:
-        options.append(
-            ChoiceOption(
-                value=logo.logo_name,
-                label=logo.display_name,
-                description=logo.logo_name,
-            )
+    options.extend(
+        ChoiceOption(
+            value=logo.logo_name,
+            label=logo.display_name,
+            description=logo.logo_name,
         )
+        for logo in logos
+    )
 
     selected = choose_option(
         title=tr("setup.choose_active_logo", default="Choose active NFO logo"),
@@ -740,23 +775,107 @@ def _prompt_torrent_announce(current: str) -> str | None:
         return raw
 
 
-def _configure_torrent_defaults(settings: dict) -> None:
+def _configure_torrent_defaults(settings: dict, store: SettingsStore) -> None:
     torrent = settings["modules"].setdefault("torrent", {})
     current = str(torrent.get("selected_announce") or torrent.get("announce") or "")
     announce = _prompt_torrent_announce(current)
     if announce is None:
         return
-    urls = [str(value) for value in torrent.get("announce_urls", []) if value]
-    if announce not in urls:
-        urls.append(announce)
-    torrent["announce_urls"] = urls
-    torrent["announce"] = announce
-    torrent["selected_announce"] = announce
+
+    # Use secure storage if security is enabled
+    from framekit.core.settings import Settings
+
+    settings_obj = Settings()
+    if settings_obj.is_security_enabled():
+        # Get existing announces and add the new one
+        existing_announces = settings_obj.get_torrent_announces()
+        if announce not in existing_announces:
+            existing_announces.append(announce)
+        settings_obj.set_torrent_announces(existing_announces)
+        settings_obj.set_selected_announce(announce)
+        # Reload settings to get the encrypted placeholders
+        settings.clear()
+        settings.update(store.load())
+    else:
+        urls = [str(value) for value in torrent.get("announce_urls", []) if value]
+        if announce not in urls:
+            urls.append(announce)
+        torrent["announce_urls"] = urls
+        torrent["announce"] = announce
+        torrent["selected_announce"] = announce
+
+
+def _summary_value(value: str | None, fallback: str = "-") -> str:
+    return value if value else fallback
+
+
+def _setup_summary_rows(settings: dict) -> list[tuple[str, str]]:
+    general = settings["general"]
+    metadata = settings["metadata"]
+    modules = settings["modules"]
+    nfo_module = modules["nfo"]
+    prez_module = modules["prez"]
+    torrent_module = modules["torrent"]
+    token = settings["metadata"].get("tmdb_read_access_token", "")
+    metadata_confirmation = (
+        tr("common.enabled", default="Enabled")
+        if metadata.get("interactive_confirmation", True)
+        else tr("common.disabled", default="Disabled")
+    )
+    tmdb_status = (
+        tr("common.configured", default="Configured")
+        if token
+        else tr("common.missing", default="missing")
+    )
+    return [
+        (
+            tr("setup.summary.interface_language", default="Interface Language"),
+            _summary_value(general.get("locale", "")),
+        ),
+        (
+            tr("setup.summary.renamer_folder", default="Renamer Default Folder"),
+            _summary_value(modules["renamer"].get("default_folder", "")),
+        ),
+        (
+            tr("setup.summary.cleanmkv_folder", default="CleanMKV Default Folder"),
+            _summary_value(modules["cleanmkv"].get("default_folder", "")),
+        ),
+        (
+            tr("setup.summary.nfo_folder", default="NFO Default Folder"),
+            _summary_value(nfo_module.get("default_folder", "")),
+        ),
+        (
+            tr("setup.summary.metadata_language", default="Metadata Language"),
+            _summary_value(metadata.get("language", "")),
+        ),
+        (
+            tr("setup.summary.metadata_confirmation", default="Metadata Confirmation"),
+            metadata_confirmation,
+        ),
+        (tr("setup.summary.tmdb_token", default="TMDb Token"), tmdb_status),
+        (
+            tr("setup.summary.preferred_nfo_template", default="Preferred NFO Template"),
+            _summary_value(nfo_module.get("active_template", "")),
+        ),
+        (
+            tr("setup.summary.active_nfo_logo", default="Active NFO Logo"),
+            _summary_value(
+                nfo_module.get("active_logo", ""),
+                fallback=tr("common.none", default="None"),
+            ),
+        ),
+        (
+            tr("setup.summary.prez", default="Prez Defaults"),
+            f"{prez_module.get('bbcode_template', '-')} / {prez_module.get('html_template', '-')}",
+        ),
+        (
+            tr("setup.summary.torrent", default="Torrent Announce"),
+            _summary_value(torrent_module.get("selected_announce", "")),
+        ),
+    ]
 
 
 def _print_setup_summary(settings: dict) -> None:
-    token = settings["metadata"].get("tmdb_read_access_token", "")
-
     table = Table(
         title=tr("setup.summary_title", default="Framekit Setup Summary"),
         expand=True,
@@ -765,56 +884,8 @@ def _print_setup_summary(settings: dict) -> None:
     )
     table.add_column(tr("common.field", default="Field"), width=24, no_wrap=True)
     table.add_column(tr("common.value", default="Value"), ratio=1)
-
-    table.add_row(
-        tr("setup.summary.interface_language", default="Interface Language"),
-        settings["general"].get("locale", "") or "-",
-    )
-    table.add_row(
-        tr("setup.summary.renamer_folder", default="Renamer Default Folder"),
-        settings["modules"]["renamer"].get("default_folder", "") or "-",
-    )
-    table.add_row(
-        tr("setup.summary.cleanmkv_folder", default="CleanMKV Default Folder"),
-        settings["modules"]["cleanmkv"].get("default_folder", "") or "-",
-    )
-    table.add_row(
-        tr("setup.summary.nfo_folder", default="NFO Default Folder"),
-        settings["modules"]["nfo"].get("default_folder", "") or "-",
-    )
-    table.add_row(
-        tr("setup.summary.metadata_language", default="Metadata Language"),
-        settings["metadata"].get("language", "") or "-",
-    )
-    table.add_row(
-        tr("setup.summary.metadata_confirmation", default="Metadata Confirmation"),
-        tr("common.enabled", default="Enabled")
-        if settings["metadata"].get("interactive_confirmation", True)
-        else tr("common.disabled", default="Disabled"),
-    )
-    table.add_row(
-        tr("setup.summary.tmdb_token", default="TMDb Token"),
-        tr("common.configured", default="Configured")
-        if token
-        else tr("common.missing", default="missing"),
-    )
-    table.add_row(
-        tr("setup.summary.preferred_nfo_template", default="Preferred NFO Template"),
-        settings["modules"]["nfo"].get("active_template", "") or "-",
-    )
-    table.add_row(
-        tr("setup.summary.active_nfo_logo", default="Active NFO Logo"),
-        settings["modules"]["nfo"].get("active_logo", "") or tr("common.none", default="None"),
-    )
-    table.add_row(
-        tr("setup.summary.prez", default="Prez Defaults"),
-        f"{settings['modules']['prez'].get('bbcode_template', '-')} / "
-        f"{settings['modules']['prez'].get('html_template', '-')}",
-    )
-    table.add_row(
-        tr("setup.summary.torrent", default="Torrent Announce"),
-        settings["modules"]["torrent"].get("selected_announce", "") or "-",
-    )
+    for field, value in _setup_summary_rows(settings):
+        table.add_row(field, value)
 
     console.print(table)
 
@@ -844,13 +915,20 @@ def _ensure_default_folders_exist(settings: dict) -> None:
             )
 
 
-def run_guided_setup(*, mark_completed: bool = True) -> int:
-    store = SettingsStore()
-    settings = _load_settings_with_defaults(store)
+SETUP_STEPS = [
+    "Language",
+    "Security",
+    "Folders",
+    "Metadata",
+    "NFO Template",
+    "Prez",
+    "Torrent",
+    "Logo",
+    "Summary",
+]
 
-    project_root = Path.cwd()
-    print_module_banner("Setup")
 
+def _show_setup_welcome() -> None:
     console.print(
         Panel(
             tr(
@@ -868,204 +946,255 @@ def run_guided_setup(*, mark_completed: bool = True) -> int:
         )
     )
 
-    try:
-        configure_interface = choose_yes_no(
-            tr(
-                "setup.confirm.choose_interface_language",
-                default="Do you want to choose Framekit interface language?",
+
+def _ask_optional_step(prompt: str, *, default_yes: bool) -> bool:
+    selection = choose_yes_no(tr(prompt), default_yes=default_yes)
+    if selection is None:
+        raise SetupCancelled
+    return bool(selection)
+
+
+def _run_language_step(settings: dict) -> None:
+    _show_step_timeline("Language", SETUP_STEPS)
+    if not _ask_optional_step("setup.confirm.choose_interface_language", default_yes=False):
+        return
+    settings["general"]["locale"] = _choose_interface_language(
+        settings["general"].get("locale", DEFAULT_SETTINGS["general"]["locale"])
+    )
+
+
+def _run_security_step(settings: dict) -> None:
+    _show_step_timeline("Security", SETUP_STEPS)
+    if not _ask_optional_step("setup.confirm.configure_security", default_yes=False):
+        return
+
+    _show_step(
+        tr("setup.security_title", default="Security Configuration"),
+        tr(
+            "setup.security_body",
+            default=(
+                "Framekit can encrypt sensitive data (TMDb tokens, torrent announce URLs)\n"
+                "using a secure vault stored in your system keyring.\n\n"
+                "Recommended: enabled for better security.\n"
+                "Note: You can change this later with 'fk settings security toggle'."
             ),
-            default_yes=False,
-        )
-        if configure_interface is None:
-            raise SetupCancelled
-        if configure_interface:
-            settings["general"]["locale"] = _choose_interface_language(
-                settings["general"].get("locale", DEFAULT_SETTINGS["general"]["locale"])
-            )
-
-        configure_folders = choose_yes_no(
+        ),
+        current_step="Security",
+        all_steps=SETUP_STEPS,
+    )
+    current_security = settings.get("security", {}).get("enabled", True)
+    enable_security = choose_yes_no(
+        tr(
+            "setup.confirm.enable_security",
+            default="Do you want to enable encryption for sensitive data?",
+        ),
+        yes_label=tr("common.yes", default="Yes (Recommended)"),
+        no_label=tr("common.no", default="No (Plain text)"),
+        default_yes=current_security,
+    )
+    if enable_security is None:
+        raise SetupCancelled
+    settings.setdefault("security", {})["enabled"] = bool(enable_security)
+    if enable_security:
+        print_success(
             tr(
-                "setup.confirm.configure_folders",
-                default="Do you want to configure default folders?",
-            ),
-            default_yes=True,
+                "setup.success.security_enabled",
+                default="Security enabled. Sensitive data will be encrypted.",
+            )
         )
-        if configure_folders is None:
-            raise SetupCancelled
-        if configure_folders:
-            renamer_appdata, renamer_project = _workspace_paths(project_root, "Renamer")
-            cleanmkv_appdata, cleanmkv_project = _workspace_paths(project_root, "CleanMKV")
-            nfo_appdata, nfo_project = _workspace_paths(project_root, "NFO")
-
-            renamer_path = _choose_workspace_path(
-                "Renamer",
-                settings["modules"]["renamer"].get("default_folder", ""),
-                renamer_appdata,
-                renamer_project,
-            )
-            if renamer_path is not None:
-                settings["modules"]["renamer"]["default_folder"] = renamer_path
-
-            cleanmkv_path = _choose_workspace_path(
-                "CleanMKV",
-                settings["modules"]["cleanmkv"].get("default_folder", ""),
-                cleanmkv_appdata,
-                cleanmkv_project,
-            )
-            if cleanmkv_path is not None:
-                settings["modules"]["cleanmkv"]["default_folder"] = cleanmkv_path
-
-            nfo_path = _choose_workspace_path(
-                "NFO",
-                settings["modules"]["nfo"].get("default_folder", ""),
-                nfo_appdata,
-                nfo_project,
-            )
-            if nfo_path is not None:
-                settings["modules"]["nfo"]["default_folder"] = nfo_path
-
-        configure_metadata = choose_yes_no(
-            tr("setup.confirm.configure_metadata", default="Do you want to configure metadata?"),
-            default_yes=True,
-        )
-        if configure_metadata is None:
-            raise SetupCancelled
-        if configure_metadata:
-            settings["metadata"]["language"] = _choose_metadata_language(
-                settings["metadata"].get("language", "en-US") or "en-US"
-            )
-
-            _show_step(
-                tr("setup.metadata_confirmation_title", default="Metadata confirmation"),
-                tr(
-                    "setup.metadata_confirmation_body",
-                    default=(
-                        "When enabled, Framekit lets you review and confirm the metadata match\n"
-                        "before it is used in the NFO.\n\n"
-                        "Recommended: enabled."
-                    ),
-                ),
-            )
-
-            interactive_choice = choose_yes_no(
-                tr(
-                    "setup.confirm.metadata_confirmation_enabled",
-                    default="Do you want metadata confirmation enabled?",
-                ),
-                yes_label=tr("common.yes", default="Yes"),
-                no_label=tr("common.no", default="No"),
-                default_yes=settings["metadata"].get("interactive_confirmation", True),
-            )
-            if interactive_choice is None:
-                raise SetupCancelled
-            settings["metadata"]["interactive_confirmation"] = bool(interactive_choice)
-
-            while True:
-                token_choice = choose_yes_no(
-                    tr(
-                        "setup.confirm.add_update_tmdb_token",
-                        default="Do you want to add or update a TMDb read access token?",
-                    ),
-                    yes_label=tr("common.yes", default="Yes"),
-                    no_label=tr("common.no", default="No"),
-                    default_yes=not bool(settings["metadata"].get("tmdb_read_access_token", "")),
-                )
-                if token_choice is None:
-                    raise SetupCancelled
-                if not token_choice:
-                    break
-
-                token_value = _prompt_tmdb_token(
-                    settings["metadata"].get("tmdb_read_access_token", "")
-                )
-
-                if token_value is None:
-                    continue
-
-                settings["metadata"]["tmdb_read_access_token"] = token_value
-                settings["metadata"]["tmdb_api_key"] = ""
-                break
-
-        choose_template_flag = choose_yes_no(
+    else:
+        print_warning(
             tr(
-                "setup.confirm.choose_nfo_template",
-                default="Do you want to choose a preferred built-in NFO template?",
-            ),
-            default_yes=True,
-        )
-        if choose_template_flag is None:
-            raise SetupCancelled
-        if choose_template_flag:
-            current_template = (
-                settings["modules"]["nfo"].get("active_template", "default") or "default"
+                "setup.warning.security_disabled",
+                default="Security disabled. Sensitive data will be stored in plain text.",
             )
-            settings["modules"]["nfo"]["active_template"] = _choose_builtin_template(
-                current_template
-            )
-
-        configure_prez = choose_yes_no(
-            tr("setup.confirm.configure_prez", default="Do you want to configure Prez defaults?"),
-            default_yes=True,
         )
-        if configure_prez is None:
-            raise SetupCancelled
-        if configure_prez:
-            _configure_prez_defaults(settings)
 
-        configure_torrent = choose_yes_no(
+
+def _configure_folder_paths(settings: dict, project_root: Path) -> None:
+    renamer_appdata, renamer_project = _workspace_paths(project_root, "Renamer")
+    cleanmkv_appdata, cleanmkv_project = _workspace_paths(project_root, "CleanMKV")
+    nfo_appdata, nfo_project = _workspace_paths(project_root, "NFO")
+
+    renamer_path = _choose_workspace_path(
+        "Renamer",
+        settings["modules"]["renamer"].get("default_folder", ""),
+        renamer_appdata,
+        renamer_project,
+    )
+    if renamer_path is not None:
+        settings["modules"]["renamer"]["default_folder"] = renamer_path
+
+    cleanmkv_path = _choose_workspace_path(
+        "CleanMKV",
+        settings["modules"]["cleanmkv"].get("default_folder", ""),
+        cleanmkv_appdata,
+        cleanmkv_project,
+    )
+    if cleanmkv_path is not None:
+        settings["modules"]["cleanmkv"]["default_folder"] = cleanmkv_path
+
+    nfo_path = _choose_workspace_path(
+        "NFO",
+        settings["modules"]["nfo"].get("default_folder", ""),
+        nfo_appdata,
+        nfo_project,
+    )
+    if nfo_path is not None:
+        settings["modules"]["nfo"]["default_folder"] = nfo_path
+
+
+def _run_folders_step(settings: dict, project_root: Path) -> None:
+    _show_step_timeline("Folders", SETUP_STEPS)
+    if not _ask_optional_step("setup.confirm.configure_folders", default_yes=True):
+        return
+    _configure_folder_paths(settings, project_root)
+
+
+def _handle_tmdb_token_update(settings: dict, store: SettingsStore) -> None:
+    while True:
+        token_choice = choose_yes_no(
             tr(
-                "setup.confirm.configure_torrent",
-                default="Do you want to configure Torrent announce URLs?",
+                "setup.confirm.add_update_tmdb_token",
+                default="Do you want to add or update a TMDb read access token?",
             ),
-            default_yes=True,
-        )
-        if configure_torrent is None:
-            raise SetupCancelled
-        if configure_torrent:
-            _configure_torrent_defaults(settings)
-
-        configure_logo = choose_yes_no(
-            tr(
-                "setup.confirm.configure_nfo_logo", default="Do you want to configure the NFO logo?"
-            ),
-            default_yes=False,
-        )
-        if configure_logo is None:
-            raise SetupCancelled
-        if configure_logo:
-            logo_name, logo_path = _choose_logo(settings["modules"]["nfo"].get("active_logo", ""))
-            settings["modules"]["nfo"]["active_logo"] = logo_name
-            settings["modules"]["nfo"]["logo_path"] = logo_path
-
-        _print_setup_summary(settings)
-
-        save_choice = choose_yes_no(
-            tr("setup.confirm.save", default="Do you want to save this setup?"),
             yes_label=tr("common.yes", default="Yes"),
             no_label=tr("common.no", default="No"),
-            default_yes=True,
+            default_yes=not bool(settings["metadata"].get("tmdb_read_access_token", "")),
         )
-
-        if save_choice is None:
+        if token_choice is None:
             raise SetupCancelled
-        if not save_choice:
-            print_warning(
-                tr(
-                    "setup.warning.cancelled_not_saved",
-                    default="Setup cancelled. Nothing was saved.",
-                )
-            )
-            return 0
+        if not token_choice:
+            return
 
-        if mark_completed:
-            settings["setup"]["completed"] = True
-        settings["setup"]["prompt_on_start"] = False
+        token_value = _prompt_tmdb_token(settings["metadata"].get("tmdb_read_access_token", ""))
+        if token_value is None:
+            continue
 
-        _ensure_default_folders_exist(settings)
-        store.save(settings)
+        from framekit.core.settings import Settings
 
-        print_success(tr("setup.success.saved", default="Framekit setup saved."))
+        settings_obj = Settings()
+        if settings_obj.is_security_enabled():
+            settings_obj.set_tmdb_token(token_value)
+            settings.clear()
+            settings.update(store.load())
+        else:
+            settings["metadata"]["tmdb_read_access_token"] = token_value
+        return
+
+
+def _run_metadata_step(settings: dict, store: SettingsStore) -> None:
+    _show_step_timeline("Metadata", SETUP_STEPS)
+    if not _ask_optional_step("setup.confirm.configure_metadata", default_yes=True):
+        return
+
+    settings["metadata"]["language"] = _choose_metadata_language(
+        settings["metadata"].get("language", "en-US") or "en-US"
+    )
+    _show_step(
+        tr("setup.metadata_confirmation_title", default="Metadata confirmation"),
+        tr(
+            "setup.metadata_confirmation_body",
+            default=(
+                "When enabled, Framekit lets you review and confirm the metadata match\n"
+                "before it is used in the NFO.\n\n"
+                "Recommended: enabled."
+            ),
+        ),
+        current_step="Metadata",
+        all_steps=SETUP_STEPS,
+    )
+    interactive_choice = choose_yes_no(
+        tr(
+            "setup.confirm.metadata_confirmation_enabled",
+            default="Do you want metadata confirmation enabled?",
+        ),
+        yes_label=tr("common.yes", default="Yes"),
+        no_label=tr("common.no", default="No"),
+        default_yes=settings["metadata"].get("interactive_confirmation", True),
+    )
+    if interactive_choice is None:
+        raise SetupCancelled
+    settings["metadata"]["interactive_confirmation"] = bool(interactive_choice)
+    _handle_tmdb_token_update(settings, store)
+
+
+def _run_nfo_template_step(settings: dict) -> None:
+    _show_step_timeline("NFO Template", SETUP_STEPS)
+    if not _ask_optional_step("setup.confirm.choose_nfo_template", default_yes=True):
+        return
+    current_template = settings["modules"]["nfo"].get("active_template", "default") or "default"
+    settings["modules"]["nfo"]["active_template"] = _choose_builtin_template(current_template)
+
+
+def _run_prez_step(settings: dict) -> None:
+    _show_step_timeline("Prez", SETUP_STEPS)
+    if not _ask_optional_step("setup.confirm.configure_prez", default_yes=True):
+        return
+    _configure_prez_defaults(settings)
+
+
+def _run_torrent_step(settings: dict, store: SettingsStore) -> None:
+    _show_step_timeline("Torrent", SETUP_STEPS)
+    if not _ask_optional_step("setup.confirm.configure_torrent", default_yes=True):
+        return
+    _configure_torrent_defaults(settings, store)
+
+
+def _run_logo_step(settings: dict) -> None:
+    _show_step_timeline("Logo", SETUP_STEPS)
+    if not _ask_optional_step("setup.confirm.configure_nfo_logo", default_yes=False):
+        return
+    logo_name, logo_path = _choose_logo(settings["modules"]["nfo"].get("active_logo", ""))
+    settings["modules"]["nfo"]["active_logo"] = logo_name
+    settings["modules"]["nfo"]["logo_path"] = logo_path
+
+
+def _save_setup(settings: dict, store: SettingsStore, mark_completed: bool) -> int:
+    _show_step_timeline("Summary", SETUP_STEPS)
+    _print_setup_summary(settings)
+
+    save_choice = choose_yes_no(
+        tr("setup.confirm.save", default="Do you want to save this setup?"),
+        yes_label=tr("common.yes", default="Yes"),
+        no_label=tr("common.no", default="No"),
+        default_yes=True,
+    )
+    if save_choice is None:
+        raise SetupCancelled
+    if not save_choice:
+        print_warning(
+            tr("setup.warning.cancelled_not_saved", default="Setup cancelled. Nothing was saved.")
+        )
         return 0
+
+    if mark_completed:
+        settings["setup"]["completed"] = True
+    settings["setup"]["prompt_on_start"] = False
+    _ensure_default_folders_exist(settings)
+    store.save(settings)
+    print_success(tr("setup.success.saved", default="Framekit setup saved."))
+    return 0
+
+
+def run_guided_setup(*, mark_completed: bool = True) -> int:
+    """Run guided setup."""
+    store = SettingsStore()
+    settings = _load_settings_with_defaults(store)
+    project_root = Path.cwd()
+    print_module_banner("Setup")
+    _show_setup_welcome()
+
+    try:
+        _run_language_step(settings)
+        _run_security_step(settings)
+        _run_folders_step(settings, project_root)
+        _run_metadata_step(settings, store)
+        _run_nfo_template_step(settings)
+        _run_prez_step(settings)
+        _run_torrent_step(settings, store)
+        _run_logo_step(settings)
+        return _save_setup(settings, store, mark_completed)
 
     except SetupCancelled:
         print_warning(
@@ -1075,6 +1204,7 @@ def run_guided_setup(*, mark_completed: bool = True) -> int:
 
 
 def maybe_offer_first_time_setup() -> None:
+    """Handle maybe offer first time setup."""
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         return
 
@@ -1090,6 +1220,13 @@ def maybe_offer_first_time_setup() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in {
         "setup",
         "init",
+        "examples",
+        "ex",
+        "doctor",
+        "doc",
+        "diag",
+        "about",
+        "license",
         "language",
         "lang",
         "-h",
@@ -1117,6 +1254,80 @@ def maybe_offer_first_time_setup() -> None:
         store.save(settings)
 
 
-@click.command("setup", help=tr("cli.setup.help", default="Run guided Framekit setup."))
-def setup_command() -> int:
-    return run_guided_setup(mark_completed=True)
+@click.command(
+    "setup",
+    help=tr(
+        "cli.setup.help",
+        default=(
+            "Run the guided first-time setup wizard to configure Framekit.\n\n"
+            "The setup wizard walks you through essential configuration steps, including interface "
+            "language, default folders, TMDb API credentials, and module preferences.\n\n"
+            "Quick examples:\n"
+            "  fk setup                                # Run full setup wizard\n"
+            "  fk setup --wizard                       # Run new profile-based wizard\n"
+            "  fk init                                 # Same as setup\n\n"
+            "Configuration steps:\n"
+            "  1. Interface language selection\n"
+            "  2. Default folder paths for each module\n"
+            "  3. Metadata provider setup (TMDb API token)\n"
+            "  4. NFO template selection\n"
+            "  5. Prez template preferences\n"
+            "  6. Torrent announce URL configuration\n"
+            "  7. Logo import (optional)\n\n"
+            "Features:\n"
+            "  • Interactive step-by-step guidance\n"
+            "  • Smart defaults based on your system\n"
+            "  • Configuration validation\n"
+            "  • Skip completed steps on re-run\n"
+            "  • Summary of all settings\n\n"
+            "Best practices:\n"
+            "  • Run setup immediately after installation\n"
+            "  • Have your TMDb API token ready (get from themoviedb.org)\n"
+            "  • Choose workspace paths carefully\n"
+            "  • Re-run setup anytime to update configuration\n\n"
+            "Related commands: settings, doctor, metadata"
+        ),
+    ),
+)
+@click.option(
+    "--wizard",
+    "-w",
+    is_flag=True,
+    help=tr(
+        "cli.setup.wizard.help",
+        default="Use the new profile-based setup wizard (beginner/advanced/custom)",
+    ),
+)
+@click.option(
+    "--profile",
+    "-p",
+    type=click.Choice(["beginner", "advanced", "custom"], case_sensitive=False),
+    default="beginner",
+    help=tr(
+        "cli.setup.profile.help",
+        default="Setup profile to use with --wizard flag",
+    ),
+)
+def setup_command(wizard: bool, profile: str) -> int:
+    """Handle setup command."""
+    if wizard:
+        from framekit.modules.setup import SetupWizard, WizardCancelled
+
+        try:
+            setup_wizard = SetupWizard(profile=profile)
+            setup_wizard.run()
+            return 0
+        except WizardCancelled:
+            console.print(
+                tr("wizard.cancelled", default="Setup wizard cancelled."),
+                style="yellow",
+            )
+            return 1
+        except Exception as e:
+            console.print(
+                tr("wizard.error", default=f"Setup wizard error: {e}"),
+                style="red",
+            )
+            return 1
+    else:
+        return run_guided_setup(mark_completed=True)

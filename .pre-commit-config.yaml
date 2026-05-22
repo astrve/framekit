@@ -1,0 +1,157 @@
+# Pre-commit hooks for Framekit
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+# Update hooks: pre-commit autoupdate
+
+repos:
+  # Ruff - lint + format. Lint is non-fixing (fail on issue), format is
+  # write-on-disk. Order matters: format first so lint sees the final code.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff-format
+        types_or: [python, pyi]
+      - id: ruff
+        args: [--no-fix]
+        types_or: [python, pyi]
+
+  # Pyright - strict static type checker. Reuses the project pyproject config.
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.383
+    hooks:
+      - id: pyright
+        # Pyright resolves imports through the installed environment. We
+        # declare runtime deps here so the hook works without an editable
+        # install. ruamel.yaml is needed for the round-trip yaml_io module.
+        additional_dependencies:
+          - click>=8.0.0
+          - rich-click>=1.6.0
+          - rich>=13.0.0
+          - platformdirs>=3.0.0
+          - langcodes>=3.3.0
+          - language-data>=1.2.0
+          - PyYAML>=6.0.0
+          - ruamel.yaml>=0.18.0
+          - babel>=2.12.0
+          - pathvalidate>=3.0.0
+          - filelock>=3.12.0
+          - bencode-open>=1.0.0
+          - jinja2>=3.1.0
+          - pymediainfo>=6.0.0
+          - cryptography>=46.0.7
+          - keyring>=24.0.0
+          - httpx[http2]>=0.27.0
+          - tenacity>=8.0.0
+          - watchfiles>=1.1.1
+          - loguru>=0.7.0
+          - pydantic>=2.0.0
+          - desktop-notifier>=6.2.0
+
+  # General file cleanup
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+      # Check for files that would conflict on case-insensitive filesystems
+      - id: check-case-conflict
+      # Check for merge conflicts
+      - id: check-merge-conflict
+      # Check for large files (>500KB)
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      # Prevent committing to main/develop
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, develop]
+
+  # YAML validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+        args: [--safe]
+        exclude: ^\.github/workflows/
+
+  # JSON validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-json
+
+  # TOML validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-toml
+
+  # Python-specific checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Check for debugger imports
+      - id: debug-statements
+      # Check docstring is first
+      - id: check-docstring-first
+      # Check for proper shebang
+      - id: check-executables-have-shebangs
+      # Validate Python syntax
+      - id: check-ast
+
+  # Security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: [-ll, -q]
+        files: ^src/
+
+  - repo: local
+    hooks:
+      - id: interrogate
+        name: interrogate (docstring coverage >= 90)
+        entry: >
+          interrogate
+          src/framekit/core/models
+          src/framekit/core/security
+          src/framekit/core/path_validation.py
+          src/framekit/core/subprocess_safe.py
+          src/framekit/core/plugins.py
+          src/framekit/modules/metadata/providers
+          src/framekit/modules/upload/adapters
+          src/framekit/modules/upload/service.py
+          --fail-under 90
+        language: system
+        pass_filenames: false
+
+# Configuration
+default_language_version:
+  python: python3.12
+
+# Run every hook on every commit; failing hooks block the commit so that no
+# unlinted / untyped code lands on a branch. Use ``pre-commit run -a`` to
+# replay the suite against the whole tree.
+fail_fast: false
+
+# Exclude patterns — generated artefacts and caches.
+exclude: |
+  (?x)^(
+    htmlcov.*/.*|
+    coverage.*\.json|
+    \.git/.*|
+    \.vscode/.*|
+    \.idea/.*|
+    __pycache__/.*|
+    .*\.pyc|
+    .*\.pyo|
+    .*\.egg-info/.*|
+    dist/.*|
+    build/.*|
+    site/.*|
+    src/framekit/templates/prez/html/generated/.*
+  )$
+
+# Minimum pre-commit version
+minimum_pre_commit_version: '3.0.0'

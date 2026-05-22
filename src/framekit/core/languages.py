@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 try:
     import langcodes  # type: ignore[import]
@@ -12,6 +13,8 @@ except ImportError:
 
 @dataclass(frozen=True, slots=True)
 class LanguageInfo:
+    """Language info."""
+
     language: str | None
     variant: str | None
 
@@ -170,6 +173,12 @@ _LANGUAGE_NAME_TO_INTERNAL: dict[str, str] = {
     "arabic": "arabic",
     "indonesian": "indonesian",
 }
+_FALLBACK_BASE_CODES: frozenset[str] = frozenset(
+    {"fr", "en", "ja", "es", "it", "de", "pt", "ru", "tr", "pl", "ar", "id"}
+)
+_REVERSE_LANGUAGE_SHORT_MAP: dict[str, str] = {
+    value: key for key, value in LANGUAGE_SHORT_MAP.items()
+}
 
 
 def _normalize_key(value: str | None) -> str:
@@ -196,45 +205,54 @@ def _from_langcodes(value: str | None) -> LanguageInfo | None:
     if langcodes is None:
         # Without langcodes, we cannot infer languages beyond the alias map.
         return None
-    try:
-        language = langcodes.Language.get(key)
-    except Exception:
+    language = _safe_get_langcodes_language(key)
+    if language is None:
         return None
 
     base = (language.language or "").lower()
     region = (language.region or "").upper()
-
-    internal_language = _LANGUAGE_NAME_TO_INTERNAL.get(
-        str(langcodes.Language.make(language=base).display_name("en")).strip().lower()
-    )
-    if internal_language is None:
-        internal_language = _LANGUAGE_NAME_TO_INTERNAL.get(base)
-
-    if internal_language is None and base in {
-        "fr",
-        "en",
-        "ja",
-        "es",
-        "it",
-        "de",
-        "pt",
-        "ru",
-        "tr",
-        "pl",
-        "ar",
-        "id",
-    }:
-        reverse = {v: k for k, v in LANGUAGE_SHORT_MAP.items()}
-        internal_language = reverse.get(base)
-
+    internal_language = _resolve_internal_language(base)
     if internal_language is None:
         return None
+    return LanguageInfo(language=internal_language, variant=_REGION_TO_VARIANT.get(region))
 
-    variant = _REGION_TO_VARIANT.get(region)
-    return LanguageInfo(language=internal_language, variant=variant)
+
+def _safe_get_langcodes_language(key: str) -> Any | None:
+    if langcodes is None:
+        return None
+    try:
+        return langcodes.Language.get(key)
+    except Exception:
+        return None
+
+
+def _resolve_internal_language(base: str) -> str | None:
+    display_name = _langcode_display_name(base)
+    if display_name:
+        from_name = _LANGUAGE_NAME_TO_INTERNAL.get(display_name)
+        if from_name is not None:
+            return from_name
+
+    from_base = _LANGUAGE_NAME_TO_INTERNAL.get(base)
+    if from_base is not None:
+        return from_base
+
+    if base in _FALLBACK_BASE_CODES:
+        return _REVERSE_LANGUAGE_SHORT_MAP.get(base)
+    return None
+
+
+def _langcode_display_name(base: str) -> str | None:
+    if langcodes is None:
+        return None
+    try:
+        return str(langcodes.Language.make(language=base).display_name("en")).strip().lower()
+    except Exception:
+        return None
 
 
 def normalize_language(value: str | None) -> tuple[str | None, str | None]:
+    """Normalise language."""
     if not value:
         return None, None
 
@@ -251,11 +269,13 @@ def normalize_language(value: str | None) -> tuple[str | None, str | None]:
 
 
 def is_french(value: str | None) -> bool:
+    """Return ``True`` if is french."""
     lang, _variant = normalize_language(value)
     return lang == "french"
 
 
 def language_short_label(language: str | None, variant: str | None = None) -> str:
+    """Handle language short label."""
     if not language:
         return "und"
 
@@ -268,6 +288,7 @@ def language_short_label(language: str | None, variant: str | None = None) -> st
 
 
 def parse_language_filter(value: str) -> tuple[str, str | None]:
+    """Parse language filter."""
     raw = str(value).strip().lower()
     if not raw:
         raise ValueError("Language filter cannot be empty.")
@@ -286,6 +307,7 @@ def parse_language_filter(value: str) -> tuple[str, str | None]:
 
 
 def is_valid_language_filter(value: str) -> bool:
+    """Return ``True`` if is valid language filter."""
     try:
         language, variant = parse_language_filter(value)
     except ValueError:
@@ -302,6 +324,7 @@ def match_language_filter(
     variant: str | None,
     filter_value: str,
 ) -> bool:
+    """Handle match language filter."""
     if not language:
         return False
 
@@ -317,11 +340,13 @@ def match_language_filter(
 
 
 def language_filter_short_label(filter_value: str) -> str:
+    """Handle language filter short label."""
     language, variant = parse_language_filter(filter_value)
     return language_short_label(language, variant)
 
 
 def language_filter_display_label(filter_value: str) -> str:
+    """Handle language filter display label."""
     language, variant = parse_language_filter(filter_value)
 
     base = LANGUAGE_DISPLAY_MAP.get(language, language.replace("_", " ").title())
@@ -333,6 +358,7 @@ def language_filter_display_label(filter_value: str) -> str:
 
 
 def language_display_label(language: str | None, variant: str | None = None) -> str:
+    """Handle language display label."""
     if not language:
         return "Unknown"
 
@@ -345,6 +371,7 @@ def language_display_label(language: str | None, variant: str | None = None) -> 
 
 
 def subtitle_variant_display_label(value: str | None) -> str:
+    """Handle subtitle variant display label."""
     if not value:
         return "Unknown"
 

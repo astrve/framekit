@@ -1,0 +1,269 @@
+# Release pipeline for Framekit.
+#
+# Trigger: a ``v*.*.*`` tag push (``v2.0.0``, ``v2.1.0`` …) or manual
+# dispatch with a tag/branch.
+#
+# Pipeline:
+#   1. validate  — version sanity, matches pyproject.toml
+#   2. test      — full pytest matrix (3.12/3.13/3.14 × ubuntu/win/macos)
+#   3. build     — wheel + sdist, twine check
+#   4. sign      — Sigstore (keyless OIDC) signs the artefacts
+#   5. binaries  — PyInstaller standalone builds for win/macos/linux
+#   6. release   — GitHub release with all artefacts attached
+#
+# Release binaries package Framekit itself. External tools such as ffmpeg,
+# mkvtoolnix, and mediainfo remain system dependencies.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., 2.0.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: get-version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          GIT_REF: ${{ github.ref }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="${GIT_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Validate version format
+        env:
+          VERSION: ${{ steps.get-version.outputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([abrc]+[0-9]+)?$ ]]; then
+            echo "::error::Invalid version format: $VERSION (expected: X.Y.Z[aN|bN|rcN])"
+            exit 1
+          fi
+
+      - name: Check version matches pyproject.toml
+        env:
+          VERSION: ${{ steps.get-version.outputs.version }}
+        run: |
+          PYPROJECT_VERSION=$(grep -Po '(?<=^version = ")[^"]*' pyproject.toml)
+          if [ "$VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "::error::Version mismatch: tag=$VERSION, pyproject.toml=$PYPROJECT_VERSION"
+            exit 1
+          fi
+          echo "OK: $VERSION"
+
+  test:
+    name: Full test suite
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mkvtoolnix mediainfo
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install mkvtoolnix mediainfo
+
+      - name: Install system dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: choco install mkvtoolnix mediainfo-cli -y
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest -v --tb=short -n auto --timeout=300
+
+  build:
+    name: Build wheel + sdist
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build
+        run: python -m build
+
+      - name: twine check
+        run: twine check dist/*
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: framekit-dist
+          path: dist/
+
+  sign:
+    name: Sign artefacts (Sigstore)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: framekit-dist
+          path: dist/
+
+      - name: Sign with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: |
+            ./dist/*.tar.gz
+            ./dist/*.whl
+
+      - name: Upload signature bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: framekit-sigstore
+          path: |
+            dist/*.sigstore.json
+
+  build-binaries:
+    name: Build binary (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: framekit-linux-x86_64
+            ext: ""
+          - os: windows-latest
+            asset_name: framekit-windows-x86_64
+            ext: ".exe"
+          - os: macos-latest
+            asset_name: framekit-macos-arm64
+            ext: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[build-binary]"
+
+      - name: Build standalone binary
+        run: pyinstaller --onefile --name framekit src/framekit/__main__.py
+
+      - name: Smoke-test binary
+        shell: bash
+        run: |
+          ./dist/framekit${{ matrix.ext }} --version
+
+      - name: Rename for upload
+        shell: bash
+        run: mv dist/framekit${{ matrix.ext }} dist/${{ matrix.asset_name }}${{ matrix.ext }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}${{ matrix.ext }}
+
+  github-release:
+    name: Create GitHub release
+    needs: [validate, sign, build-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download every artefact
+        uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+          pattern: "framekit-*"
+          merge-multiple: true
+
+      - name: Extract changelog entry for this version
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          if [ -f CHANGELOG.md ]; then
+            awk "/^## \\[$VERSION\\]/,/^## \\[/{print}" CHANGELOG.md \
+              | sed '$d' > release_notes.md
+            if [ ! -s release_notes.md ]; then
+              echo "See CHANGELOG.md for details." > release_notes.md
+            fi
+          else
+            echo "Release v$VERSION" > release_notes.md
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.validate.outputs.version }}
+          name: Framekit v${{ needs.validate.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(needs.validate.outputs.version, 'a') || contains(needs.validate.outputs.version, 'b') || contains(needs.validate.outputs.version, 'rc') }}
+          files: |
+            artefacts/*.whl
+            artefacts/*.tar.gz
+            artefacts/*.sigstore.json
+            artefacts/framekit-linux-x86_64
+            artefacts/framekit-windows-x86_64.exe
+            artefacts/framekit-macos-arm64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

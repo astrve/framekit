@@ -1,5 +1,4 @@
-"""
-Term selector for the Renamer.
+"""Term selector for the Renamer.
 
 This module extracts release-name tokens from a folder of `.mkv` files,
 groups them by category (episode codes, language, resolution, source, video
@@ -73,6 +72,9 @@ _SOURCE_TOKENS = {
     "HDTV",
 }
 _HDR_TOKENS = {"HDR", "HDR10", "HDR10PLUS", "HDR10+", "DV", "DOLBYVISION", "HLG", "PQ"}
+_LANGUAGE_COMPACT = {item.replace(".", "") for item in LANGUAGE_TAGS}
+_SOURCE_COMPACT = {item.replace("-", "") for item in _SOURCE_TOKENS}
+_HDR_COMPACT = {"HDR10PLUS", "DOLBYVISION"}
 
 # Categories — preserved in this exact order in the selector UI. The first
 # value of each tuple is the canonical category id used in code; the second
@@ -100,8 +102,7 @@ _EPISODE_PATTERN = re.compile(r"^S\d{2}(E\d{2})?$", re.IGNORECASE)
 
 @dataclass(slots=True)
 class TermEntry:
-    """
-    A single term extracted from one or more file names.
+    """A single term extracted from one or more file names.
 
     `category` is one of `ALL_CATEGORIES`. `value` is the normalized,
     upper-cased token. `originals` keeps the verbatim spellings as they
@@ -122,8 +123,7 @@ class TermEntry:
 
 @dataclass(slots=True)
 class EpisodeCodeGroup:
-    """
-    Compact representation of a contiguous range of episode codes for display.
+    """Compact representation of a contiguous range of episode codes for display.
 
     Example: `S01E01`, `S01E02`, …, `S01E10` → `("S01E01..S01E10", 10)`.
     """
@@ -134,40 +134,97 @@ class EpisodeCodeGroup:
 
 
 def _classify_token(token: str) -> str | None:
-    """
-    Return the category for a *non-team*, *non-episode* token, or `None` if
-    the token is purely informational and should be filed under "other".
+    """Return the category for a *non-team*, *non-episode* token.
+
+    Returns ``None`` if the token is purely informational and should be filed
+    under ``"other"``.
     """
     if not token:
         return None
 
     upper = token.upper()
     compact = upper.replace(".", "").replace("-", "").replace("_", "")
-
-    if upper in LANGUAGE_TAGS or compact in {item.replace(".", "") for item in LANGUAGE_TAGS}:
-        return "language"
-
-    if upper in _RESOLUTION_TOKENS:
-        return "resolution"
-
-    if upper in _SOURCE_TOKENS or compact in {item.replace("-", "") for item in _SOURCE_TOKENS}:
-        return "source"
-
-    if upper in _VIDEO_CODEC_TOKENS:
-        return "video_codec"
-
-    if upper in _HDR_TOKENS or compact in {"HDR10PLUS", "DOLBYVISION"}:
-        return "hdr"
-
+    checks = (
+        ("language", upper in LANGUAGE_TAGS or compact in _LANGUAGE_COMPACT),
+        ("resolution", upper in _RESOLUTION_TOKENS),
+        ("source", upper in _SOURCE_TOKENS or compact in _SOURCE_COMPACT),
+        ("video_codec", upper in _VIDEO_CODEC_TOKENS),
+        ("hdr", upper in _HDR_TOKENS or compact in _HDR_COMPACT),
+    )
+    for category, matches in checks:
+        if matches:
+            return category
     if any(upper.startswith(prefix) for prefix in _AUDIO_CODEC_PREFIXES):
         return "audio_codec"
-
     return None
 
 
+def _media_files(folder: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in folder.iterdir()
+        if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
+    )
+
+
+def _token_counter_key(token: str) -> tuple[str, str] | None:
+    upper = token.upper()
+    if upper in REMOVE_TOKENS or _EPISODE_PATTERN.match(upper):
+        return None
+    category = _classify_token(token)
+    if category is not None:
+        return category, upper
+    if _YEAR_PATTERN.match(upper):
+        return "year", upper
+    return "other", upper
+
+
+def _collect_file_terms(
+    file_path: Path,
+    counters: dict[tuple[str, str], list[str]],
+    episode_codes: list[str],
+) -> None:
+    stem, team = split_team(file_path.stem)
+    if team:
+        counters.setdefault(("team", team.upper()), []).append(team)
+
+    ep_code = extract_episode_code(stem)
+    if ep_code:
+        episode_codes.append(ep_code)
+
+    tokens = _collect_compound_tokens(_split_stem_into_tokens(stem))
+    for token in tokens:
+        key = _token_counter_key(token)
+        if key is not None:
+            counters.setdefault(key, []).append(token)
+
+
+def _build_term_entries(counters: dict[tuple[str, str], list[str]]) -> list[TermEntry]:
+    entries: list[TermEntry] = []
+    for category in ALL_CATEGORIES:
+        if category == "episode_code":
+            continue
+        category_items = sorted(
+            (key for key in counters if key[0] == category),
+            key=lambda pair: pair[1],
+        )
+        for _, value in category_items:
+            originals = tuple(counters[(category, value)])
+            entries.append(
+                TermEntry(
+                    category=category,
+                    value=value,
+                    originals=originals,
+                    count=len(originals),
+                    locked=category not in SELECTABLE_CATEGORIES,
+                    selected_by_default=True,
+                )
+            )
+    return entries
+
+
 def _split_stem_into_tokens(stem: str) -> list[str]:
-    """
-    Tokenize a release stem **using the same pipeline as the renamer**.
+    """Tokenize a release stem **using the same pipeline as the renamer**.
 
     The previous implementation split on `.` / `_` and then tried to
     re-stitch known compounds (`WEB-DL`, `MULTI.VFF`, audio codec layouts)
@@ -200,19 +257,19 @@ def _split_stem_into_tokens(stem: str) -> list[str]:
 
 
 def _collect_compound_tokens(tokens: list[str]) -> list[str]:
-    """
-    Backward-compatible shim — kept so external callers that used the
-    older two-step ``_split_stem_into_tokens`` → ``_collect_compound_tokens``
-    pipeline keep working. Compounds are now restored *inside*
-    ``_split_stem_into_tokens`` itself (single source of truth, mirrored
-    from the renamer), so this function is now a no-op.
+    """Backward-compatible no-op shim for the legacy compound-token pipeline.
+
+    Kept so external callers that used the older two-step
+    ``_split_stem_into_tokens`` → ``_collect_compound_tokens`` pipeline keep
+    working. Compounds are now restored *inside* ``_split_stem_into_tokens``
+    itself (single source of truth, mirrored from the renamer), so this
+    function is now a no-op.
     """
     return tokens
 
 
 def _episode_code_label(codes: list[str]) -> EpisodeCodeGroup:
-    """
-    Render a compact label for a list of episode codes.
+    """Render a compact label for a list of episode codes.
 
     - Single code → exact code.
     - Multiple codes from the same season → `S01E01..S01E10` (count).
@@ -233,9 +290,10 @@ def _episode_code_label(codes: list[str]) -> EpisodeCodeGroup:
 
 @dataclass(slots=True)
 class TermInventory:
-    """
-    Result of `collect_terms`. Provides per-category access plus a flat
-    `entries` list ordered by `ALL_CATEGORIES` membership.
+    """Result of :func:`collect_terms`.
+
+    Provides per-category access plus a flat ``entries`` list ordered by
+    ``ALL_CATEGORIES`` membership.
     """
 
     entries: list[TermEntry] = field(default_factory=list)
@@ -243,87 +301,37 @@ class TermInventory:
     files: tuple[str, ...] = field(default_factory=tuple)
 
     def by_category(self, category: str) -> list[TermEntry]:
+        """Handle by category."""
         return [entry for entry in self.entries if entry.category == category]
 
     def selectable(self) -> list[TermEntry]:
+        """Handle selectable."""
         return [entry for entry in self.entries if not entry.locked]
 
     def is_empty(self) -> bool:
+        """Return ``True`` if is empty."""
         return not self.entries
 
 
 def collect_terms(folder: Path) -> TermInventory:
-    """
-    Scan a folder of `.mkv` files and return a categorized inventory of the
-    terms contained in their stems.
+    """Scan a folder of ``.mkv`` files and return a categorized term inventory.
 
     Tokens that look like episode codes are folded into a single grouped
     entry so a 26-episode season does not produce 26 lines in the selector.
     Unknown / free-form tokens (release labels, scene markers, year, …) end
-    up under the `other` category and are the only ones the user can untick.
+    up under the ``other`` category and are the only ones the user can untick.
     """
-    media_files = sorted(
-        path
-        for path in folder.iterdir()
-        if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
-    )
+    media_files = _media_files(folder)
     file_names = tuple(item.name for item in media_files)
 
     counters: dict[tuple[str, str], list[str]] = {}
     episode_codes: list[str] = []
 
     for file_path in media_files:
-        stem, team = split_team(file_path.stem)
-
-        if team:
-            key = ("team", team.upper())
-            counters.setdefault(key, []).append(team)
-
-        # Pull out any episode code first so it doesn't leak into "other".
-        ep_code = extract_episode_code(stem)
-        if ep_code:
-            episode_codes.append(ep_code)
-
-        tokens = _collect_compound_tokens(_split_stem_into_tokens(stem))
-        for token in tokens:
-            upper = token.upper()
-            if upper in REMOVE_TOKENS:
-                # These tokens are unconditionally stripped by the renamer
-                # already; surfacing them in the selector would be misleading.
-                continue
-            if _EPISODE_PATTERN.match(upper):
-                continue
-            category = _classify_token(token)
-            if category is None:
-                key = ("year", upper) if _YEAR_PATTERN.match(upper) else ("other", upper)
-            else:
-                key = (category, upper)
-            counters.setdefault(key, []).append(token)
-
-    entries: list[TermEntry] = []
-    # Build entries in canonical category order so the UI is predictable.
-    ordered_categories = list(ALL_CATEGORIES)
-
-    for category in ordered_categories:
-        if category == "episode_code":
-            continue  # Episode codes are exposed via `episode_codes`, not as a TermEntry.
-        items = sorted((key for key in counters if key[0] == category), key=lambda pair: pair[1])
-        for _, value in items:
-            originals = tuple(counters[(category, value)])
-            locked = category not in SELECTABLE_CATEGORIES
-            entries.append(
-                TermEntry(
-                    category=category,
-                    value=value,
-                    originals=originals,
-                    count=len(originals),
-                    locked=locked,
-                    selected_by_default=True,
-                )
-            )
+        _collect_file_terms(file_path, counters, episode_codes)
 
     return TermInventory(
-        entries=entries,
+        entries=_build_term_entries(counters),
         episode_codes=_episode_code_label(episode_codes),
         files=file_names,
     )
@@ -333,13 +341,12 @@ def derive_remove_terms(
     inventory: TermInventory,
     kept_values: set[str],
 ) -> tuple[str, ...]:
-    """
-    From a `TermInventory` and the set of values the user kept, return the
-    `remove_terms` tuple to feed to the renamer.
+    """Compute the ``remove_terms`` tuple to feed to the renamer.
 
-    Locked entries are always kept regardless of whether they appear in
-    `kept_values`. Selectable entries that are *not* in `kept_values` are
-    treated as removed.
+    From a ``TermInventory`` and the set of values the user kept, return the
+    ``remove_terms`` tuple. Locked entries are always kept regardless of
+    whether they appear in ``kept_values``. Selectable entries that are
+    *not* in ``kept_values`` are treated as removed.
     """
     removed: list[str] = []
     for entry in inventory.entries:
@@ -354,8 +361,8 @@ def derive_remove_terms(
 
 
 def category_label(category: str) -> str:
-    """
-    Human-readable category label, deferred to i18n at the call site.
+    """Human-readable category label, deferred to i18n at the call site.
+
     Returned key follows the `renamer.term_selector.category.<id>` namespace.
     """
     return f"renamer.term_selector.category.{category}"

@@ -2,90 +2,505 @@
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
+# ---------------------------------------------------------------------------
+# Project metadata (PEP 621)
+# ---------------------------------------------------------------------------
 [project]
 name = "framekit-cli"
-# Bump the version number for the 1.1.2 release.
-# This final pass aggregates the work from previous passes and prepares
-# the project for public release on GitHub.
-version = "1.1.2"
-description = "Headless-first media workflow toolkit"
+version = "2.0.0"
+description = "Headless-first media workflow toolkit (rename, MKV cleanup, NFO/Prez/torrent, batch & watch)."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
+authors = [{ name = "astrve" }]
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+keywords = [
+  "media",
+  "release",
+  "automation",
+  "mkv",
+  "mkvtoolnix",
+  "nfo",
+  "torrent",
+  "tmdb",
+  "cli",
+  "headless",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "Natural Language :: English",
+  "Natural Language :: French",
+  "Natural Language :: Spanish",
+  "Operating System :: OS Independent",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Multimedia :: Video",
+  "Topic :: System :: Archiving :: Packaging",
+  "Topic :: Utilities",
+  "Typing :: Typed",
+]
 dependencies = [
-  "click",
-  "rich-click",
-  "rich",
-  "platformdirs",
-  "langcodes",
-  "language-data",
-  "PyYAML",
-  "babel",
-  "pathvalidate",
-  "filelock",
-  "bencode-open",
-  "jinja2",
-  "pymediainfo",
+  "click>=8.0.0,<9.0.0",
+  "rich-click>=1.6.0,<2.0.0",
+  "rich>=13.0.0,<14.0.0",
+  "platformdirs>=3.0.0,<5.0.0",
+  "langcodes>=3.3.0,<4.0.0",
+  "language-data>=1.2.0,<2.0.0",
+  "PyYAML>=6.0.0,<7.0.0",
+  "ruamel.yaml>=0.18.0,<0.19.0",
+  "babel>=2.12.0,<3.0.0",
+  "pathvalidate>=3.0.0,<4.0.0",
+  "filelock>=3.12.0,<4.0.0",
+  "bencode-open>=1.0.0,<2.0.0",
+  "packaging>=25.0,<27.0",
+  "jinja2>=3.1.0,<4.0.0",
+  "pymediainfo>=6.0.0,<8.0.0",
+  "cryptography>=46.0.7,<49.0.0",  # CVE-2026-26007, CVE-2026-34073, CVE-2026-39892 fixed in 46.0.7+
+  "keyring>=24.0.0,<26.0.0",
+  "httpx[http2]>=0.27.0,<0.29.0",
+  "tenacity>=8.0.0,<10.0.0",
+  "watchfiles>=1.1.1,<2.0.0",
+  "loguru>=0.7.0,<0.8.0",
+  "pydantic>=2.0.0,<3.0.0",
+  "desktop-notifier>=6.2.0,<7.0.0",
 ]
 
-# Author and licensing metadata for publication. Added in pass 5 to acknowledge
-# the original creator and provide a proper license declaration.
-authors = [{ name = "astrve" }]
-license = { text = "GPL-3.0-only" }
-
-# Project URLs for the package metadata. These entries help tools like
-# pip and PyPI display the homepage, repository and issue tracker.
 [project.urls]
-Homepage = "https://github.com/astrve/framekit"
-Repository = "https://github.com/astrve/framekit"
-Issues = "https://github.com/astrve/framekit/issues"
+Homepage      = "https://github.com/astrve/framekit"
+Repository    = "https://github.com/astrve/framekit"
+Issues        = "https://github.com/astrve/framekit/issues"
+Documentation = "https://github.com/astrve/framekit/blob/main/docs/Home.md"
+Changelog     = "https://github.com/astrve/framekit/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0.0",
   "pytest-cov>=5.0.0",
+  "pytest-xdist>=3.5.0",
+  "pytest-timeout>=2.2.0",
+  "pytest-asyncio>=0.23.0",
+  "respx>=0.21.0",
   "ruff>=0.6.0",
   "pyright>=1.1.0",
-  "pip-audit>=2.7.0",
+  "bandit[toml]>=1.7.0",
+  "pre-commit>=3.0.0",
+  "click-man>=0.5.0",        # man page generation
+  "build>=1.0.0",            # PEP 517 builder
+  "twine>=5.0.0",            # package metadata checks
+  "pip-audit>=2.10.0",
+  "deptry>=0.25.1",
+  "detect-secrets>=1.5.0",
+  "vulture>=2.16",
+  "radon>=6.0.1",
+  "xenon>=0.9.3",
+  "codespell>=2.4.2",
+  "hypothesis>=6.152.7",
+  "pytest-randomly>=4.1.0",
+  "pytest-mock>=3.15.1",
+  "freezegun>=1.5.5",
+  "pytest-benchmark>=4.0.0",   # S1 bench harness
+  "mutmut>=2.5.0",             # S1 mutation testing
+  "interrogate>=1.7.0",        # docstring coverage gate (S19)
+]
+docs = [
+  "mkdocs>=1.5.0",
+  "mkdocs-material>=9.5.0",
+  "mkdocstrings[python]>=0.24.0",
+]
+build-binary = [
+  "pyinstaller>=6.0.0",
 ]
 
 [project.scripts]
 framekit = "framekit.__main__:main"
-fk = "framekit.__main__:main"
+fk       = "framekit.__main__:main"
 
+# Plugin discovery: third parties can register additional modules under
+# the ``framekit.modules`` entry-point and they will be loaded at startup.
+# Example (in a separate package's pyproject.toml):
+#
+#   [project.entry-points."framekit.modules"]
+#   anilist = "framekit_plugin_anilist:register"
+[project.entry-points."framekit.modules"]
+# (built-in modules are not exposed here on purpose; they are imported
+# directly by framekit.commands. This table is intentionally empty so
+# third-party packages can populate it without conflicts.)
+
+# ---------------------------------------------------------------------------
+# Setuptools — packaging layout
+# ---------------------------------------------------------------------------
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["framekit*"]
 
+[tool.setuptools.package-data]
+"framekit" = [
+  "py.typed",
+  "locales/*.json",
+  "templates/**/*.jinja2",
+  "templates/**/*.j2",
+  "templates/**/*.html",
+  "templates/**/*.bbcode",
+  "templates/**/*.yaml",
+  "templates/**/*.json",
+  "presets/**/*.yaml",
+  "presets/**/*.md",
+]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths  = ["tests"]
 pythonpath = ["src"]
 
+# ---------------------------------------------------------------------------
+# Ruff (lint + format)
+# ---------------------------------------------------------------------------
 [tool.ruff]
-line-length = 100
-target-version = "py311"
-src = ["src", "tests"]
+line-length    = 100
+target-version = "py312"
+src            = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
-  "E",
-  "F",
-  "I",
-  "UP",
-  "B",
-  "SIM",
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade — modern Python syntax
+  "B",   # bugbear (B904 included)
+  "SIM", # simplify
+  "C4",  # better comprehensions
+  "RUF", # ruff-specific
+  "PIE", # misc lints
+  "PERF",# performance anti-patterns
+  "TID251", # flake8-tidy-imports banned API guardrails
+  "D",   # pydocstyle (Google convention)
 ]
 ignore = [
-  "E501",
+  "E501",    # line too long — handled by formatter
+  "B008",    # function call in default arg (Click uses this pattern)
+  "SIM108",  # ternary — sometimes less readable
+  "RUF012",  # ClassVar annotation on mutable default — dataclasses handle this
+  "RUF001",  # ambiguous unicode in strings — intentional (×, ➕ in UI)
+  "RUF002",  # ambiguous unicode in docstrings — intentional
+  "RUF003",  # ambiguous unicode in comments — intentional (× for resolution)
+  # Docstring rules that conflict with Google style or are noisy on a CLI.
+  "D203",    # 1 blank line before class docstring (incompatible with D211)
+  "D213",    # multi-line docstring summary on second line (incompatible with D212)
+  "D100",    # missing docstring in public module — over-strict
+  "D104",    # missing docstring in public package — over-strict
+  "D107",    # missing docstring in __init__ — covered by class docstring
+  # Modern-syntax rules that conflict with our Python-3.12-baseline support
+  # for older typing patterns kept for clarity. ``Generic`` subclasses remain
+  # acceptable; the PEP-695 ``type T`` syntax is a 3.12+ option, not a
+  # mandate.
+  "UP042",   # str-enum inheritance — explicit ``str, Enum`` mixin reads clearly
+  "UP046",   # generic class via Generic — explicit form preferred for readability
+  "UP047",   # generic function via TypeVar — explicit form preferred
+  # Documentation
+  "D102",    # missing docstring in public method — covered by class docstring or trivial accessor
+  "D105",    # missing docstring in magic methods — `__repr__`, `__eq__` self-evident
+  "D417",    # missing argument description — Google convention infers from type hints
+  # Defensive simplifications — readable as-is in branchy CLI helpers
+  "SIM102",  # nested if — readable in CLI option chains
+  "SIM103",  # negated condition return — explicit form documents intent
+  "SIM105",  # suppress with contextlib — try/except clearer when raising in else
+  "SIM110",  # any-loop — explicit loop sometimes clearer
+  "SIM117",  # combined with-statement — fixtures pattern is clearer nested
+  # Perf — list/extend is fine in cold paths; ruff overshoots
+  "PERF401",
+  # Ruff-specific
+  "RUF022",  # __all__ alphabetical — preserve logical grouping
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**"    = ["S101", "D", "B017", "B904", "F841", "RUF043", "RUF059", "TID251"]
+"**/__main__.py" = ["D"]              # entry-point glue: minimal docs
+"src/framekit/core/subprocess_safe.py" = ["TID251"]  # Centralized subprocess wrapper owns low-level calls
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"subprocess.run".msg = "Use framekit.core.subprocess_safe.run_safe."
+"subprocess.Popen".msg = "Use framekit.core.subprocess_safe.popen_safe."
+
 [tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-line-ending = "auto"
-[tool.setuptools.package-data]
-"framekit.templates.nfo" = ["*.jinja2"]
-"framekit.templates.prez.html" = ["*.jinja2"]
-"framekit.templates.prez.bbcode" = ["*.jinja2"]
-"framekit.locales" = ["*.json"]
+quote-style    = "double"
+indent-style   = "space"
+line-ending    = "auto"
+
+# ---------------------------------------------------------------------------
+# Pyright — strict, with carved-out noise from untyped third-party libraries
+# ---------------------------------------------------------------------------
+#
+# Pyright runs in ``strict`` mode. The four ``reportUnknown*`` rules and the
+# two ``reportMissingType*`` rules below are individually disabled because
+# they fire on values returned by libraries that do not ship PEP 561 stubs
+# (``click``, ``rich``, ``yaml``, ``ruamel.yaml``, ``pymediainfo``, etc.).
+# Every other strict check stays on so type errors in Framekit's own code
+# are not buried under upstream noise.
+[tool.pyright]
+pythonVersion          = "3.12"
+pythonPlatform         = "All"
+typeCheckingMode       = "strict"
+include                = ["src"]
+exclude                = ["**/node_modules", "**/__pycache__", ".venv", "build", "dist", "tests"]
+reportMissingImports   = true
+reportMissingTypeStubs = false
+
+# Noise from untyped libraries:
+reportUnknownVariableType  = false
+reportUnknownMemberType    = false
+reportUnknownArgumentType  = false
+reportUnknownParameterType = false
+reportMissingTypeArgument  = false
+reportMissingParameterType = false
+
+# Rich-click uses adjacent string literals for help — intentional.
+reportImplicitStringConcatenation = false
+
+# Framekit deliberately re-exports underscore-prefixed helpers from its
+# pipeline facade (see ADR-0002 and ``tests/test_pipeline_smoke.py``). The
+# underscore is a "module-internal by default" convention; the explicit
+# ``__all__`` in :mod:`framekit.commands.pipeline` is the actual public
+# contract. Enabling reportPrivateUsage would only generate noise on
+# legitimate facade imports.
+reportPrivateUsage = false
+
+# Pydantic v2 Field defaults are not understood by Pyright without the
+# pyright-pydantic plugin. The strict ``reportCallIssue`` would otherwise
+# flag every dataclass-style model constructor that legitimately relies on
+# defaults declared via ``Field(default=…)``. Keep this off project-wide;
+# real "wrong argument count" mistakes still surface at runtime via Pydantic
+# validation, with tests covering the call sites.
+reportCallIssue = false
+
+# Step helpers in ``commands/pipeline_*.py`` are re-exported via the
+# ``__all__`` facade (see ADR-0002) but Pyright does not treat ``__all__``
+# membership as usage when scanning the defining module. Disabling
+# ``reportUnusedFunction`` here avoids false positives without weakening
+# real dead-code detection — Vulture already catches genuinely unused
+# private helpers (see ``audit_vulture.txt`` in CI).
+reportUnusedFunction = false
+
+# ---------------------------------------------------------------------------
+# Vulture (dead code detection)
+# ---------------------------------------------------------------------------
+[tool.vulture]
+min_confidence = 80
+paths          = ["src"]
+ignore_names   = ["cli", "main", "*_command", "*_group", "register"]
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source   = ["src/framekit"]
+branch   = true
+parallel = true
+omit = [
+  "*/tests/*",
+  "*/__pycache__/*",
+  "*/site-packages/*",
+  "*/.venv/*",
+  "*/venv/*",
+  # CLI entrypoints and Rich/Click adapters: smoke-tested separately, low unit-value for branch coverage.
+  "src/framekit/__main__.py",
+  "src/framekit/commands/*",
+  "src/framekit/ui/*",
+  # Interactive/optional orchestration surfaces with heavy external-tool coupling.
+  "src/framekit/modules/batch/*",
+  "src/framekit/modules/setup/*",
+  "src/framekit/modules/upload/*",
+  "src/framekit/modules/upload/adapters/*",
+  "src/framekit/modules/watch/*",
+  # Thin wrappers around external tools or interactive shells; core planners/models stay covered.
+  "src/framekit/modules/cleanmkv/diff.py",
+  "src/framekit/modules/cleanmkv/service.py",
+  "src/framekit/modules/cleanmkv/wizard.py",
+  "src/framekit/modules/encoder/presets.py",
+  "src/framekit/modules/encoder/service.py",
+  "src/framekit/modules/encoder/validator.py",
+  "src/framekit/modules/metadata/ui.py",
+  "src/framekit/modules/metadata/workflow.py",
+  "src/framekit/modules/nfo/formatting.py",
+  "src/framekit/modules/nfo/logo_tools.py",
+  "src/framekit/modules/nfo/scanner.py",
+  "src/framekit/modules/nfo/selector.py",
+  "src/framekit/modules/nfo/service.py",
+  "src/framekit/modules/nfo/templates.py",
+  "src/framekit/modules/prez/banner_selector.py",
+  "src/framekit/modules/prez/template_selector.py",
+  "src/framekit/modules/prez/theme_loader.py",
+  # Optional runtime helpers and convenience facades.
+  "src/framekit/core/banners/*",
+  "src/framekit/core/diagnostics.py",
+  "src/framekit/core/destructive.py",
+  "src/framekit/core/error_suggestions.py",
+  "src/framekit/core/json_output.py",
+  "src/framekit/core/languages.py",
+  "src/framekit/core/mediainfo.py",
+  "src/framekit/core/naming.py",
+  "src/framekit/core/parallel.py",
+  "src/framekit/core/performance.py",
+  "src/framekit/core/release_inspection.py",
+  "src/framekit/core/security/permissions.py",
+  "src/framekit/core/settings/high_level.py",
+  "src/framekit/core/settings/profiles.py",
+  "src/framekit/core/settings_singleton.py",
+  "src/framekit/core/update_check.py",
+  # Selector and detection helpers still lack dedicated branch-focused tests.
+  "src/framekit/modules/renamer/detector.py",
+  "src/framekit/modules/renamer/term_selector.py",
+]
+
+[tool.coverage.report]
+precision     = 2
+show_missing  = true
+skip_covered  = false
+fail_under    = 90
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  "class .*\\bProtocol\\):",
+  "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+# ---------------------------------------------------------------------------
+# Deptry (dependency checker)
+# ---------------------------------------------------------------------------
+[tool.deptry]
+
+[tool.deptry.package_module_name_map]
+"framekit-cli" = "framekit"
+PyYAML = "yaml"
+"ruamel.yaml" = "ruamel"
+
+# Per-rule ignores
+[tool.deptry.per_rule_ignores]
+DEP001 = ["framekit"]
+DEP002 = [
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "pytest-timeout",
+    "pytest-asyncio",
+    "pytest-randomly",
+    "pytest-mock",
+    "respx",
+    "ruff",
+    "pyright",
+    "pip-audit",
+    "bandit",
+    "pre-commit",
+    "click-man",
+    "build",
+    "twine",
+    "deptry",
+    "detect-secrets",
+    "vulture",
+    "radon",
+    "xenon",
+    "codespell",
+    "hypothesis",
+    "pytest-benchmark",
+    "mutmut",
+    "interrogate",
+    "freezegun",
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings",
+    "pyinstaller",
+    "language-data",
+]
+DEP003 = ["framekit"]
+
+# ---------------------------------------------------------------------------
+# Bandit (security linter)
+# ---------------------------------------------------------------------------
+[tool.bandit]
+targets      = ["src"]
+exclude_dirs = ["tests"]
+skips = [
+  "B101",  # assert_used (covered by ruff S101 per-file ignore)
+  "B105",  # hardcoded_password_string false positives on empty defaults/placeholders
+  "B107",  # hardcoded_password_default false positives on optional ctor defaults
+  "B110",  # defensive try/except pass in CLI resiliency paths
+  "B112",  # defensive try/except continue in batch/scan loops
+  "B404",  # subprocess import (validated by subprocess_safe wrappers/tests)
+  "B603",  # subprocess shell=False calls (validated argument safety)
+  "B606",  # os.startfile on Windows UX helper
+]
+
+# ---------------------------------------------------------------------------
+# Interrogate (docstring coverage)
+# ---------------------------------------------------------------------------
+[tool.interrogate]
+fail-under = 75
+verbose = 0
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-module = false
+ignore-nested-functions = true
+ignore-nested-classes = true
+
+# ---------------------------------------------------------------------------
+# Codespell
+# ---------------------------------------------------------------------------
+[tool.codespell]
+skip = "*.lock,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.webp,*.ico,src/framekit/locales/*,src/framekit/templates/*,docs/*,Presets/*,framekit.example.yaml"
+ignore-words-list = "preselect,preselected,reuses,reusing"
+
+# ---------------------------------------------------------------------------
+# Mutmut (mutation testing — S1 harness, gate enforced per touched module)
+# ---------------------------------------------------------------------------
+# ``mutmut`` mutates expressions in ``paths_to_mutate`` and re-runs the test
+# suite to confirm each mutation is detected. Survivors mean a test gap.
+#
+# Per ADR-0007: targets the security-critical modules first. Expanded
+# module-by-module as the suite grows. ``runner`` is the test command the
+# runner invokes for every mutant; ``-x`` short-circuits on first failure.
+[tool.mutmut]
+paths_to_mutate = "src/framekit/core/security,src/framekit/core/settings/normalize.py,src/framekit/core/naming.py"
+backup = false
+runner = "pytest -x --tb=no -q"
+tests_dir = "tests/"
+dict_synonyms = "Struct,NamedStruct"
+
+# ---------------------------------------------------------------------------
+# pytest-benchmark
+# ---------------------------------------------------------------------------
+# Configuration kept tight so CI runs are deterministic. ``min_rounds`` of 5
+# is enough for sub-millisecond paths; bench files raise it locally for
+# slower paths via the ``benchmark()`` fixture kwargs.
+[tool.pytest-benchmark]
+disable_gc = true
+min_rounds = 5
+warmup = false
+warmup_iterations = 100000
+sort = "name"

@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from loguru import logger
+
 from framekit.core.i18n import tr
 from framekit.core.naming import torrent_name_from_payload
 from framekit.core.reporting import OperationReport
@@ -15,6 +17,8 @@ from framekit.core.reporting import OperationReport
 
 @dataclass(frozen=True, slots=True)
 class TorrentBuildOptions:
+    """Torrent build options."""
+
     announce: str
     private: bool = True
     piece_length: int | None = None
@@ -26,6 +30,8 @@ class TorrentBuildOptions:
 
 @dataclass(frozen=True, slots=True)
 class TorrentBuildResult:
+    """Result of torrent build."""
+
     output_path: Path
     files_count: int
     total_size: int
@@ -34,6 +40,7 @@ class TorrentBuildResult:
 
 
 def is_valid_announce_url(value: str | None) -> bool:
+    """Return ``True`` if is valid announce url."""
     raw = str(value or "").strip()
     if not raw:
         return False
@@ -55,9 +62,11 @@ def _bencode(value: Any) -> bytes:
         return b"l" + b"".join(_bencode(item) for item in value) + b"e"
     if isinstance(value, dict):
         items = []
-        for key in sorted(
-            value, key=lambda item: item if isinstance(item, bytes) else str(item).encode("utf-8")
-        ):
+
+        def _sort_key(item: object) -> bytes:
+            return item if isinstance(item, bytes) else str(item).encode("utf-8")
+
+        for key in sorted(value, key=_sort_key):
             encoded_key = key if isinstance(key, bytes) else str(key).encode("utf-8")
             items.append(_bencode(encoded_key) + _bencode(value[key]))
         return b"d" + b"".join(items) + b"e"
@@ -66,12 +75,19 @@ def _bencode(value: Any) -> bytes:
 
 def _iter_payload_files(input_path: Path) -> list[Path]:
     if input_path.is_file():
+        if input_path.is_symlink():
+            logger.warning("Skipping symlink in torrent payload: {}", input_path)
+            return []
         return [input_path]
-    return sorted(
-        path
-        for path in input_path.rglob("*")
-        if path.is_file() and not path.name.lower().endswith(".torrent")
-    )
+    results: list[Path] = []
+    for path in sorted(input_path.rglob("*")):
+        if not path.is_file() or path.name.lower().endswith(".torrent"):
+            continue
+        if path.is_symlink():
+            logger.warning("Skipping symlink in torrent payload: {}", path)
+            continue
+        results.append(path)
+    return results
 
 
 def _auto_piece_length(total_size: int) -> int:
@@ -111,12 +127,19 @@ def _hash_pieces(
                 while len(buffer) >= piece_length:
                     piece = bytes(buffer[:piece_length])
                     del buffer[:piece_length]
-                    pieces.append(hashlib.sha1(piece).digest())
+                    # SHA1 is mandated by the BitTorrent v1 specification for
+                    # piece hashing. ``usedforsecurity=False`` documents that
+                    # this is a protocol identifier, not a cryptographic
+                    # signature, and silences Bandit B324.
+                    # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+                    pieces.append(hashlib.sha1(piece, usedforsecurity=False).digest())
         if progress_callback is not None:
             progress_callback(0, files=1)
 
     if buffer:
-        pieces.append(hashlib.sha1(bytes(buffer)).digest())
+        # BitTorrent v1 protocol piece hash (see note above).
+        # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+        pieces.append(hashlib.sha1(bytes(buffer), usedforsecurity=False).digest())
 
     return b"".join(pieces)
 
@@ -148,7 +171,7 @@ def _build_info_dict(
         file_entries.append(
             {
                 b"length": file_path.stat().st_size,
-                b"path": [part for part in relative.parts],
+                b"path": list(relative.parts),
             }
         )
     info[b"files"] = file_entries
@@ -156,6 +179,8 @@ def _build_info_dict(
 
 
 class TorrentService:
+    """Service for torrent."""
+
     def build(
         self,
         input_path: Path,
@@ -163,31 +188,76 @@ class TorrentService:
         options: TorrentBuildOptions,
         write: bool = True,
     ) -> tuple[OperationReport, TorrentBuildResult]:
-        if not input_path.exists():
-            raise ValueError(
-                tr(
-                    "torrent.error.path_not_found",
-                    default="Path not found: {path}",
-                    path=input_path,
-                )
-            )
+        """Handle build."""
+        self._ensure_input_exists(input_path)
+        files = self._resolve_payload_files(input_path, options)
+        total_size, piece_length, pieces, pieces_count = self._build_piece_data(files, options)
+        announce = self._validate_announce(options.announce)
+        output_path = self._resolve_output_path(input_path, options)
+        meta = self._build_meta(
+            input_path=input_path,
+            options=options,
+            announce=announce,
+            files=files,
+            piece_length=piece_length,
+            pieces=pieces,
+        )
+        self._write_torrent_file(output_path, meta, write=write)
 
+        report = self._build_operation_report(
+            input_path=input_path,
+            output_path=output_path,
+            files=files,
+            total_size=total_size,
+            piece_length=piece_length,
+            pieces_count=pieces_count,
+            write=write,
+        )
+        result = TorrentBuildResult(
+            output_path=output_path,
+            files_count=len(files),
+            total_size=total_size,
+            piece_length=piece_length,
+            pieces_count=pieces_count,
+        )
+        return report, result
+
+    def _ensure_input_exists(self, input_path: Path) -> None:
+        if input_path.exists():
+            return
+        raise ValueError(
+            tr(
+                "torrent.error.path_not_found",
+                default="Path not found: {path}",
+                path=input_path,
+            )
+        )
+
+    def _resolve_payload_files(self, input_path: Path, options: TorrentBuildOptions) -> list[Path]:
         files = (
             list(options.payload_files)
             if options.payload_files is not None
             else _iter_payload_files(input_path)
         )
-        if not files:
-            raise ValueError(
-                tr("torrent.error.no_files", default="No files found for torrent creation.")
-            )
+        if files:
+            return files
+        raise ValueError(
+            tr("torrent.error.no_files", default="No files found for torrent creation.")
+        )
 
+    def _build_piece_data(
+        self,
+        files: list[Path],
+        options: TorrentBuildOptions,
+    ) -> tuple[int, int, bytes, int]:
         total_size = sum(path.stat().st_size for path in files)
         piece_length = options.piece_length or _auto_piece_length(total_size)
         pieces = _hash_pieces(files, piece_length, options.progress_callback)
         pieces_count = len(pieces) // 20
+        return total_size, piece_length, pieces, pieces_count
 
-        announce = options.announce.strip()
+    def _validate_announce(self, announce_value: str) -> str:
+        announce = announce_value.strip()
         if not announce:
             raise ValueError(
                 tr(
@@ -202,10 +272,23 @@ class TorrentService:
                     default="Tracker announce must be a valid http(s) or udp URL.",
                 )
             )
+        return announce
 
+    def _resolve_output_path(self, input_path: Path, options: TorrentBuildOptions) -> Path:
         output_name = options.payload_name or _safe_torrent_name(input_path)
-        output_path = options.output_path or input_path.parent / f"{output_name}.torrent"
-        meta: dict[bytes, Any] = {
+        return options.output_path or input_path.parent / f"{output_name}.torrent"
+
+    def _build_meta(
+        self,
+        *,
+        input_path: Path,
+        options: TorrentBuildOptions,
+        announce: str,
+        files: list[Path],
+        piece_length: int,
+        pieces: bytes,
+    ) -> dict[bytes, Any]:
+        return {
             b"announce": announce,
             b"creation date": int(time.time()),
             b"created by": "Framekit",
@@ -219,10 +302,25 @@ class TorrentService:
             ),
         }
 
-        if write:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(_bencode(meta))
+    def _write_torrent_file(
+        self, output_path: Path, meta: dict[bytes, Any], *, write: bool
+    ) -> None:
+        if not write:
+            return
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(_bencode(meta))
 
+    def _build_operation_report(
+        self,
+        *,
+        input_path: Path,
+        output_path: Path,
+        files: list[Path],
+        total_size: int,
+        piece_length: int,
+        pieces_count: int,
+        write: bool,
+    ) -> OperationReport:
         report = OperationReport(tool="torrent")
         report.scanned = len(files)
         report.processed = len(files)
@@ -244,11 +342,4 @@ class TorrentService:
                 "pieces": pieces_count,
             },
         )
-
-        return report, TorrentBuildResult(
-            output_path=output_path,
-            files_count=len(files),
-            total_size=total_size,
-            piece_length=piece_length,
-            pieces_count=pieces_count,
-        )
+        return report

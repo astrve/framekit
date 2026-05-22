@@ -15,6 +15,8 @@ from framekit.modules.metadata.matcher import build_lookup_request, sort_candida
 
 
 class MetadataService:
+    """Service for metadata."""
+
     def __init__(
         self,
         provider: MetadataProvider,
@@ -29,9 +31,11 @@ class MetadataService:
         self.cache_ttl_hours = cache_ttl_hours
 
     def build_lookup_request(self, release: ReleaseNfoData) -> MetadataLookupRequest:
+        """Build lookup request."""
         return build_lookup_request(release)
 
     def get_stored_choice(self, release: ReleaseNfoData) -> MetadataCandidate | None:
+        """Return the stored choice."""
         stored = self.choice_store.get(release)
         if not stored:
             return None
@@ -54,9 +58,11 @@ class MetadataService:
         )
 
     def store_choice(self, release: ReleaseNfoData, candidate: MetadataCandidate) -> None:
+        """Handle store choice."""
         self.choice_store.set(release, candidate)
 
     def clear_stored_choice(self, release: ReleaseNfoData) -> None:
+        """Handle clear stored choice."""
         self.choice_store.clear(release)
 
     def _same_candidate(self, left: MetadataCandidate, right: MetadataCandidate) -> bool:
@@ -113,6 +119,7 @@ class MetadataService:
     def search(
         self, release: ReleaseNfoData
     ) -> tuple[MetadataLookupRequest, list[MetadataCandidate]]:
+        """Handle search."""
         request = self.build_lookup_request(release)
         stored = self.get_stored_choice(release)
 
@@ -131,6 +138,7 @@ class MetadataService:
         self,
         candidate: MetadataCandidate,
     ) -> MovieMetadata | EpisodeMetadata | SeasonMetadata:
+        """Resolve candidate."""
         if candidate.kind == "movie":
             return self.provider.fetch_movie(candidate)
 

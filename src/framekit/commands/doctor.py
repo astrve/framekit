@@ -1,20 +1,24 @@
 from __future__ import annotations
 
+import shutil
+import sys
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Literal
-
-# Prefer rich_click if available; fall back to click when the rich integration is not installed.
-try:
-    import rich_click as click  # type: ignore[import-not-found]
-except Exception:
-    import click  # type: ignore[import-not-found]
 from urllib.parse import urlsplit
 
 from rich import box
 from rich.table import Table
 
+from framekit.commands.benchmark import benchmark_command
 from framekit.core.diagnostics import diagnostics_summary
 from framekit.core.i18n import tr
+from framekit.core.paths import (
+    get_cache_dir,
+    get_config_dir,
+    get_master_key_path,
+    get_vault_path,
+)
 from framekit.core.settings import (
     DEFAULT_SETTINGS,
     SettingsStore,
@@ -28,13 +32,22 @@ from framekit.modules.nfo.template_registry import NfoTemplateRegistry
 from framekit.modules.nfo.templates import list_builtin_templates
 from framekit.modules.torrent.service import is_valid_announce_url
 from framekit.ui.branding import print_module_banner
+
+# Prefer rich_click if available; fall back to click when the rich integration is not installed.
+from framekit.ui.click_helper import click
 from framekit.ui.console import console, print_json
+
+MINIMUM_PYTHON_VERSION = (3, 12)
+MIN_FREE_CACHE_MB = 200  # Below this, prez/cache eviction starts hurting UX.
+TMDB_PROBE_TIMEOUT_SECONDS = 4.0
 
 DoctorStatus = Literal["ok", "warn", "err"]
 
 
 @dataclass(slots=True)
 class DoctorCheck:
+    """Doctor check."""
+
     section: str
     name: str
     status: DoctorStatus
@@ -325,6 +338,237 @@ def _torrent_checks(settings: dict) -> list[DoctorCheck]:
     ]
 
 
+def _runtime_checks() -> list[DoctorCheck]:
+    """Python runtime + free disk space at default cache/config dirs."""
+    checks: list[DoctorCheck] = []
+    section = tr("doctor.section.runtime", default="Runtime")
+
+    py_version = sys.version_info[:3]
+    py_status: DoctorStatus = "ok" if py_version >= MINIMUM_PYTHON_VERSION else "err"
+    checks.append(
+        DoctorCheck(
+            section=section,
+            name=tr("doctor.check.python_version", default="Python"),
+            status=py_status,
+            detail=(
+                f"{py_version[0]}.{py_version[1]}.{py_version[2]} "
+                f"(minimum {MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]})"
+            ),
+        )
+    )
+
+    for label, path in (
+        (tr("doctor.check.cache_dir", default="cache dir"), get_cache_dir()),
+        (tr("doctor.check.config_dir", default="config dir"), get_config_dir()),
+    ):
+        try:
+            target = path if path.exists() else path.parent
+            usage = shutil.disk_usage(target)
+            free_mb = usage.free // (1024 * 1024)
+        except OSError as exc:
+            checks.append(
+                DoctorCheck(
+                    section=section,
+                    name=label,
+                    status="warn",
+                    detail=str(exc),
+                )
+            )
+            continue
+        status: DoctorStatus = "ok" if free_mb >= MIN_FREE_CACHE_MB else "warn"
+        checks.append(
+            DoctorCheck(
+                section=section,
+                name=label,
+                status=status,
+                detail=tr(
+                    "doctor.detail.disk_free",
+                    default="{free_mb} MB free at {path}",
+                    free_mb=free_mb,
+                    path=str(path),
+                ),
+            )
+        )
+
+    return checks
+
+
+def _network_checks(settings: dict) -> list[DoctorCheck]:
+    """Best-effort connectivity probes for the metadata and update endpoints.
+
+    Each probe is wrapped in a tight timeout; the doctor command must remain
+    responsive even on a flaky network.
+    """
+    checks: list[DoctorCheck] = []
+    section = tr("doctor.section.network", default="Network")
+
+    try:
+        import httpx
+    except ImportError:
+        checks.append(
+            DoctorCheck(
+                section=section,
+                name="httpx",
+                status="err",
+                detail="httpx not installed (should be a runtime dependency).",
+            )
+        )
+        return checks
+
+    endpoints = (
+        ("TMDb", "https://api.themoviedb.org/3/configuration"),
+        ("PyPI", "https://pypi.org/pypi/framekit-cli/json"),
+    )
+
+    for label, url in endpoints:
+        try:
+            with httpx.Client(timeout=TMDB_PROBE_TIMEOUT_SECONDS) as client:
+                response = client.get(url)
+                status: DoctorStatus = "ok" if response.status_code < 500 else "warn"
+                detail = f"HTTP {response.status_code}"
+        except Exception as exc:
+            status = "warn"
+            detail = f"unreachable ({exc.__class__.__name__})"
+        checks.append(
+            DoctorCheck(
+                section=section,
+                name=label,
+                status=status,
+                detail=detail,
+            )
+        )
+
+    return checks
+
+
+def _tmdb_token_probe(settings: dict) -> list[DoctorCheck]:
+    """Make one authenticated call to TMDb when a token is configured.
+
+    Verifies that the token is well-formed and accepted by TMDb. Skipped
+    when no credentials are configured (already flagged by metadata checks).
+    """
+    config = resolve_metadata_config(settings)
+    if not config.has_credentials:
+        return []
+
+    section = tr("doctor.section.metadata", default="Metadata")
+    try:
+        provider = build_metadata_provider(settings, config=config)
+    except Exception as exc:
+        return [
+            DoctorCheck(
+                section=section,
+                name=tr("doctor.check.tmdb_auth", default="TMDb auth"),
+                status="err",
+                detail=str(exc),
+            )
+        ]
+
+    try:
+        # ``provider`` is typed as the abstract ``MetadataProvider`` base.
+        # ``http_client`` and ``_headers`` are TMDb-specific surface; narrow
+        # to the concrete provider so static checkers stop flagging the
+        # attributes and a non-TMDb provider gets a clean diagnostic instead
+        # of a misleading attribute error.
+        from framekit.modules.metadata.tmdb_provider import TMDbProvider
+
+        if not isinstance(provider, TMDbProvider):
+            return [
+                DoctorCheck(
+                    section=section,
+                    name=tr("doctor.check.tmdb_auth", default="TMDb auth"),
+                    status="warn",
+                    detail=tr(
+                        "doctor.detail.not_tmdb",
+                        default="Active provider is not TMDb; skipping auth probe.",
+                    ),
+                )
+            ]
+        provider.http_client.get_json("/configuration", headers=provider._headers())  # pyright: ignore[reportPrivateUsage]  # doctor inspects provider auth headers to surface config errors
+    except Exception as exc:
+        return [
+            DoctorCheck(
+                section=section,
+                name=tr("doctor.check.tmdb_auth", default="TMDb auth"),
+                status="err",
+                detail=str(exc),
+            )
+        ]
+    return [
+        DoctorCheck(
+            section=section,
+            name=tr("doctor.check.tmdb_auth", default="TMDb auth"),
+            status="ok",
+            detail=tr("doctor.detail.token_valid", default="token accepted"),
+        )
+    ]
+
+
+def _vault_checks(settings: dict) -> list[DoctorCheck]:
+    """Vault file + key file existence and (POSIX) permission hygiene."""
+    checks: list[DoctorCheck] = []
+    section = tr("doctor.section.security", default="Security")
+    security_cfg = settings.get("security", {}) if isinstance(settings, dict) else {}  # pyright: ignore[reportUnnecessaryIsInstance]  # Defensive guard: settings may be a raw mapping or None at call sites
+
+    checks.append(
+        DoctorCheck(
+            section=section,
+            name=tr("doctor.check.security_enabled", default="vault enabled"),
+            status="ok" if security_cfg.get("enabled") else "warn",
+            detail=tr("common.enabled", default="enabled")
+            if security_cfg.get("enabled")
+            else tr("common.disabled", default="disabled"),
+        )
+    )
+
+    for label, path in (
+        (tr("doctor.check.vault_file", default="vault file"), get_vault_path()),
+        (tr("doctor.check.key_file", default="key file"), get_master_key_path()),
+    ):
+        if not Path(path).exists():
+            checks.append(
+                DoctorCheck(
+                    section=section,
+                    name=label,
+                    status="warn",
+                    detail=tr("common.not_found", default="not found"),
+                )
+            )
+            continue
+        try:
+            from framekit.core.security.permissions import verify_secure_permissions
+
+            secure = verify_secure_permissions(Path(path))
+        except Exception as exc:
+            checks.append(
+                DoctorCheck(
+                    section=section,
+                    name=label,
+                    status="warn",
+                    detail=f"could not inspect: {exc}",
+                )
+            )
+            continue
+        checks.append(
+            DoctorCheck(
+                section=section,
+                name=label,
+                status="ok" if secure else "warn",
+                detail=tr(
+                    "doctor.detail.perm_secure",
+                    default="owner-only",
+                )
+                if secure
+                else tr(
+                    "doctor.detail.perm_loose",
+                    default="loose permissions (run: framekit settings security repair)",
+                ),
+            )
+        )
+
+    return checks
+
+
 def _diagnostics_checks() -> list[DoctorCheck]:
     summary = diagnostics_summary()
     log_file = summary.get("log_file")
@@ -396,16 +640,21 @@ def _render_checks(checks: list[DoctorCheck]) -> None:
 
 
 def run_doctor_command(*, json_output: bool) -> int:
+    """Run doctor command."""
     store = SettingsStore()
     settings = store.load()
 
     tool_checks, tool_payload = _tool_checks(store)
     checks = [
+        *_runtime_checks(),
         *tool_checks,
         *_settings_checks(store, settings),
         *_metadata_checks(settings),
+        *_tmdb_token_probe(settings),
         *_template_checks(settings),
         *_torrent_checks(settings),
+        *_vault_checks(settings),
+        *_network_checks(settings),
         *_diagnostics_checks(),
     ]
     checks.append(_summary_check(checks))
@@ -424,8 +673,42 @@ def run_doctor_command(*, json_output: bool) -> int:
     return 0
 
 
-@click.command(
-    "doctor", help=tr("cli.doctor.help", default="Run environment and configuration checks.")
+@click.group(
+    "doctor",
+    invoke_without_command=True,
+    help=tr(
+        "cli.doctor.help",
+        default=(
+            "Run comprehensive environment and configuration diagnostics.\n\n"
+            "The doctor command performs health checks on your Framekit installation, verifying "
+            "external tools, settings, metadata configuration, templates, and more.\n\n"
+            "Quick examples:\n"
+            "  fk doctor                               # Run all checks\n"
+            "  fk diag -j                              # Output as JSON\n"
+            "  fk doc                                  # Quick health check\n"
+            "  fk doctor benchmark                     # Run performance benchmarks\n\n"
+            "Checks performed:\n"
+            "  • External tools (mkvmerge, ffmpeg, ffprobe, mediainfo)\n"
+            "  • Settings file and schema validation\n"
+            "  • Metadata provider configuration\n"
+            "  • TMDb credentials\n"
+            "  • NFO templates availability\n"
+            "  • Torrent announce URLs\n"
+            "  • Debug and logging configuration\n\n"
+            "Status indicators:\n"
+            "  • OK (green): Everything working correctly\n"
+            "  • Warning (yellow): Non-critical issues\n"
+            "  • Error (red): Critical problems requiring attention\n\n"
+            "Best practices:\n"
+            "  • Run doctor after installation\n"
+            "  • Check before reporting issues\n"
+            "  • Use -j for automated monitoring\n"
+            "  • Review warnings for optimization opportunities\n\n"
+            "Subcommands:\n"
+            "  benchmark                               # Run performance benchmarks\n\n"
+            "Related commands: setup, settings"
+        ),
+    ),
 )
 @click.option(
     "-j",
@@ -434,5 +717,14 @@ def run_doctor_command(*, json_output: bool) -> int:
     is_flag=True,
     help=tr("cli.doctor.option.json", default="Output checks as JSON."),
 )
-def doctor_command(json_output: bool) -> int:
-    return run_doctor_command(json_output=json_output)
+@click.pass_context
+def doctor_command(ctx: click.Context, json_output: bool) -> int:
+    """Doctor command group with default health check behavior."""
+    # If no subcommand is invoked, run the health checks
+    if ctx.invoked_subcommand is None:
+        return run_doctor_command(json_output=json_output)
+    return 0
+
+
+# Register benchmark as a subcommand of doctor
+doctor_command.add_command(benchmark_command)

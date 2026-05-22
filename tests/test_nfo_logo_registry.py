@@ -1,9 +1,12 @@
+"""Tests for NFO logo registry - logo management and storage."""
+
 from pathlib import Path
 
 from framekit.modules.nfo.logo_registry import NfoLogoRecord, NfoLogoRegistry
 
 
 def test_logo_registry_roundtrip(tmp_path: Path):
+    """Test that logos can be registered and retrieved from the registry."""
     registry = NfoLogoRegistry(tmp_path / "registry.json")
 
     record = NfoLogoRecord(

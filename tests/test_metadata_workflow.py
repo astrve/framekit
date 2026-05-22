@@ -1,9 +1,10 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from framekit.core.models.metadata import MetadataCandidate
 from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData
 from framekit.modules.metadata.base import MetadataProvider
-from framekit.modules.metadata.workflow import run_metadata_workflow
+from framekit.modules.metadata.workflow import _detect_content_type, run_metadata_workflow
 
 
 class DummyProvider(MetadataProvider):
@@ -22,6 +23,22 @@ class DummyProvider(MetadataProvider):
                 confidence=0.95,
                 reasons=["dummy"],
             )
+        ]
+
+    def fetch_posters(self, candidate):
+        return [
+            {
+                "url": "https://image.tmdb.org/t/p/w500/poster1.jpg",
+                "url_original": "https://image.tmdb.org/t/p/original/poster1.jpg",
+                "size": "2000x3000",
+                "language": "en",
+            },
+            {
+                "url": "https://image.tmdb.org/t/p/w500/poster2.jpg",
+                "url_original": "https://image.tmdb.org/t/p/original/poster2.jpg",
+                "size": "2000x3000",
+                "language": "fr",
+            },
         ]
 
     def fetch_movie(self, candidate):
@@ -196,3 +213,156 @@ def test_run_metadata_workflow_passes_language_override_to_provider(monkeypatch)
 
     assert result.status == "resolved"
     assert captured["language"] == "es-ES"
+
+
+def test_run_metadata_workflow_with_cover_selection_headless(monkeypatch):
+    """Test that cover selection works in headless mode (auto-accept)."""
+    release = ReleaseNfoData(
+        media_kind="movie",
+        release_title="MOONLIGHT.2016.MULTI.VFF.1080P.WEB.H264-ACKER",
+        title_display="MOONLIGHT",
+        series_title=None,
+        year="2016",
+        source="WEB",
+        resolution="1080P",
+        video_tag="H264",
+        audio_tag="E-AC-3.5.1",
+        language_tag="MULTI (EN, FR)",
+        audio_languages_display="English / French",
+        episodes=[],
+    )
+
+    monkeypatch.setattr(
+        "framekit.modules.metadata.workflow.build_metadata_provider",
+        lambda settings, **kwargs: DummyProvider(),
+    )
+
+    settings = {
+        "metadata": {
+            "tmdb_read_access_token": "dummy.valid.token",
+            "interactive_confirmation": False,
+        }
+    }
+
+    result = run_metadata_workflow(
+        release,
+        settings,
+        auto_accept=True,
+        show_ui=False,
+        env={},
+    )
+
+    assert result.status == "resolved"
+    assert result.selected_cover is not None
+    assert result.selected_cover["url"] == "https://image.tmdb.org/t/p/w500/poster1.jpg"
+    assert (
+        result.selected_cover["url_original"] == "https://image.tmdb.org/t/p/original/poster1.jpg"
+    )
+    assert "metadata_cover_url" in result.context
+    assert result.context["metadata_cover_url"] == "https://image.tmdb.org/t/p/w500/poster1.jpg"
+
+
+def test_run_metadata_workflow_cover_in_context(monkeypatch):
+    """Test that selected cover is properly added to context."""
+    release = ReleaseNfoData(
+        media_kind="movie",
+        release_title="MOONLIGHT.2016.MULTI.VFF.1080P.WEB.H264-ACKER",
+        title_display="MOONLIGHT",
+        series_title=None,
+        year="2016",
+        source="WEB",
+        resolution="1080P",
+        video_tag="H264",
+        audio_tag="E-AC-3.5.1",
+        language_tag="MULTI (EN, FR)",
+        audio_languages_display="English / French",
+        episodes=[],
+    )
+
+    monkeypatch.setattr(
+        "framekit.modules.metadata.workflow.build_metadata_provider",
+        lambda settings, **kwargs: DummyProvider(),
+    )
+
+    settings = {
+        "metadata": {
+            "tmdb_read_access_token": "dummy.valid.token",
+            "interactive_confirmation": False,
+        }
+    }
+
+    result = run_metadata_workflow(
+        release,
+        settings,
+        auto_accept=True,
+        show_ui=False,
+        env={},
+    )
+
+    assert result.status == "resolved"
+    assert "metadata_cover_url" in result.context
+    assert "metadata_cover_url_original" in result.context
+    assert result.context["metadata_cover_url"] is not None
+    assert result.context["metadata_cover_url_original"] is not None
+
+
+def test_run_metadata_workflow_no_posters_available(monkeypatch):
+    """Test workflow when no posters are available and no default poster_url."""
+
+    class NoPostersProvider(DummyProvider):
+        def fetch_posters(self, candidate):
+            return []
+
+    release = ReleaseNfoData(
+        media_kind="movie",
+        release_title="MOONLIGHT.2016.MULTI.VFF.1080P.WEB.H264-ACKER",
+        title_display="MOONLIGHT",
+        series_title=None,
+        year="2016",
+        source="WEB",
+        resolution="1080P",
+        video_tag="H264",
+        audio_tag="E-AC-3.5.1",
+        language_tag="MULTI (EN, FR)",
+        audio_languages_display="English / French",
+        episodes=[],
+    )
+
+    monkeypatch.setattr(
+        "framekit.modules.metadata.workflow.build_metadata_provider",
+        lambda settings, **kwargs: NoPostersProvider(),
+    )
+
+    settings = {
+        "metadata": {
+            "tmdb_read_access_token": "dummy.valid.token",
+            "interactive_confirmation": False,
+        }
+    }
+
+    result = run_metadata_workflow(
+        release,
+        settings,
+        auto_accept=True,
+        show_ui=False,
+        env={},
+    )
+
+    assert result.status == "resolved"
+    # When no posters are available and no default poster_url, selected_cover should be None
+    assert result.selected_cover is None
+    # Context should still have the keys but with None values
+    assert "metadata_cover_url" in result.context
+    assert result.context["metadata_cover_url"] is None
+
+
+def test_detect_content_type_without_legacy_title_attr():
+    release_like = SimpleNamespace(
+        media_kind="single_episode",
+        release_title="[SubsPlease] Show.S01E01.1080p.WEB.x264-GROUP",
+        title_display="Show",
+        series_title="Show",
+        release_group="SubsPlease",
+    )
+
+    assert _detect_content_type(release_like) == "anime"

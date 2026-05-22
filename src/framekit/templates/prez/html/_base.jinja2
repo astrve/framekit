@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ data.title }}</title>
+  <style>
+    :root { 
+      color-scheme: dark; 
+      {{ style_css(template_name) }}
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto;
+      max-width: 1200px;
+      background: var(--primary);
+      color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, Segoe UI, sans-serif;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    /* Universal wrapping safeguard: release names, paths and metadata can
+       contain long unbroken tokens. Forcing wrap globally keeps layouts
+       from blowing up. Individual layouts may still override per element. */
+    h1, h2, h3, h4, p, td, th, .field, .info-card, strong {
+      overflow-wrap: anywhere;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    
+    /* Common utility classes */
+    .muted { color: var(--muted); }
+    .flag { width: 20px; height: 15px; vertical-align: -2px; margin-right: 7px; border-radius: 2px; }
+    
+    /* Layout-specific styles will be injected here */
+    {% block layout_styles %}{% endblock %}
+  </style>
+</head>
+<body class="{{ body_class(template_name) }}">
+  {% block content %}
+  <main>
+    {% block header %}
+    <header>
+      <div class="badges">
+        {% for badge in data.badges %}<span class="badge">{{ badge }}</span>{% endfor %}
+      </div>
+      <h1>{{ data.title }}</h1>
+      {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+      {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+      {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+      {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+      <strong>{{ data.technical_summary }}</strong>
+    </header>
+    {% endblock %}
+    
+    {% block poster_section %}
+    <aside class="poster-container">
+      {% if data.poster_url != '-' %}
+        <img class="poster" src="{{ data.poster_url }}" alt="poster">
+      {% else %}
+        <div class="placeholder">{{ tr('prez.no_poster', default='No poster available') }}</div>
+      {% endif %}
+    </aside>
+    {% endblock %}
+    
+    {% block synopsis %}
+    {% if data.overview != '-' %}
+    <section class="synopsis">
+      <h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2>
+      <p>{{ data.overview }}</p>
+    </section>
+    {% endif %}
+    {% endblock %}
+    
+    {% block info_section %}
+    {% if data.info_fields %}
+    <section class="info-section">
+      <h2>{{ tr('prez.section.infos', default='Informations') }}</h2>
+      <div class="info-grid">
+        {% for field in data.info_fields %}
+        <div class="info-card{% if field.wide %} wide{% endif %}">
+          <span>{{ field.label }}</span>
+          <strong>{{ field_url_html(field)|safe }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+    {% endblock %}
+    
+    {% block release_section %}
+    {% if data.release_fields %}
+    <section class="release-section">
+      <h2>{{ tr('prez.section.release', default='Release') }}</h2>
+      <div class="info-grid">
+        {% for field in data.release_fields %}
+        <div class="info-card{% if field.wide %} wide{% endif %}">
+          <span>{{ field.label }}</span>
+          <strong>{{ field_url_html(field)|safe }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+    {% endblock %}
+    
+    {% block metadata_section %}
+    {% if data.has_metadata_section %}
+    <section class="metadata-section">
+      <h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>
+      {% if data.metadata_fields %}
+      <div class="info-grid">
+        {% for field in data.metadata_fields %}
+        <div class="info-card{% if field.wide %} wide{% endif %}">
+          <span>{{ field.label }}</span>
+          <strong>{{ field_url_html(field)|safe }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if data.cast != '-' %}
+      <p><strong>{{ tr('prez.label.cast', default='Cast') }}:</strong> {{ data.cast }}</p>
+      {% endif %}
+      {% if data.crew != '-' %}
+      <p><strong>{{ tr('prez.label.crew', default='Crew') }}:</strong> {{ data.crew }}</p>
+      {% endif %}
+    </section>
+    {% endif %}
+    {% endblock %}
+    
+    {% block video_section %}
+    {% if data.video_fields %}
+    <section class="video-section">
+      <h2>{{ tr('prez.section.video', default='Video') }}</h2>
+      <div class="info-grid">
+        {% for field in data.video_fields %}
+        <div class="info-card{% if field.wide %} wide{% endif %}">
+          <span>{{ field.label }}</span>
+          <strong>{{ field_url_html(field)|safe }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+    {% endblock %}
+    
+    {% block audio_section %}
+    <section class="audio-section">
+      <h2>{{ tr('prez.section.audio', default='Audio') }}</h2>
+      {{ audio_table_grouped_html(data.audio_track_groups)|safe }}
+    </section>
+    {% endblock %}
+    
+    {% block subtitle_section %}
+    <section class="subtitle-section">
+      <h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>
+      {{ subtitle_table_grouped_html(data.subtitle_track_groups)|safe }}
+    </section>
+    {% endblock %}
+    
+    {% block mediainfo_section %}
+    {% if data.has_mediainfo %}
+    <details class="mediainfo">
+      <summary>{{ tr('prez.section.mediainfo', default='MediaInfo') }}</summary>
+      <pre>{{ data.mediainfo_text }}</pre>
+    </details>
+    {% endif %}
+    {% endblock %}
+  </main>
+  {% endblock %}
+</body>
+</html>

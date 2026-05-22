@@ -7,11 +7,12 @@ from framekit.core.languages import (
 )
 from framekit.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
 from framekit.modules.cleanmkv.tracks import (
+    track_display_grouping_key,
+    track_grouped_label,
     track_reference_hint,
     track_reference_key,
-    track_reference_label,
 )
-from framekit.ui.selector import SelectorDivider, SelectorOption, select_many, select_one
+from framekit.ui.unified_selector import SelectionItem, UnifiedSelector
 
 LANGUAGE_FILTER_CHOICES = [
     "french",
@@ -45,62 +46,101 @@ def _variant_display_label(value: str) -> str:
     return tr(f"cleanmkv.subtitle_variant.{value}", default=value.replace("_", " ").title())
 
 
-def _language_entries(enabled_values: tuple[str, ...] = ()) -> list[SelectorOption[str]]:
+def _select_many_values(
+    *,
+    title: str,
+    items: list[SelectionItem[str]],
+    page_size: int,
+    allow_empty: bool,
+) -> tuple[str, ...]:
+    result = UnifiedSelector[str](
+        title=title,
+        items=items,
+        multi=True,
+        page_size=page_size,
+        allow_empty=allow_empty,
+    ).select()
+    return tuple(result.items)
+
+
+def _select_one_value(
+    *,
+    title: str,
+    items: list[SelectionItem[str | None]],
+    page_size: int,
+) -> str | None:
+    result = UnifiedSelector[str | None](
+        title=title,
+        items=items,
+        multi=False,
+        page_size=page_size,
+    ).select()
+    return result.value
+
+
+def _language_entries(
+    enabled_values: tuple[str, ...] = (),
+    *,
+    group: str | None = None,
+) -> list[SelectionItem[str]]:
     return [
-        SelectorOption(
+        SelectionItem(
             value=value,
             label=language_filter_display_label(value),
-            hint=language_filter_short_label(value),
-            selected=False,
+            description=language_filter_short_label(value),
+            preselected=value in enabled_values,
+            group=group,
         )
         for value in LANGUAGE_FILTER_CHOICES
     ]
 
 
-def _variant_entries(enabled_values: tuple[str, ...] = ()) -> list[SelectorOption[str]]:
+def _variant_entries(
+    enabled_values: tuple[str, ...] = (),
+    *,
+    group: str | None = None,
+) -> list[SelectionItem[str]]:
     return [
-        SelectorOption(
+        SelectionItem(
             value=value,
             label=_variant_display_label(value),
-            hint=tr("cleanmkv.subtitle_variant_hint", default="subtitle variant"),
-            selected=False,
+            description=tr("cleanmkv.subtitle_variant_hint", default="subtitle variant"),
+            preselected=value in enabled_values,
+            group=group,
         )
         for value in SUBTITLE_VARIANTS
     ]
 
 
 def run_cleanmkv_wizard() -> CleanPreset:
-    keep_audio_filters = tuple(
-        select_many(
-            title=tr("cleanmkv.wizard.audio_filters", default="Audio Filters"),
-            entries=[
-                SelectorDivider(
-                    tr("cleanmkv.wizard.languages_variants", default="Languages / Variants")
-                ),
-                *_language_entries(),
-            ],
-            page_size=12,
-            minimal_count=0,
-        )
+    """Run cleanmkv wizard."""
+    keep_audio_filters = _select_many_values(
+        title=tr("cleanmkv.wizard.audio_filters", default="Audio Filters"),
+        items=_language_entries(
+            group=tr("cleanmkv.wizard.languages_variants", default="Languages / Variants")
+        ),
+        page_size=12,
+        allow_empty=True,
     )
 
     default_audio_candidates = (
         list(keep_audio_filters) if keep_audio_filters else LANGUAGE_FILTER_CHOICES
     )
-    default_audio_filter = select_one(
+    default_audio_filter = _select_one_value(
         title=tr("cleanmkv.wizard.default_audio_filter", default="Default Audio Filter"),
-        entries=[
-            SelectorDivider(tr("common.default", default="Default")),
-            SelectorOption(
+        items=[
+            SelectionItem(
                 value=None,
                 label=tr("common.none", default="None"),
-                hint=tr("cleanmkv.wizard.no_default_track", default="no default track"),
+                description=tr("cleanmkv.wizard.no_default_track", default="no default track"),
+                group=tr("common.default", default="Default"),
             ),
             *[
-                SelectorOption(
+                SelectionItem(
                     value=value,
                     label=language_filter_display_label(value),
-                    hint=language_filter_short_label(value),
+                    description=language_filter_short_label(value),
+                    group=tr("common.default", default="Default"),
                 )
                 for value in default_audio_candidates
             ],
@@ -108,47 +148,43 @@ def run_cleanmkv_wizard() -> CleanPreset:
         page_size=12,
     )
 
-    keep_subtitle_filters = tuple(
-        select_many(
-            title=tr("cleanmkv.wizard.subtitle_filters", default="Subtitle Filters"),
-            entries=[
-                SelectorDivider(
-                    tr("cleanmkv.wizard.languages_variants", default="Languages / Variants")
-                ),
-                *_language_entries(),
-            ],
-            page_size=12,
-            minimal_count=0,
-        )
+    keep_subtitle_filters = _select_many_values(
+        title=tr("cleanmkv.wizard.subtitle_filters", default="Subtitle Filters"),
+        items=_language_entries(
+            group=tr("cleanmkv.wizard.languages_variants", default="Languages / Variants")
+        ),
+        page_size=12,
+        allow_empty=True,
     )
 
-    keep_subtitle_variants = tuple(
-        select_many(
-            title=tr("cleanmkv.wizard.subtitle_variants", default="Subtitle Variants"),
-            entries=[
-                SelectorDivider(tr("cleanmkv.wizard.variants", default="Variants")),
-                *_variant_entries(("forced", "full")),
-            ],
-            page_size=6,
-            minimal_count=0,
-        )
+    keep_subtitle_variants = _select_many_values(
+        title=tr("cleanmkv.wizard.subtitle_variants", default="Subtitle Variants"),
+        items=_variant_entries(
+            ("forced", "full"),
+            group=tr("cleanmkv.wizard.variants", default="Variants"),
+        ),
+        page_size=6,
+        allow_empty=True,
     )
 
     if keep_subtitle_filters:
-        default_subtitle_filter = select_one(
+        default_subtitle_filter = _select_one_value(
             title=tr("cleanmkv.wizard.default_subtitle_filter", default="Default Subtitle Filter"),
-            entries=[
-                SelectorDivider(tr("common.default", default="Default")),
-                SelectorOption(
+            items=[
+                SelectionItem(
                     value=None,
                     label=tr("common.none", default="None"),
-                    hint=tr("cleanmkv.wizard.no_default_subtitle", default="no default subtitle"),
+                    description=tr(
+                        "cleanmkv.wizard.no_default_subtitle", default="no default subtitle"
+                    ),
+                    group=tr("common.default", default="Default"),
                 ),
                 *[
-                    SelectorOption(
+                    SelectionItem(
                         value=value,
                         label=language_filter_display_label(value),
-                        hint=language_filter_short_label(value),
+                        description=language_filter_short_label(value),
+                        group=tr("common.default", default="Default"),
                     )
                     for value in keep_subtitle_filters
                 ],
@@ -159,22 +195,27 @@ def run_cleanmkv_wizard() -> CleanPreset:
         default_subtitle_filter = None
 
     if default_subtitle_filter and keep_subtitle_variants:
-        default_subtitle_variant = select_one(
+        default_subtitle_variant = _select_one_value(
             title=tr(
                 "cleanmkv.wizard.default_subtitle_variant", default="Default Subtitle Variant"
             ),
-            entries=[
-                SelectorDivider(tr("common.default", default="Default")),
-                SelectorOption(
+            items=[
+                SelectionItem(
                     value=None,
                     label=tr("common.none", default="None"),
-                    hint=tr("cleanmkv.wizard.no_default_subtitle", default="no default subtitle"),
+                    description=tr(
+                        "cleanmkv.wizard.no_default_subtitle", default="no default subtitle"
+                    ),
+                    group=tr("common.default", default="Default"),
                 ),
                 *[
-                    SelectorOption(
+                    SelectionItem(
                         value=value,
                         label=_variant_display_label(value),
-                        hint=tr("cleanmkv.subtitle_variant_hint", default="subtitle variant"),
+                        description=tr(
+                            "cleanmkv.subtitle_variant_hint", default="subtitle variant"
+                        ),
+                        group=tr("common.default", default="Default"),
                     )
                     for value in keep_subtitle_variants
                 ],
@@ -215,31 +256,77 @@ def _track_entry_counts(
     return result
 
 
+def _track_display_groups(
+    scans: list[MkvFileScan], *, kind: str
+) -> dict[str, tuple[list[str], list[TrackInfo], set[str]]]:
+    """Group tracks for display purposes.
+
+    Returns a dict mapping display_group_key -> (track_refs, tracks, paths)
+    where tracks with the same language/role but different codecs are grouped together.
+    """
+    # First, get all individual track references
+    track_counts = _track_entry_counts(scans, kind=kind)
+
+    # Group by display key (language+role, not codec)
+    display_groups: dict[str, tuple[list[str], list[TrackInfo], set[str]]] = {}
+
+    for ref, (track, paths) in track_counts.items():
+        display_key = track_display_grouping_key(track)
+
+        if display_key not in display_groups:
+            display_groups[display_key] = ([], [], set())
+
+        display_groups[display_key][0].append(ref)  # track_refs
+        display_groups[display_key][1].append(track)  # tracks
+        display_groups[display_key][2].update(paths)  # paths
+
+    return display_groups
+
+
 def _track_entries(
     scans: list[MkvFileScan],
     *,
     kind: str,
     enabled_values: tuple[str, ...] = (),
     select_all: bool = False,
-) -> list[SelectorOption[str]]:
+) -> list[SelectionItem[str]]:
     total = len(scans)
-    entries: list[SelectorOption[str]] = []
-    for ref, (track, paths) in sorted(
-        _track_entry_counts(scans, kind=kind).items(),
-        key=lambda item: (track_reference_label(item[1][0]).lower(), item[0]),
+    entries: list[SelectionItem[str]] = []
+
+    # Get display groups (tracks grouped by language+role)
+    display_groups = _track_display_groups(scans, kind=kind)
+
+    for _display_key, (track_refs, tracks, paths) in sorted(
+        display_groups.items(),
+        key=lambda item: (track_grouped_label(item[1][1]).lower(), item[0]),
     ):
+        # For display: use grouped label showing all codecs
+        # For multi-grouped tracks (multiple codecs), include file count
+        label = track_grouped_label(
+            tracks,
+            available_count=len(paths),
+            total_count=total,
+        )
+
+        # For selection value: use comma-separated refs if multiple tracks in group
+        # This allows selecting all tracks in the group at once
+        value = ",".join(track_refs)
+
+        # Use first track for hint
+        hint = track_reference_hint(tracks[0], available_count=len(paths), total_count=total)
+
         entries.append(
-            SelectorOption(
-                value=ref,
-                label=track_reference_label(track),
-                hint=track_reference_hint(track, available_count=len(paths), total_count=total),
-                selected=bool(select_all),
+            SelectionItem(
+                value=value,
+                label=label,
+                description=hint,
+                preselected=bool(select_all),
             )
         )
     return entries
 
 
-def _default_refs(scans: list[MkvFileScan], *, kind: str) -> tuple[str, ...]:
+def _default_refs(scans: list[MkvFileScan], *, kind: str) -> tuple[str, ...]:  # pyright: ignore[reportUnusedFunction]  # Utility helper kept for downstream wizards
     refs: list[str] = []
     for scan in scans:
         tracks = scan.audio_tracks if kind == "audio" else scan.subtitle_tracks
@@ -255,7 +342,7 @@ def _all_refs(scans: list[MkvFileScan], *, kind: str) -> tuple[str, ...]:
     return tuple(_track_entry_counts(scans, kind=kind).keys())
 
 
-def _first_existing_ref(candidates: tuple[str, ...], allowed: tuple[str, ...]) -> str | None:
+def _first_existing_ref(candidates: tuple[str, ...], allowed: tuple[str, ...]) -> str | None:  # pyright: ignore[reportUnusedFunction]  # Utility helper kept for downstream wizards
     allowed_set = set(allowed)
     for ref in candidates:
         if ref in allowed_set:
@@ -263,44 +350,65 @@ def _first_existing_ref(candidates: tuple[str, ...], allowed: tuple[str, ...]) -
     return allowed[0] if allowed else None
 
 
+def _expand_grouped_refs(grouped_refs: tuple[str, ...]) -> tuple[str, ...]:
+    """Expand comma-separated track references from grouped selections.
+
+    When tracks are grouped for display (e.g., "ref1,ref2,ref3"), this function
+    expands them back to individual references for the preset.
+    """
+    expanded = []
+    for ref in grouped_refs:
+        if "," in ref:
+            # This is a grouped reference, expand it
+            expanded.extend(ref.split(","))
+        else:
+            # Single reference
+            expanded.append(ref)
+    return tuple(expanded)
+
+
 def run_cleanmkv_track_selector(scans: list[MkvFileScan]) -> CleanPreset:
+    """Run cleanmkv track selector."""
     audio_defaults = _all_refs(scans, kind="audio")
     subtitle_defaults = _all_refs(scans, kind="subtitle")
 
     # Pre-check every detected audio/subtitle track so the user only has to
     # un-tick the ones to drop — typically faster than ticking each one in.
-    keep_audio_refs = tuple(
-        select_many(
-            title=tr("cleanmkv.selector.audio_tracks", default="Audio Tracks Found"),
-            entries=[
-                SelectorDivider(
-                    tr("cleanmkv.selector.current_audio", default="Current audio tracks")
-                ),
-                *_track_entries(
-                    scans, kind="audio", enabled_values=audio_defaults, select_all=True
-                ),
-            ],
-            page_size=12,
-            minimal_count=1,
-        )
+    keep_audio_refs = _select_many_values(
+        title=tr("cleanmkv.selector.audio_tracks", default="Audio Tracks Found"),
+        items=[
+            SelectionItem(
+                value=entry.value,
+                label=entry.label,
+                description=entry.description,
+                preselected=entry.preselected,
+                group=tr("cleanmkv.selector.current_audio", default="Current audio tracks"),
+            )
+            for entry in _track_entries(
+                scans, kind="audio", enabled_values=audio_defaults, select_all=True
+            )
+        ],
+        page_size=12,
+        allow_empty=False,
     )
 
-    default_audio_ref = select_one(
+    default_audio_ref = _select_one_value(
         title=tr("cleanmkv.selector.default_audio", default="Default Audio Track"),
-        entries=[
-            SelectorDivider(tr("common.default", default="Default")),
-            SelectorOption(
+        items=[
+            SelectionItem(
                 value=None,
                 label=tr("common.none", default="None"),
-                hint=tr("cleanmkv.wizard.no_default_track", default="no default track"),
-                selected=False,
+                description=tr("cleanmkv.wizard.no_default_track", default="no default track"),
+                preselected=False,
+                group=tr("common.default", default="Default"),
             ),
             *[
-                SelectorOption(
+                SelectionItem(
                     value=option.value,
                     label=option.label,
-                    hint=option.hint,
-                    selected=False,
+                    description=option.description,
+                    preselected=False,
+                    group=tr("common.default", default="Default"),
                 )
                 for option in _track_entries(scans, kind="audio")
                 if option.value in keep_audio_refs
@@ -309,39 +417,44 @@ def run_cleanmkv_track_selector(scans: list[MkvFileScan]) -> CleanPreset:
         page_size=12,
     )
 
-    keep_subtitle_refs = tuple(
-        select_many(
-            title=tr("cleanmkv.selector.subtitle_tracks", default="Subtitle Tracks Found"),
-            entries=[
-                SelectorDivider(
-                    tr("cleanmkv.selector.current_subtitles", default="Current subtitle tracks")
-                ),
-                *_track_entries(
-                    scans, kind="subtitle", enabled_values=subtitle_defaults, select_all=True
-                ),
-            ],
-            page_size=12,
-            minimal_count=0,
-        )
+    keep_subtitle_refs = _select_many_values(
+        title=tr("cleanmkv.selector.subtitle_tracks", default="Subtitle Tracks Found"),
+        items=[
+            SelectionItem(
+                value=entry.value,
+                label=entry.label,
+                description=entry.description,
+                preselected=entry.preselected,
+                group=tr("cleanmkv.selector.current_subtitles", default="Current subtitle tracks"),
+            )
+            for entry in _track_entries(
+                scans, kind="subtitle", enabled_values=subtitle_defaults, select_all=True
+            )
+        ],
+        page_size=12,
+        allow_empty=True,
     )
 
     if keep_subtitle_refs:
-        default_subtitle_ref = select_one(
+        default_subtitle_ref = _select_one_value(
             title=tr("cleanmkv.selector.default_subtitle", default="Default Subtitle Track"),
-            entries=[
-                SelectorDivider(tr("common.default", default="Default")),
-                SelectorOption(
+            items=[
+                SelectionItem(
                     value=None,
                     label=tr("common.none", default="None"),
-                    hint=tr("cleanmkv.wizard.no_default_subtitle", default="no default subtitle"),
-                    selected=False,
+                    description=tr(
+                        "cleanmkv.wizard.no_default_subtitle", default="no default subtitle"
+                    ),
+                    preselected=False,
+                    group=tr("common.default", default="Default"),
                 ),
                 *[
-                    SelectorOption(
+                    SelectionItem(
                         value=option.value,
                         label=option.label,
-                        hint=option.hint,
-                        selected=False,
+                        description=option.description,
+                        preselected=False,
+                        group=tr("common.default", default="Default"),
                     )
                     for option in _track_entries(scans, kind="subtitle")
                     if option.value in keep_subtitle_refs
@@ -360,9 +473,9 @@ def run_cleanmkv_track_selector(scans: list[MkvFileScan]) -> CleanPreset:
         keep_subtitle_variants=(),
         default_subtitle_filter=None,
         default_subtitle_variant=None,
-        keep_audio_track_refs=keep_audio_refs,
+        keep_audio_track_refs=_expand_grouped_refs(keep_audio_refs),
         default_audio_track_ref=default_audio_ref,
-        keep_subtitle_track_refs=keep_subtitle_refs,
+        keep_subtitle_track_refs=_expand_grouped_refs(keep_subtitle_refs),
         default_subtitle_track_ref=default_subtitle_ref,
         # The track selector always exposes a "None" choice for both audio
         # and subtitle defaults, so a missing reference here is always an

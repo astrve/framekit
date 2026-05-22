@@ -1,0 +1,4 @@
+# Development environment.
+# Runtime, test, docs, security, and binary-build tooling are declared in pyproject.toml.
+
+-e .[dev,docs,build-binary]

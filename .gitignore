@@ -1,48 +1,97 @@
 # Python
 __pycache__/
 *.py[cod]
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.pyright/
-.coverage
-coverage.xml
-htmlcov/
+*$py.class
+*.so
 
 # Virtual environments
 .venv/
 venv/
 env/
 
-# Build artifacts
-dist/
-build/
-*.egg-info/
+# Local environment files
+.env
+.env.*
+!.env.example
 
-# Framekit local artifacts
+# Tool caches
+.mypy_cache/
+.pyright/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.mutmut-cache/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+coverage*.json
+htmlcov/
+
+# Build outputs
+build/
+dist/
+dist-test/
+sdist/
+wheels/
+*.egg
+*.egg-info/
+*.whl
+*.tar.gz
+*.spec
+build-pyinstaller/
+
+# Docs build output
+site/
+_build/
+
+# Framekit local state
+framekit.yaml
+.framekit_batch_queue.json
+.framekit_watch.pid
+.framekit_watch.lock
+*.enc.backup
+*.enc.bak
+settings.json
+*.local.json
+*.local.yaml
+
+# Logs and reports
+*.log
+*.jsonl
+crash-*.txt
+bandit-report.*
+pip-audit-report.*
+audit-reqs.txt
+.xenon-latest.txt
+.tmp_xenon.txt
+
+# Patch/archive scratch files
 *.zip
 *.patch
 *.diff
 *.rej
-*.log
-*.jsonl
 
-# Local settings / secrets
-settings.json
-.env
-.env.*
-*.local.json
+# Local assistant/editor state
+.claude/
+.codex/
+.agents/
+.bob/
+.roo-cline/
+.skills/
+AGENTS.md
+CLAUDE.md
+prompts/
 
-# OS/editor
+# OS/editor metadata
 .DS_Store
+._.DS_Store
 Thumbs.db
+desktop.ini
 .vscode/
 .idea/
-
-# Development/tooling artefacts
-uv.lock
-pyrightconfig.json
-
-# Local generated folders
-project/
-scripts/
+*.iml
+*.swp
+*.swo
+*~

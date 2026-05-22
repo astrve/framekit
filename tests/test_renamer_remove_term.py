@@ -1,3 +1,5 @@
+"""Tests for renamer remove-term feature - removing unwanted tokens from filenames."""
+
 from pathlib import Path
 
 from framekit.modules.renamer.service import RenamerService

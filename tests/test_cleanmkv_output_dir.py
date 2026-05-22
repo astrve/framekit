@@ -1,3 +1,5 @@
+"""Tests for cleanmkv output directory handling."""
+
 from pathlib import Path
 
 from framekit.core.models.cleanmkv import MkvFileScan, TrackInfo

@@ -1,3 +1,5 @@
+"""Tests for renamer service - file renaming operations."""
+
 from __future__ import annotations
 
 from framekit.core.models.renamer import RenamePlanItem
@@ -5,6 +7,7 @@ from framekit.modules.renamer import service as renamer_service
 
 
 def test_renamer_service_reports_planned_collision_and_unchanged(monkeypatch, tmp_path):
+    """Test that renamer service correctly reports planned, unchanged, and collision statuses."""
     source = tmp_path / "old.mkv"
     target = tmp_path / "new.mkv"
     unchanged = tmp_path / "same.mkv"
@@ -44,6 +47,7 @@ def test_renamer_service_reports_planned_collision_and_unchanged(monkeypatch, tm
 
 
 def test_renamer_service_applies_regular_rename(monkeypatch, tmp_path):
+    """Test that renamer service applies renames when requested."""
     source = tmp_path / "old.mkv"
     target = tmp_path / "new.mkv"
     source.write_bytes(b"x")
@@ -65,6 +69,7 @@ def test_renamer_service_applies_regular_rename(monkeypatch, tmp_path):
 
 
 def test_renamer_service_passes_remove_terms_to_planner(monkeypatch, tmp_path):
+    """Test that remove_terms parameter is correctly passed to the planner."""
     source = tmp_path / "Movie.DSNP.mkv"
     target = tmp_path / "Movie.mkv"
     source.write_bytes(b"x")

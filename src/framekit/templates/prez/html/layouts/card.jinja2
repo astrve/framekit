@@ -1,0 +1,354 @@
+{# Card Layout - Grid-based card layout with hover effects #}
+{% extends "_base.jinja2" %}
+{% import "_macros.jinja2" as macros %}
+
+{% block layout_styles %}
+<style>
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 50px 30px;
+    background: var(--primary);
+  }
+  
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 50px;
+    padding: 40px;
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+  
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+  
+  .badge {
+    background: var(--accent);
+    color: var(--primary);
+    padding: 8px 18px;
+    font-weight: 800;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-radius: 20px;
+  }
+  
+  h1 {
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    line-height: 1.1;
+    margin: 0 0 16px;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+  }
+  
+  h2 {
+    color: var(--accent);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin: 0 0 12px;
+    font-weight: 700;
+  }
+  
+  /* Poster card */
+  .poster-card {
+    max-width: 350px;
+    margin: 0 auto 50px;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  
+  .poster-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+  
+  .poster {
+    width: 100%;
+    display: block;
+  }
+  
+  /* Card grid - Optimized for 1200px with 2-column layout */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 30px;
+    margin-bottom: 40px;
+  }
+  
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 28px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--line);
+  }
+  
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border-color: var(--accent);
+  }
+  
+  .card h2 {
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--accent);
+    text-align: left;
+  }
+  
+  .card.wide {
+    grid-column: span 2;
+  }
+  
+  .card.full {
+    grid-column: 1 / -1;
+  }
+  
+  /* Info cards - More spacious for 1200px */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+  }
+  
+  .info-card {
+    background: var(--secondary);
+    border-radius: 8px;
+    padding: 18px;
+    border-left: 4px solid var(--accent);
+    transition: background 0.2s ease;
+    overflow: hidden;
+    word-wrap: break-word;
+  }
+  
+  .info-card:hover {
+    background: var(--line);
+  }
+  
+  .info-card.wide {
+    grid-column: span 2;
+  }
+  
+  .info-card span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 800;
+    margin-bottom: 8px;
+  }
+  
+  .info-card strong {
+    display: block;
+    font-size: 1rem;
+    color: var(--text);
+  }
+  
+  /* Tables in cards */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    table-layout: fixed;
+  }
+  
+  th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  th {
+    color: var(--accent);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    font-weight: 800;
+    background: var(--secondary);
+  }
+  
+  /* Fixed column widths for audio/subtitle tables */
+  th:nth-child(1), td:nth-child(1) { width: 30%; } /* Language */
+  th:nth-child(2), td:nth-child(2) { width: 25%; } /* Codec/Type */
+  th:nth-child(3), td:nth-child(3) { width: 20%; } /* Channels/Format */
+  th:nth-child(4), td:nth-child(4) { width: 25%; } /* Bitrate/Additional */
+  
+  /* Synopsis card */
+  .synopsis-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 40px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--line);
+  }
+  
+  .synopsis-card h2 {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  
+  .synopsis-card p {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  
+  /* MediaInfo card */
+  .mediainfo {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 30px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--line);
+  }
+  
+  summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-align: center;
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--secondary);
+    transition: background 0.2s ease;
+  }
+  
+  summary:hover {
+    background: var(--line);
+  }
+  
+  pre {
+    margin-top: 20px;
+    padding: 20px;
+    background: var(--primary);
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  
+  /* Responsive */
+  @media (max-width: 900px) {
+    .card-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .card.wide {
+      grid-column: span 1;
+    }
+    
+    .info-card.wide {
+      grid-column: span 1;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    main {
+      padding: 30px 20px;
+    }
+    
+    header {
+      padding: 30px 20px;
+    }
+    
+    .synopsis-card {
+      padding: 24px 20px;
+    }
+    
+    .synopsis-card p {
+      text-align: left;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main>
+  <header>
+    <div class="badges">
+      {% for badge in data.badges %}<span class="badge">{{ badge }}</span>{% endfor %}
+    </div>
+    <h1>{{ data.title }}</h1>
+    {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+    {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+    {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+    {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+    <p style="margin-top: 20px; font-size: 1.1rem; font-weight: 600;">{{ data.technical_summary }}</p>
+  </header>
+  
+  {% if data.poster_url != '-' %}
+  <div class="poster-card">
+    <img class="poster" src="{{ data.poster_url }}" alt="poster">
+  </div>
+  {% endif %}
+  
+  {% if data.overview != '-' %}
+  <div class="synopsis-card">
+    <h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2>
+    <p>{{ data.overview }}</p>
+  </div>
+  {% endif %}
+  
+  <div class="card-grid">
+    {% if data.info_fields %}
+    <div class="card{% if data.info_fields|length > 4 %} wide{% endif %}">
+      <h2>{{ tr('prez.section.infos', default='Informations') }}</h2>
+      {{ macros.render_info_grid(data.info_fields) }}
+    </div>
+    {% endif %}
+    
+    {% if data.release_fields %}
+    <div class="card{% if data.release_fields|length > 4 %} wide{% endif %}">
+      <h2>{{ tr('prez.section.release', default='Release') }}</h2>
+      {{ macros.render_info_grid(data.release_fields) }}
+    </div>
+    {% endif %}
+    
+    {% if data.has_metadata_section %}
+    <div class="card full">
+      <h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>
+      {{ macros.render_metadata(data.metadata_fields, data.cast, data.crew) }}
+    </div>
+    {% endif %}
+    
+    {% if data.video_fields %}
+    <div class="card{% if data.video_fields|length > 4 %} wide{% endif %}">
+      <h2>{{ tr('prez.section.video', default='Video') }}</h2>
+      {{ macros.render_info_grid(data.video_fields) }}
+    </div>
+    {% endif %}
+    
+    <div class="card wide">
+      <h2>{{ tr('prez.section.audio', default='Audio') }}</h2>
+      {{ macros.render_audio_tracks(data.audio_track_groups) }}
+    </div>
+    
+    <div class="card wide">
+      <h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>
+      {{ macros.render_subtitle_tracks(data.subtitle_track_groups) }}
+    </div>
+  </div>
+  
+  {{ macros.render_mediainfo(data.has_mediainfo, data.mediainfo_text) }}
+</main>
+{% endblock %}

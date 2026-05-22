@@ -1,0 +1,38 @@
+# MULTI.EN Compact Pipeline Preset
+# =================================
+# Keep all tracks, English audio default, no default subtitle
+# Prez: compact / NFO: classic / HTML: Magazine Dark
+
+multi_en_compact:
+  name: "MULTI.EN Compact - All tracks, EN audio default"
+  description: "Keep all audio/subtitle tracks, English audio as default, compact presentation"
+  modules:
+    - "renamer"
+    - "cleanmkv"
+    - "nfo"
+    - "torrent"
+    - "prez"
+  renamer:
+    auto_detect: true
+  cleanmkv:
+    external_preset: "multi_en"
+    apply_changes: true
+    output_dir_name: "Release/{release}"
+  nfo:
+    template: "detailed"
+    locale: "en"
+    mode: "global"
+    auto_metadata: true
+  torrent:
+    private: true
+  prez:
+    format: "both"
+    bbcode_template: "compact"
+    html_template: "magazine_dark"
+    banner_design: "textual"
+    detail_level: "compact"
+    mediainfo_mode: "spoiler"
+    show_tmdb: "true"
+    show_mediainfo: "true"
+
+

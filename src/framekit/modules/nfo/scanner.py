@@ -9,11 +9,11 @@ from framekit.core.languages import (
 )
 from framekit.core.mediainfo import probe_media_file
 from framekit.core.models.nfo import EpisodeNfoData, TrackNfoData
+from framekit.core.subtitles import is_audio_description_track
 from framekit.modules.renamer.detector import (
-    get_hdr_canonical,
     get_preferred_resolution,
     get_preferred_video_tag,
-    hdr_display_label,
+    hdr_display_label_all,
 )
 from framekit.modules.renamer.rules import (
     VIDEO_EXTENSIONS,
@@ -30,7 +30,7 @@ def _overall_bitrate_kbps(size_bytes: int, duration_ms: int | None) -> int | Non
     seconds = duration_ms / 1000
     bits = size_bytes * 8
     kbps = bits / seconds / 1000
-    return int(round(kbps))
+    return round(kbps)
 
 
 def _normalize_overall_bitrate_kbps(value: int | None) -> int | None:
@@ -39,7 +39,7 @@ def _normalize_overall_bitrate_kbps(value: int | None) -> int | None:
 
     # MediaInfo returns overall bitrate in b/s.
     # We store the episode field in kb/s.
-    return int(round(value / 1000))
+    return round(value / 1000)
 
 
 def _episode_label_from_code(code: str | None) -> str | None:
@@ -86,7 +86,7 @@ def _build_video_tracks(info) -> list[TrackNfoData]:
 
     return [
         TrackNfoData(
-            display_id="#1",
+            display_id="",
             kind="video",
             language_display=None,
             language_short=None,
@@ -111,7 +111,7 @@ def _build_video_tracks(info) -> list[TrackNfoData]:
 def _build_audio_tracks(info) -> list[TrackNfoData]:
     tracks: list[TrackNfoData] = []
 
-    for index, track in enumerate(info.audio_tracks, start=2):
+    for index, track in enumerate(info.audio_tracks, start=1):
         channels_count = None
         if track.channels:
             try:
@@ -123,7 +123,11 @@ def _build_audio_tracks(info) -> list[TrackNfoData]:
             TrackNfoData(
                 display_id=f"#{index}",
                 kind="audio",
-                language_display=language_display_label(track.language, track.language_variant),
+                language_display=(
+                    language_display_label(track.language, track.language_variant) + " (AD)"
+                    if is_audio_description_track(track.title)
+                    else language_display_label(track.language, track.language_variant)
+                ),
                 language_short=language_short_label(track.language, track.language_variant),
                 format_name=track.format_name,
                 codec=track.codec,
@@ -133,7 +137,7 @@ def _build_audio_tracks(info) -> list[TrackNfoData]:
                 title=track.title,
                 is_default=track.is_default,
                 is_forced=track.is_forced,
-                subtitle_variant=None,
+                subtitle_variant="ad" if is_audio_description_track(track.title) else None,
                 bitrate=track.bitrate,
                 size_bytes=track.stream_size_bytes,
                 size_percent=track.stream_size_ratio,
@@ -145,14 +149,13 @@ def _build_audio_tracks(info) -> list[TrackNfoData]:
     return tracks
 
 
-def _build_subtitle_tracks(info, audio_track_count: int) -> list[TrackNfoData]:
+def _build_subtitle_tracks(info) -> list[TrackNfoData]:
     tracks: list[TrackNfoData] = []
 
-    start_index = 2 + audio_track_count
-    for offset, track in enumerate(info.subtitle_tracks):
+    for index, track in enumerate(info.subtitle_tracks, start=1):
         tracks.append(
             TrackNfoData(
-                display_id=f"#{start_index + offset}",
+                display_id=f"#{index}",
                 kind="subtitle",
                 language_display=language_display_label(track.language, track.language_variant),
                 language_short=language_short_label(track.language, track.language_variant),
@@ -201,6 +204,7 @@ def _subtitle_summary_from_probe(info) -> list[str]:
 
 
 def scan_nfo_folder(folder: Path) -> list[EpisodeNfoData]:
+    """Handle scan nfo folder."""
     episodes: list[EpisodeNfoData] = []
 
     media_files = sorted(
@@ -213,12 +217,12 @@ def scan_nfo_folder(folder: Path) -> list[EpisodeNfoData]:
         info = probe_media_file(file_path)
         stem, _team = split_team(file_path.stem)
 
-        hdr_canonical = get_hdr_canonical(info)
-        hdr_display = hdr_display_label(hdr_canonical) if hdr_canonical else None
+        # Use hdr_display_label_all to show all HDR formats (e.g., "Dolby Vision + HDR10+")
+        hdr_display = hdr_display_label_all(info) or None
 
         video_tracks = _build_video_tracks(info)
         audio_tracks = _build_audio_tracks(info)
-        subtitle_tracks = _build_subtitle_tracks(info, len(audio_tracks))
+        subtitle_tracks = _build_subtitle_tracks(info)
 
         episode_code = extract_episode_code(stem)
 

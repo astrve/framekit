@@ -1,0 +1,123 @@
+@echo off
+setlocal enabledelayedexpansion
+
+echo.
+echo  ============================================
+echo   Framekit v2.0.0 - Windows Installer
+echo  ============================================
+echo.
+
+:: ── Python check ──────────────────────────────────────────────────────────────
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Python not found. Install Python 3.12+ from https://www.python.org
+    goto :end_pause
+)
+
+for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set PYVER=%%v
+for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
+    if %%a lss 3 (
+        echo [ERROR] Python 3.12+ required, found %PYVER%
+        goto :end_pause
+    )
+    if %%a equ 3 if %%b lss 12 (
+        echo [ERROR] Python 3.12+ required, found %PYVER%
+        goto :end_pause
+    )
+)
+echo [OK] Python %PYVER%
+
+:: ── Virtual environment ────────────────────────────────────────────────────────
+set VENV_DIR=%~dp0.venv
+if not exist "%VENV_DIR%\Scripts\python.exe" (
+    echo [..] Creating virtual environment...
+    python -m venv "%VENV_DIR%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to create virtual environment.
+        goto :end_pause
+    )
+    echo [OK] Virtual environment created.
+) else (
+    echo [OK] Virtual environment exists.
+)
+
+:: ── Install Framekit ──────────────────────────────────────────────────────────
+echo [..] Installing Framekit...
+"%VENV_DIR%\Scripts\pip.exe" install --upgrade pip >nul 2>&1
+"%VENV_DIR%\Scripts\pip.exe" install -e "%~dp0."
+if errorlevel 1 (
+    echo [ERROR] Installation failed.
+    goto :end_pause
+)
+echo [OK] Framekit installed.
+
+:: ── Verify ────────────────────────────────────────────────────────────────────
+"%VENV_DIR%\Scripts\framekit.exe" --version >nul 2>&1
+if errorlevel 1 (
+    echo [WARN] framekit binary not found in venv.
+) else (
+    for /f "delims=" %%v in ('"%VENV_DIR%\Scripts\framekit.exe" --version 2^>^&1') do echo [OK] %%v
+)
+
+:: ── Optional dependencies ─────────────────────────────────────────────────────
+echo.
+echo  Optional dependencies (required for full functionality):
+echo    - MKVToolNix ^(mkvmerge^)  : MKV track manipulation  ^(required for CleanMKV^)
+echo    - FFmpeg                  : Video encoding / thumbnails
+echo.
+echo  Install method:
+echo    [1] winget  ^(recommended — built into Windows 10/11^)
+echo    [2] Chocolatey ^(choco^)
+echo    [3] Skip — I will install them manually
+echo.
+set /p DEP_CHOICE=Your choice [1/2/3]:
+
+if "%DEP_CHOICE%"=="1" goto :install_winget
+if "%DEP_CHOICE%"=="2" goto :install_choco
+goto :skip_deps
+
+:install_winget
+echo.
+echo [..] Installing MKVToolNix via winget...
+winget install MKVToolNix.MKVToolNix --silent
+if errorlevel 1 echo [WARN] MKVToolNix install may have failed. Check manually.
+echo [..] Installing FFmpeg via winget...
+winget install Gyan.FFmpeg --silent
+if errorlevel 1 echo [WARN] FFmpeg install may have failed. Check manually.
+echo [OK] winget installs requested. Restart your terminal for PATH to update.
+goto :skip_deps
+
+:install_choco
+echo.
+choco --version >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Chocolatey not found. Install from https://chocolatey.org/install
+    goto :skip_deps
+)
+echo [..] Installing MKVToolNix via choco...
+choco install mkvtoolnix -y
+echo [..] Installing FFmpeg via choco...
+choco install ffmpeg -y
+echo [OK] Chocolatey installs complete.
+goto :skip_deps
+
+:skip_deps
+
+:: ── Summary ───────────────────────────────────────────────────────────────────
+echo.
+echo  ============================================
+echo   Installation complete!
+echo  ============================================
+echo.
+echo  Run Framekit:
+echo    %VENV_DIR%\Scripts\fk.exe --help
+echo.
+echo  Add to PATH (run in PowerShell):
+echo    $env:PATH += ";%VENV_DIR%\Scripts"
+echo    [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "User")
+echo.
+
+:end_pause
+echo.
+pause
+endlocal

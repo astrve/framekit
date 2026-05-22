@@ -10,16 +10,19 @@ except ImportError:
     import re as _re
 
     def sanitize_filename(filename: str, replacement_text: str = "_") -> str:
-        """
-        Sanitize a filename by replacing characters illegal on most filesystems.
+        """Sanitize a filename by replacing characters illegal on most filesystems.
+
         This fallback keeps alphanumeric characters, dots, dashes and underscores,
         and replaces any other sequence with the given replacement_text.
         """
         return _re.sub(r"[^A-Za-z0-9._-]+", replacement_text, filename)
 
 
+from loguru import logger
+
 from framekit.core.i18n import tr
 from framekit.core.models.nfo import ReleaseNfoData
+from framekit.core.paths import get_nfo_templates_dir
 from framekit.core.reporting import OperationReport
 from framekit.modules.nfo.builder import build_release_nfo
 from framekit.modules.nfo.scanner import scan_nfo_folder
@@ -34,6 +37,9 @@ def _safe_output_name(name: str) -> str:
     return cleaned or "release"
 
 
+_LOGO_ALLOWED_EXTENSIONS = {".txt", ".ans", ".asc"}
+
+
 def _load_logo_text(logo_path: str | None) -> str | None:
     if not logo_path:
         return None
@@ -41,6 +47,33 @@ def _load_logo_text(logo_path: str | None) -> str | None:
     path = Path(logo_path)
     if not path.exists() or not path.is_file():
         return None
+
+    # Security: reject symlinks to prevent reading arbitrary files
+    if path.is_symlink():
+        logger.warning("Logo path is a symbolic link, skipping: {}", path)
+        return None
+
+    # Security: check extension is a text format
+    if path.suffix.lower() not in _LOGO_ALLOWED_EXTENSIONS:
+        logger.warning(
+            "Logo path has unexpected extension '{}', expected one of {}: {}",
+            path.suffix,
+            _LOGO_ALLOWED_EXTENSIONS,
+            path,
+        )
+        return None
+
+    # Security: warn if logo is outside the framekit templates directory
+    resolved = path.resolve()
+    templates_dir = get_nfo_templates_dir().resolve()
+    try:
+        resolved.relative_to(templates_dir)
+    except ValueError:
+        logger.warning(
+            "Logo file is outside the framekit templates directory ({}): {}",
+            templates_dir,
+            resolved,
+        )
 
     content = path.read_text(encoding="utf-8", errors="replace")
     content = content.rstrip("\n\r")
@@ -61,6 +94,8 @@ def _resolve_template_name(requested_template: str, media_kind: str) -> str:
 
 
 class NfoService:
+    """Service for nfo."""
+
     def build_from_release(
         self,
         folder: Path,
@@ -71,6 +106,7 @@ class NfoService:
         template_locale: str = "en",
         extra_context: dict | None = None,
     ) -> tuple[OperationReport, ReleaseNfoData, str]:
+        """Build from release."""
         resolved_template_name = _resolve_template_name(template_name, release.media_kind)
 
         context = {
@@ -122,12 +158,12 @@ class NfoService:
         template_locale: str = "en",
         extra_context: dict | None = None,
     ) -> list[tuple[OperationReport, ReleaseNfoData, str, Path]]:
-        """
-        Build one NFO per `.mkv` file in `folder`. Each MKV is wrapped in its
-        own single-episode release, rendered through the
-        single-episode/movie template family (depending on whether the file
+        """Build one NFO per ``.mkv`` file in ``folder``.
+
+        Each MKV is wrapped in its own single-episode release, rendered through
+        the single-episode/movie template family (depending on whether the file
         carries an episode code), and returned as a 4-tuple
-        `(report, release, rendered_text, source_mkv_path)`.
+        ``(report, release, rendered_text, source_mkv_path)``.
 
         The metadata `extra_context` provided by the caller is reused as-is
         for every file. For series, the per-episode metadata (`metadata_episode_map`)
@@ -177,8 +213,7 @@ class NfoService:
         template_name: str,
         template_locale: str = "en",
     ) -> tuple[OperationReport, list[Path]]:
-        """
-        Persist a list of per-file NFOs returned by `build_per_file`.
+        """Persist a list of per-file NFOs returned by `build_per_file`.
 
         Each NFO is written next to its source MKV using the MKV stem as the
         base name (`<stem>.nfo`). A consolidated `OperationReport` is
@@ -225,6 +260,7 @@ class NfoService:
         template_locale: str = "en",
         extra_context: dict | None = None,
     ) -> tuple[OperationReport, ReleaseNfoData, str]:
+        """Handle build."""
         episodes = scan_nfo_folder(folder)
         if not episodes:
             raise ValueError(
@@ -255,6 +291,7 @@ class NfoService:
         template_locale: str = "en",
         extra_context: dict | None = None,
     ) -> tuple[OperationReport, ReleaseNfoData, Path]:
+        """Handle write."""
         report, release, rendered = self.build(
             folder,
             template_name=template_name,
@@ -289,6 +326,7 @@ class NfoService:
         output_name: str | None = None,
         template_locale: str = "en",
     ) -> tuple[OperationReport, Path]:
+        """Handle write rendered."""
         final_name = (
             output_name if output_name else f"{_safe_output_name(release.release_title)}.nfo"
         )

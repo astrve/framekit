@@ -12,6 +12,8 @@ from framekit.core.paths import get_lock_dir, get_metadata_cache_file
 
 
 class MetadataCache:
+    """Metadata cache."""
+
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path) if path else get_metadata_cache_file()
         self.lock = FileLock(str(get_lock_dir() / f"{self.path.name}.lock"))
@@ -51,6 +53,7 @@ class MetadataCache:
         request: MetadataLookupRequest,
         ttl_hours: int,
     ) -> list[MetadataCandidate] | None:
+        """Handle get."""
         data = self._load_raw()
         key = self._key(provider_name, request)
 
@@ -72,6 +75,7 @@ class MetadataCache:
         request: MetadataLookupRequest,
         candidates: list[MetadataCandidate],
     ) -> None:
+        """Handle set."""
         data = self._load_raw()
         key = self._key(provider_name, request)
 

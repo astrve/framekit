@@ -1,0 +1,126 @@
+# Dependabot configuration for automated dependency updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # Python dependencies (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "astrve"
+    assignees:
+      - "astrve"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    # Group updates by type
+    groups:
+      # Production dependencies
+      production-dependencies:
+        patterns:
+          - "click*"
+          - "rich*"
+          - "pyyaml"
+          - "jinja2"
+          - "httpx*"
+          - "pydantic*"
+          - "cryptography"
+          - "keyring"
+          - "tenacity"
+          - "watchfiles"
+          - "loguru"
+          - "desktop-notifier"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Development dependencies
+      development-dependencies:
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "pyright"
+          - "bandit*"
+          - "pip-audit"
+          - "pre-commit"
+          - "coverage*"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Security updates (always separate)
+      security-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+    
+    # Version update strategy
+    versioning-strategy: increase
+    
+    # Ignore specific dependencies or versions
+    ignore:
+      # Ignore major version updates for stable dependencies
+      - dependency-name: "click"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "rich"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+    
+    # Allow both direct and indirect dependencies
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "astrve"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+# Dependabot will:
+# 1. Check for updates weekly on Monday at 09:00 UTC
+# 2. Group minor and patch updates together
+# 3. Keep security updates separate for immediate attention
+# 4. Limit open PRs to avoid overwhelming the review queue
+# 5. Auto-assign to maintainers
+# 6. Label PRs appropriately for easy filtering
+# 7. Use conventional commit messages
+
+# To enable auto-merge for minor/patch updates:
+# 1. Enable "Allow auto-merge" in repository settings
+# 2. Add branch protection rules
+# 3. Configure GitHub Actions to auto-approve Dependabot PRs
+# 4. Dependabot will auto-merge after CI passes
+
+# Security updates are always created immediately, regardless of schedule

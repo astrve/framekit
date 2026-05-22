@@ -41,6 +41,8 @@ else:
 
 
 class SelectorAction(StrEnum):
+    """Selector action."""
+
     UP = "UP"
     DOWN = "DOWN"
     LEFT = "LEFT"
@@ -48,6 +50,7 @@ class SelectorAction(StrEnum):
     TOGGLE = "TOGGLE"
     TOGGLE_ALL = "TOGGLE_ALL"
     OPEN = "OPEN"
+    EXPAND = "EXPAND"
     CONFIRM = "CONFIRM"
     CANCEL = "CANCEL"
     NONE = "NONE"
@@ -55,6 +58,8 @@ class SelectorAction(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SelectorOption(Generic[T]):
+    """Option entry: selector."""
+
     value: T
     label: str
     hint: str | None = None
@@ -65,6 +70,8 @@ class SelectorOption(Generic[T]):
 
 @dataclass(frozen=True, slots=True)
 class SelectorDivider:
+    """Selector divider."""
+
     label: str = ""
 
 
@@ -73,6 +80,8 @@ SelectorEntry = SelectorOption[Any] | SelectorDivider
 
 @dataclass(slots=True)
 class SelectorTheme:
+    """Selector theme."""
+
     title_style: str = "bold white"
     title_rule_style: str = "bright_black"
 
@@ -92,6 +101,8 @@ class SelectorTheme:
 
 @dataclass(slots=True)
 class SelectorState:
+    """Selector state."""
+
     title: str
     entries: list[SelectorEntry]
     page_size: int = 8
@@ -102,6 +113,7 @@ class SelectorState:
     scroll_offset: int = 0
 
     def __post_init__(self) -> None:
+        """Normalise page size and seed initial selection state."""
         self.page_size = max(1, self.page_size)
 
         if not self.selected_indices:
@@ -119,6 +131,7 @@ class SelectorState:
             self.cursor_index = selectable[0] if selectable else 0
 
     def selectable_indices(self) -> list[int]:
+        """Handle selectable indices."""
         result: list[int] = []
         for idx, entry in enumerate(self.entries):
             if isinstance(entry, SelectorOption) and not entry.disabled:
@@ -126,6 +139,7 @@ class SelectorState:
         return result
 
     def selected_values(self) -> list[Any]:
+        """Handle selected values."""
         values: list[Any] = []
         for idx, entry in enumerate(self.entries):
             if idx in self.selected_indices and isinstance(entry, SelectorOption):
@@ -133,11 +147,13 @@ class SelectorState:
         return values
 
     def can_confirm(self) -> bool:
+        """Return ``True`` if can confirm."""
         if not self.multi:
             return True
         return len(self.selected_indices) >= self.minimal_count
 
     def current_entry(self) -> SelectorOption[Any] | None:
+        """Handle current entry."""
         if self.cursor_index < 0 or self.cursor_index >= len(self.entries):
             return None
 
@@ -148,10 +164,13 @@ class SelectorState:
 
 
 class SelectorEngine:
+    """Selector engine."""
+
     def __init__(self, state: SelectorState) -> None:
         self.state = state
 
     def move_cursor(self, delta: int) -> None:
+        """Handle move cursor."""
         selectable = self.state.selectable_indices()
         if not selectable:
             return
@@ -165,6 +184,7 @@ class SelectorEngine:
         self.state.cursor_index = selectable[new_pos]
 
     def change_page(self, delta: int) -> None:
+        """Handle change page."""
         if not self.state.entries:
             return
 
@@ -184,6 +204,7 @@ class SelectorEngine:
             self.state.cursor_index = selectable_visible[0]
 
     def toggle_current(self) -> None:
+        """Handle toggle current."""
         idx = self.state.cursor_index
         if idx < 0 or idx >= len(self.state.entries):
             return
@@ -201,6 +222,7 @@ class SelectorEngine:
             self.state.selected_indices = {idx}
 
     def toggle_all(self) -> None:
+        """Handle toggle all."""
         if not self.state.multi:
             return
 
@@ -211,6 +233,7 @@ class SelectorEngine:
             self.state.selected_indices = selectable
 
     def select_current_and_confirm(self) -> bool:
+        """Handle select current and confirm."""
         if not self.state.multi:
             idx = self.state.cursor_index
             if idx in self.state.selectable_indices():
@@ -220,6 +243,7 @@ class SelectorEngine:
         return self.state.can_confirm()
 
     def visible_indices(self) -> list[int]:
+        """Handle visible indices."""
         if not self.state.entries:
             return []
 
@@ -236,6 +260,8 @@ class SelectorEngine:
 
 
 class SelectorRenderer:
+    """Selector renderer."""
+
     def __init__(
         self,
         theme: SelectorTheme | None = None,
@@ -347,6 +373,7 @@ class SelectorRenderer:
         return footer
 
     def render(self, state: SelectorState, engine: SelectorEngine):
+        """Handle render."""
         visible_indices = engine.visible_indices()
 
         table = Table(
@@ -397,7 +424,25 @@ class SelectorRenderer:
 
 
 class SelectorInputAdapter:
+    """Selector input adapter."""
+
+    _CHAR_ACTIONS: dict[str, SelectorAction] = {
+        " ": SelectorAction.TOGGLE,
+        "a": SelectorAction.TOGGLE_ALL,
+        "o": SelectorAction.OPEN,
+        "e": SelectorAction.EXPAND,
+        "w": SelectorAction.UP,
+        "k": SelectorAction.UP,
+        "s": SelectorAction.DOWN,
+        "j": SelectorAction.DOWN,
+        "h": SelectorAction.LEFT,
+        "d": SelectorAction.RIGHT,
+        "l": SelectorAction.RIGHT,
+        "q": SelectorAction.CANCEL,
+    }
+
     def read_action(self) -> SelectorAction:
+        """Handle read action."""
         if IS_WINDOWS:
             return self._read_windows()
         return self._read_unix()
@@ -443,7 +488,7 @@ class SelectorInputAdapter:
                 return SelectorAction.CANCEL
 
             if ch1 == "\x1b":
-                ready, _, _ = _select_any.select([sys.stdin], [], [], 0.01)
+                ready, _, _ = _select_any.select([sys.stdin], [], [], 0.05)
                 if ready:
                     ch2 = sys.stdin.read(1)
                     if ch2 in ("[", "O"):
@@ -462,26 +507,12 @@ class SelectorInputAdapter:
     def _map_char(self, char: str) -> SelectorAction:
         if char in ("\r", "\n"):
             return SelectorAction.CONFIRM
-        if char == " ":
-            return SelectorAction.TOGGLE
-        if char in ("a", "A"):
-            return SelectorAction.TOGGLE_ALL
-        if char in ("o", "O", "e", "E"):
-            return SelectorAction.OPEN
-        if char in ("w", "W", "k", "K"):
-            return SelectorAction.UP
-        if char in ("s", "S", "j", "J"):
-            return SelectorAction.DOWN
-        if char in ("h", "H"):
-            return SelectorAction.LEFT
-        if char in ("d", "D", "l", "L"):
-            return SelectorAction.RIGHT
-        if char in ("q", "Q"):
-            return SelectorAction.CANCEL
-        return SelectorAction.NONE
+        return self._CHAR_ACTIONS.get(char.lower(), SelectorAction.NONE)
 
 
 class SelectorRunner:
+    """Selector runner."""
+
     def __init__(
         self,
         *,
@@ -518,7 +549,27 @@ class SelectorRunner:
 
         self.on_open_current(entry.value)
 
+    def _handle_action(self, action: SelectorAction) -> list[Any] | None:
+        handlers: dict[SelectorAction, Callable[[], None]] = {
+            SelectorAction.UP: lambda: self.engine.move_cursor(-1),
+            SelectorAction.DOWN: lambda: self.engine.move_cursor(1),
+            SelectorAction.LEFT: lambda: self.engine.change_page(-1),
+            SelectorAction.RIGHT: lambda: self.engine.change_page(1),
+            SelectorAction.TOGGLE: self.engine.toggle_current,
+            SelectorAction.TOGGLE_ALL: self.engine.toggle_all,
+            SelectorAction.OPEN: self._open_current,
+        }
+        if action == SelectorAction.CONFIRM and self.engine.select_current_and_confirm():
+            return self.state.selected_values()
+        if action == SelectorAction.CANCEL:
+            raise KeyboardInterrupt
+        handler = handlers.get(action)
+        if handler is not None:
+            handler()
+        return None
+
     def run(self) -> list[Any]:
+        """Handle run."""
         try:
             with Live(
                 self.renderer.render(self.state, self.engine),
@@ -529,26 +580,9 @@ class SelectorRunner:
                 while True:
                     live.update(self.renderer.render(self.state, self.engine), refresh=True)
                     action = self.input_adapter.read_action()
-
-                    if action == SelectorAction.UP:
-                        self.engine.move_cursor(-1)
-                    elif action == SelectorAction.DOWN:
-                        self.engine.move_cursor(1)
-                    elif action == SelectorAction.LEFT:
-                        self.engine.change_page(-1)
-                    elif action == SelectorAction.RIGHT:
-                        self.engine.change_page(1)
-                    elif action == SelectorAction.TOGGLE:
-                        self.engine.toggle_current()
-                    elif action == SelectorAction.TOGGLE_ALL:
-                        self.engine.toggle_all()
-                    elif action == SelectorAction.OPEN:
-                        self._open_current()
-                    elif action == SelectorAction.CONFIRM:
-                        if self.engine.select_current_and_confirm():
-                            return self.state.selected_values()
-                    elif action == SelectorAction.CANCEL:
-                        raise KeyboardInterrupt
+                    selected_values = self._handle_action(action)
+                    if selected_values is not None:
+                        return selected_values
         except KeyboardInterrupt:
             raise
 
@@ -562,9 +596,7 @@ def select_many(
     theme: SelectorTheme | None = None,
     on_open_current: Callable[[Any], None] | None = None,
 ) -> list[Any]:
-    # In headless mode (no interactive terminal), interactive selection is not
-    # possible.  Raise a RuntimeError so that callers can provide a clear
-    # error message rather than hanging waiting for input.
+    """Handle select many."""
     if not sys.stdin.isatty():
         raise RuntimeError(
             tr(
@@ -592,10 +624,7 @@ def select_one(
     theme: SelectorTheme | None = None,
     on_open_current: Callable[[Any], None] | None = None,
 ) -> Any:
-    # Disallow interactive selection in headless mode.  When standard input is
-    # not attached to a TTY, there is no way to capture user input, so we
-    # signal this condition via a RuntimeError.  Higher-level commands
-    # should catch this and surface an appropriate error message.
+    """Handle select one."""
     if not sys.stdin.isatty():
         raise RuntimeError(
             tr(
@@ -622,23 +651,30 @@ def confirm_choice(
     default: bool = True,
     yes_label: str | None = None,
     no_label: str | None = None,
-) -> bool:
-    result = select_one(
-        title=title,
-        entries=[
-            SelectorOption(
-                value=True,
-                label=yes_label or tr("common.yes", default="Yes"),
-                selected=default,
-            ),
-            SelectorOption(
-                value=False,
-                label=no_label or tr("common.no", default="No"),
-                selected=not default,
-            ),
-        ],
-        page_size=4,
-    )
+) -> bool | None:
+    """Handle confirm choice."""
+    try:
+        result = select_one(
+            title=title,
+            entries=[
+                SelectorOption(
+                    value=True,
+                    label=yes_label or tr("common.yes", default="Yes"),
+                    selected=default,
+                ),
+                SelectorOption(
+                    value=False,
+                    label=no_label or tr("common.no", default="No"),
+                    selected=not default,
+                ),
+            ],
+            page_size=4,
+        )
+    except KeyboardInterrupt:
+        return None
+
+    if result is None:
+        return None
     return bool(result)
 
 
@@ -648,8 +684,7 @@ def text_input(
     default: str = "",
     mandatory: bool = False,
 ) -> str:
-    # Prevent blocking for input in headless environments by raising.  The
-    # higher-level commands should catch this and report a clear error.
+    """Handle text input."""
     if not sys.stdin.isatty():
         raise RuntimeError(
             tr(

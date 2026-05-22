@@ -18,6 +18,8 @@ VALID_TEMPLATE_SCOPES = (
 
 @dataclass(slots=True)
 class NfoTemplateRecord:
+    """Nfo template record."""
+
     display_name: str
     template_name: str
     source: str
@@ -26,6 +28,7 @@ class NfoTemplateRecord:
 
 
 def builtin_template_records() -> list[NfoTemplateRecord]:
+    """Handle builtin template records."""
     return [
         NfoTemplateRecord(
             display_name="Default",
@@ -45,6 +48,8 @@ def builtin_template_records() -> list[NfoTemplateRecord]:
 
 
 class NfoTemplateRegistry:
+    """Registry of nfo template."""
+
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path) if path else get_nfo_template_registry_file()
         self.lock = FileLock(str(get_lock_dir() / f"{self.path.name}.lock"))
@@ -68,22 +73,27 @@ class NfoTemplateRegistry:
             )
 
     def load_custom(self) -> list[NfoTemplateRecord]:
+        """Load custom."""
         rows = self._load_raw()
         return [NfoTemplateRecord(**row) for row in rows]
 
     def save_custom(self, records: list[NfoTemplateRecord]) -> None:
+        """Save custom."""
         self._save_raw([asdict(record) for record in records])
 
     def register(self, record: NfoTemplateRecord) -> None:
+        """Handle register."""
         records = self.load_custom()
         records = [item for item in records if item.template_name != record.template_name]
         records.append(record)
         self.save_custom(records)
 
     def list_all(self) -> list[NfoTemplateRecord]:
+        """Handle list all."""
         return builtin_template_records() + self.load_custom()
 
     def find(self, template_name: str) -> NfoTemplateRecord | None:
+        """Handle find."""
         for item in self.list_all():
             if item.template_name == template_name:
                 return item
@@ -91,4 +101,5 @@ class NfoTemplateRegistry:
 
 
 def scope_matches(scope: str, media_kind: str) -> bool:
+    """Handle scope matches."""
     return scope == "universal" or scope == media_kind

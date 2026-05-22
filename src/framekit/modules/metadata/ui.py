@@ -10,6 +10,7 @@ from framekit.ui.console import console, print_info, print_success, print_warnin
 
 
 def print_lookup_summary(request) -> None:
+    """Handle print lookup summary."""
     table = Table(
         title=tr("metadata.lookup_title", default="Metadata Lookup"),
         expand=True,
@@ -30,6 +31,7 @@ def print_lookup_summary(request) -> None:
 
 
 def print_candidates(candidates) -> None:
+    """Handle print candidates."""
     table = Table(
         title=tr("metadata.candidates_title", default="Metadata Candidates"),
         expand=True,
@@ -57,7 +59,60 @@ def print_candidates(candidates) -> None:
     console.print(table)
 
 
+def _parse_candidate_index(raw: str, count: int) -> int | None:
+    if not raw.isdigit():
+        return None
+    index = int(raw)
+    if index < 1 or index > count:
+        return None
+    return index - 1
+
+
+def _open_candidate_command(raw: str) -> str | None:
+    if not raw.lower().startswith("o"):
+        return None
+    return raw[1:].strip()
+
+
+def _warn_index_range() -> None:
+    print_warning(
+        tr(
+            "metadata.choose.index_out_of_range",
+            default="Candidate index out of range.",
+        )
+    )
+
+
+def _handle_open_candidate(raw: str, candidates) -> bool:
+    index_raw = _open_candidate_command(raw)
+    if index_raw is None:
+        return False
+    if not index_raw.isdigit():
+        print_warning(tr("metadata.choose.open_example", default="Use o<number>, for example: o2"))
+        return True
+
+    index = _parse_candidate_index(index_raw, len(candidates))
+    if index is None:
+        _warn_index_range()
+        return True
+
+    candidate = candidates[index]
+    if not candidate.external_url:
+        print_warning(
+            tr(
+                "metadata.choose.no_browser_url",
+                default="This candidate does not expose a browser URL yet.",
+            )
+        )
+        return True
+
+    webbrowser.open(candidate.external_url)
+    print_success(tr("metadata.choose.opened", default="Opened: {url}", url=candidate.external_url))
+    return True
+
+
 def choose_candidate(candidates):
+    """Handle choose candidate."""
     if not candidates:
         return None
 
@@ -82,55 +137,74 @@ def choose_candidate(candidates):
         if raw.lower() == "q":
             return None
 
-        if raw.lower().startswith("o"):
-            index_raw = raw[1:].strip()
-            if not index_raw.isdigit():
-                print_warning(
-                    tr("metadata.choose.open_example", default="Use o<number>, for example: o2")
-                )
-                continue
-
-            index = int(index_raw)
-            if index < 1 or index > len(candidates):
-                print_warning(
-                    tr(
-                        "metadata.choose.index_out_of_range",
-                        default="Candidate index out of range.",
-                    )
-                )
-                continue
-
-            candidate = candidates[index - 1]
-            if not candidate.external_url:
-                print_warning(
-                    tr(
-                        "metadata.choose.no_browser_url",
-                        default="This candidate does not expose a browser URL yet.",
-                    )
-                )
-                continue
-
-            webbrowser.open(candidate.external_url)
-            print_success(
-                tr("metadata.choose.opened", default="Opened: {url}", url=candidate.external_url)
-            )
+        if _handle_open_candidate(raw, candidates):
             continue
 
+        index = _parse_candidate_index(raw, len(candidates))
+        if index is not None:
+            return candidates[index]
         if raw.isdigit():
-            index = int(raw)
-            if index < 1 or index > len(candidates):
-                print_warning(
-                    tr(
-                        "metadata.choose.index_out_of_range",
-                        default="Candidate index out of range.",
-                    )
-                )
-                continue
-            return candidates[index - 1]
+            _warn_index_range()
+            continue
 
         print_warning(
             tr(
                 "metadata.choose.unknown_input",
                 default="Unknown input. Press Enter, use a number, o<number>, or q.",
+            )
+        )
+
+
+def print_cover_selection_summary(poster_count: int) -> None:
+    """Print a summary of available cover images."""
+    print_info(
+        tr(
+            "metadata.cover.available_count",
+            default="Found {count} available poster images.",
+            count=poster_count,
+        )
+    )
+
+
+def prompt_manual_tmdb_id() -> str | None:
+    """Prompt the user to manually enter a TMDB ID or URL.
+
+    Returns:
+        TMDB ID as string, or None if cancelled
+    """
+    print_info(
+        tr(
+            "metadata.manual_id.prompt",
+            default="Enter TMDB ID or URL (e.g., '12345' or 'https://www.themoviedb.org/movie/12345'):",
+        )
+    )
+
+    while True:
+        raw = console.input("[white]> [/white]").strip()
+
+        if not raw or raw.lower() == "q":
+            return None
+
+        # Try to extract ID from URL
+        import re
+
+        # Match movie URL: https://www.themoviedb.org/movie/12345
+        movie_match = re.search(r"themoviedb\.org/movie/(\d+)", raw)
+        if movie_match:
+            return movie_match.group(1)
+
+        # Match TV show URL: https://www.themoviedb.org/tv/12345
+        tv_match = re.search(r"themoviedb\.org/tv/(\d+)", raw)
+        if tv_match:
+            return tv_match.group(1)
+
+        # Check if it's just a numeric ID
+        if raw.isdigit():
+            return raw
+
+        print_warning(
+            tr(
+                "metadata.manual_id.invalid",
+                default="Invalid input. Please enter a numeric TMDB ID or a valid TMDB URL.",
             )
         )

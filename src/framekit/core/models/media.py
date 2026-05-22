@@ -6,6 +6,8 @@ from pathlib import Path
 
 @dataclass(slots=True)
 class MediaTrack:
+    """Media track."""
+
     id: int
     kind: str
     codec: str
@@ -31,6 +33,8 @@ class MediaTrack:
 
 @dataclass(slots=True)
 class MediaFileInfo:
+    """Media file info."""
+
     path: Path
     container: str
     duration_ms: int | None

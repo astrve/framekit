@@ -3,11 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from framekit.core.i18n import tr
-from framekit.ui.selector import SelectorOption, select_one
+from framekit.ui.unified_selector import SelectorOption
+from framekit.ui.unified_selector import select_one as _select_one
 
 
 @dataclass(slots=True)
 class TemplateOption:
+    """Option entry: template."""
+
     display_name: str
     template_name: str
     source: str
@@ -21,6 +24,7 @@ def _display_name_for_record(record) -> str:
 
 
 def build_template_options(records) -> list[TemplateOption]:
+    """Build template options."""
     return [
         TemplateOption(
             display_name=_display_name_for_record(record),
@@ -35,6 +39,7 @@ def build_template_options(records) -> list[TemplateOption]:
 def find_template_option(
     options: list[TemplateOption], template_name: str | None
 ) -> TemplateOption | None:
+    """Handle find template option."""
     if not template_name:
         return None
 
@@ -45,6 +50,8 @@ def find_template_option(
 
 
 class TemplateSelector:
+    """Interactive selector for template."""
+
     def __init__(
         self,
         options: list[TemplateOption],
@@ -56,15 +63,32 @@ class TemplateSelector:
         self.page_size = page_size
 
     def run(self) -> TemplateOption | None:
-        entries: list[SelectorOption[TemplateOption]] = [
-            SelectorOption(
-                value=option,
-                label=option.display_name,
-                hint=f"{option.scope} · {option.source}",
-                selected=False,
+        """Render the selector and return the picked option.
+
+        Pre-selects the entry whose ``template_name`` matches
+        ``preferred_name`` so the cursor lands on the user's current
+        ``active_template`` rather than the first entry. Without this, a
+        user with ``active_template = "detailed"`` would still see the
+        cursor on "Default" and accidentally confirm it by pressing
+        Enter without scrolling.
+        """
+        current_label = tr("nfo.template_selector.current", default="current")
+        entries: list[SelectorOption[TemplateOption]] = []
+        for option in self.options:
+            is_preferred = (
+                self.preferred_name is not None and option.template_name == self.preferred_name
             )
-            for option in self.options
-        ]
+            label = option.display_name
+            if is_preferred:
+                label = f"{label}  ({current_label})"
+            entries.append(
+                SelectorOption(
+                    value=option,
+                    label=label,
+                    hint=f"{option.scope} · {option.source}",
+                    selected=is_preferred,
+                )
+            )
 
         try:
             return select_one(
@@ -80,11 +104,13 @@ def choose_template(
     options: list[TemplateOption],
     preferred_name: str | None = None,
 ) -> TemplateOption | None:
+    """Handle choose template."""
     selector = TemplateSelector(options, preferred_name=preferred_name)
     return selector.run()
 
 
 def choose_template_scope(preferred_scope: str = "universal") -> str | None:
+    """Handle choose template scope."""
     options = [
         TemplateOption(tr("nfo.scope.movie", default="Movie"), "movie", "scope", "movie"),
         TemplateOption(
@@ -108,6 +134,7 @@ def choose_template_scope(preferred_scope: str = "universal") -> str | None:
 
 
 def choose_import_location(preferred: str = "appdata") -> str | None:
+    """Handle choose import location."""
     options = [
         TemplateOption(
             tr("nfo.location.appdata", default="AppData"), "appdata", "location", "appdata"
@@ -118,3 +145,6 @@ def choose_import_location(preferred: str = "appdata") -> str | None:
     ]
     chosen = TemplateSelector(options, preferred_name=preferred).run()
     return chosen.template_name if chosen else None
+
+
+select_one = _select_one  # backwards-compatible patch target for tests

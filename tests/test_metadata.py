@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from framekit.core.models.metadata import MetadataCandidate
+from framekit.core.models.metadata import MetadataCandidate, MetadataLookupRequest
 from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData
 from framekit.modules.metadata.cache import MetadataCache
 from framekit.modules.metadata.matcher import build_lookup_request
@@ -68,10 +68,44 @@ def test_build_lookup_request_single_episode():
     assert request.episode_number == 4
 
 
+def test_release_title_alias_movie_prefers_title_display():
+    release = ReleaseNfoData(
+        media_kind="movie",
+        release_title="MOVIE.2024.1080P.WEB.H264-GRP",
+        title_display="MOVIE",
+        series_title=None,
+        year="2024",
+        source="WEB",
+        resolution="1080P",
+        video_tag="H264",
+        audio_tag="AAC.2.0",
+        language_tag="EN",
+        audio_languages_display="English",
+        episodes=[],
+    )
+    assert release.title == "MOVIE"
+
+
+def test_release_title_alias_series_prefers_series_title():
+    release = ReleaseNfoData(
+        media_kind="single_episode",
+        release_title="SHOW.S01E01.2024.1080P.WEB.H264-GRP",
+        title_display="SHOW EPISODE",
+        series_title="SHOW",
+        year="2024",
+        source="WEB",
+        resolution="1080P",
+        video_tag="H264",
+        audio_tag="AAC.2.0",
+        language_tag="EN",
+        audio_languages_display="English",
+        episodes=[],
+    )
+    assert release.title == "SHOW"
+
+
 def test_metadata_cache_roundtrip(tmp_path: Path):
     cache = MetadataCache(tmp_path / "metadata_cache.json")
-
-    from framekit.core.models.metadata import MetadataLookupRequest
 
     request = MetadataLookupRequest(
         media_kind="movie",

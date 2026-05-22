@@ -5,11 +5,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import yaml
+from loguru import logger
+
+from framekit.core.verbose import configure_verbosity, is_verbose
+
 # Prefer rich_click if available; fall back to click when the rich integration is not installed.
-try:
-    import rich_click as click  # type: ignore[import-not-found]
-except Exception:
-    import click  # type: ignore[import-not-found]
+from framekit.ui.click_helper import click
+
 try:
     from pathvalidate import sanitize_filename  # type: ignore[import]
 except ImportError:
@@ -17,67 +20,168 @@ except ImportError:
     import re as _re
 
     def sanitize_filename(filename: str, replacement_text: str = "_") -> str:
-        """
-        Sanitize a filename by replacing characters illegal on most filesystems.
+        """Sanitize a filename by replacing characters illegal on most filesystems.
+
         This fallback keeps alphanumeric characters, dots, dashes and underscores,
         and replaces any other sequence with the given replacement_text.
         """
         return _re.sub(r"[^A-Za-z0-9._-]+", replacement_text, filename)
 
 
-from rich import box
 from rich.panel import Panel
-from rich.table import Table
 
-from framekit.commands.cleanmkv import run_cleanmkv_command
-from framekit.commands.nfo import run_nfo_command
-from framekit.commands.renamer import run_renamer_command
-from framekit.commands.torrent import run_torrent_command
+# Import from extracted modules. The step helpers and preset utilities are
+# imported here even when not consumed directly in this module: ``pipeline``
+# is the documented public facade for the pipeline subsystem (see ADR-0002 and
+# ``tests/test_pipeline_smoke.py::test_module_exports_public_surface``). Listing
+# them in ``__all__`` below preserves the re-export against future ruff
+# ``--fix`` passes that would otherwise prune "unused" imports.
+from framekit.commands.pipeline_batch import run_batch_pipeline
+from framekit.commands.pipeline_orchestrator import execute_pipeline_modules
+from framekit.commands.pipeline_presets import (
+    list_pipeline_presets as _list_pipeline_presets,
+)
+from framekit.commands.pipeline_presets import (
+    load_pipeline_preset as _load_pipeline_preset,
+)
+from framekit.commands.pipeline_presets import (
+    select_pipeline_preset as _select_pipeline_preset,
+)
+from framekit.commands.pipeline_preview import (
+    _gather_preview_data,
+    _print_pipeline_preview,
+    _print_pipeline_preview_comparison,
+)
+from framekit.commands.pipeline_steps import (
+    _cleanmkv_step,
+    _encoder_step,
+    _ensure_release_context,
+    _nfo_step,
+    _prez_step,
+    _renamer_step,
+    _resolve_pipeline_locale,
+    _torrent_step,
+    _upload_step,
+)
 from framekit.core.i18n import tr
 from framekit.core.models.nfo import ReleaseNfoData
-from framekit.core.naming import release_name_from_mkv_paths, torrent_name_from_payload
+from framekit.core.naming import release_name_from_mkv_paths
 from framekit.core.paths import PathResolver
-from framekit.core.release_inspection import inspect_release_completeness
-from framekit.core.settings import (
-    SettingsStore,
-    metadata_language_for_nfo_locale,
-    resolve_nfo_locale,
-)
-from framekit.modules.metadata.workflow import run_metadata_workflow
-from framekit.modules.nfo.builder import build_release_nfo
-from framekit.modules.nfo.scanner import scan_nfo_folder
-from framekit.modules.nfo.service import NfoService
-from framekit.modules.prez.service import PREZ_PRESETS, PrezBuildOptions, PrezService
+from framekit.core.settings import SettingsStore
 from framekit.ui.branding import print_module_banner
 from framekit.ui.console import (
     console,
     print_error,
-    print_exception_error,
     print_info,
     print_success,
+    print_warning,
 )
-from framekit.ui.selector import SelectorDivider, SelectorEntry, SelectorOption, select_many
+from framekit.ui.unified_selector import (
+    SelectorDivider,
+    SelectorEntry,
+    SelectorOption,
+    confirm_choice,
+    text_input,
+)
+from framekit.ui.unified_selector import (
+    select_many as _select_many,
+)
 
-PIPELINE_MODULES = ("renamer", "cleanmkv", "nfo", "torrent", "prez")
+PIPELINE_MODULES = ("renamer", "cleanmkv", "nfo", "prez", "torrent", "upload", "encoder")
+# Module execution order: renamer → cleanmkv → nfo → prez → torrent → upload → encoder
+# Encoder is opt-in (heavy operation) — excluded from the default set
+PIPELINE_MODULES_DEFAULT = ("renamer", "cleanmkv", "nfo", "torrent", "prez", "upload")
 PipelineStep = tuple[str, str, Callable[[], int]]
+_PIPELINE_NFO_OUTPUT_MODES = frozenset({"global", "per_file", "both"})
+_PIPELINE_NFO_TEMPLATE_ALIASES = {
+    "default": "default",
+    "classic": "default",
+    "detailed": "detailed",
+    "movie_default": "default",
+    "series_default": "default",
+    "single_episode_default": "default",
+    "movie_detailed": "detailed",
+    "series_detailed": "detailed",
+    "single_episode_detailed": "detailed",
+}
+
+
+# Documented public facade for the pipeline subsystem (ADR-0002). Tests assert
+# every name below is importable from ``framekit.commands.pipeline``; do not
+# remove an entry without coordinating with ``tests/test_pipeline_smoke.py``.
+__all__ = [
+    "PIPELINE_MODULES",
+    "PIPELINE_MODULES_DEFAULT",
+    "PipelineContext",
+    "PipelineStep",
+    "execute_pipeline_modules",
+    "pipeline_command",
+    "run_batch_pipeline",
+    "run_pipeline_command",
+    # Preset discovery (re-exported from pipeline_presets).
+    "_list_pipeline_presets",
+    "_load_pipeline_preset",
+    "_select_pipeline_preset",
+    # Preview helpers (re-exported from pipeline_preview).
+    "_gather_preview_data",
+    "_print_pipeline_preview",
+    "_print_pipeline_preview_comparison",
+    # Step helpers (re-exported from pipeline_steps).
+    "_cleanmkv_step",
+    "_encoder_step",
+    "_ensure_release_context",
+    "_nfo_step",
+    "_prez_step",
+    "_renamer_step",
+    "_resolve_pipeline_locale",
+    "_torrent_step",
+    "_upload_step",
+]
 
 
 @dataclass(slots=True)
 class PipelineContext:
+    """Pipeline context."""
+
     release: ReleaseNfoData | None = None
     metadata_context: dict | None = None
     nfo_path: Path | None = None
     torrent_path: Path | None = None
     prez_outputs: tuple[Path, ...] = field(default_factory=tuple)
+    dry_run: bool = False
+
+
+# BatchQueueItem moved to framekit.modules.batch.models
+
+
+def _pipeline_explain_text() -> str:
+    """Return explanation text for the pipeline command."""
+    return tr(
+        "pipeline.explain.text",
+        default=(
+            "The pipeline command orchestrates multiple modules in sequence:\n\n"
+            "1. Renamer: Standardize filenames\n"
+            "2. CleanMKV: Remove unwanted tracks\n"
+            "3. NFO: Generate release information\n"
+            "4. Torrent: Create torrent file\n"
+            "5. Prez: Generate presentation files\n"
+            "6. Upload: Upload to trackers\n"
+            "7. Encoder: Encode video files (opt-in)\n\n"
+            "Use --preset to load a saved configuration.\n"
+            "Use --preview to see what will happen before execution."
+        ),
+    )
 
 
 def _module_label(name: str) -> str:
     return {
         "renamer": tr("pipeline.step.renamer", default="Renamer"),
         "cleanmkv": tr("pipeline.step.cleanmkv", default="CleanMKV"),
+        "encoder": tr("pipeline.step.encoder", default="Encoder"),
         "nfo": tr("pipeline.step.nfo", default="NFO + Metadata"),
         "torrent": tr("pipeline.step.torrent", default="Torrent"),
         "prez": tr("pipeline.step.prez", default="Prez"),
+        "upload": tr("pipeline.step.upload", default="Upload"),
     }.get(name, name)
 
 
@@ -86,61 +190,119 @@ def _resolve_enabled_modules(settings: dict, requested: tuple[str, ...] | None =
     if requested is not None:
         return {item for item in requested if item in allowed}
     configured = (
-        settings.get("modules", {}).get("pipeline", {}).get("enabled_modules", PIPELINE_MODULES)
+        settings.get("modules", {})
+        .get("pipeline", {})
+        .get("enabled_modules", PIPELINE_MODULES_DEFAULT)
     )
     if isinstance(configured, list):
         selected = {
             str(item).strip().lower() for item in configured if str(item).strip().lower() in allowed
         }
-        return selected or set(PIPELINE_MODULES)
-    return set(PIPELINE_MODULES)
+        return selected or set(PIPELINE_MODULES_DEFAULT)
+    return set(PIPELINE_MODULES_DEFAULT)
 
 
 def _maybe_select_modules(
-    settings: dict, selected: set[str], select_modules: bool | None
-) -> set[str]:
+    settings: dict, selected: set[str], select_modules: bool | None, metadata_enabled: bool = True
+) -> tuple[set[str], bool, bool, bool]:
     should_select = sys.stdin.isatty() if select_modules is None else select_modules
     if not should_select:
-        return selected
+        return selected, False, False, metadata_enabled
     entries: list[SelectorEntry] = [SelectorDivider("Modules")]
     entries.extend(
         SelectorOption(
             value=name,
             label=_module_label(name),
             hint=tr("pipeline.selector.module_hint", default="Enable this module for this run"),
-            selected=False,
+            selected=name in selected,
         )
         for name in PIPELINE_MODULES
+    )
+    entries.append(SelectorDivider("Options"))
+    entries.append(
+        SelectorOption(
+            value="__preview__",
+            label=tr("pipeline.selector.show_preview", default="Show preview before execution"),
+            hint=tr(
+                "pipeline.selector.preview_hint",
+                default="Display comparison table with planned changes",
+            ),
+            selected=True,
+        )
+    )
+    entries.append(
+        SelectorOption(
+            value="__auto_mode__",
+            label=tr("pipeline.selector.auto_mode", default="Auto Mode (No user interaction)"),
+            hint=tr(
+                "pipeline.selector.auto_mode_hint",
+                default="Run fully autonomous with preset configurations",
+            ),
+            selected=False,
+        )
     )
     try:
         values = select_many(
             title=tr("pipeline.selector.title", default="Choose pipeline modules"),
             entries=entries,
-            page_size=8,
+            page_size=14,
             minimal_count=1,
         )
     except KeyboardInterrupt:
         raise
-    return {str(value) for value in values if str(value) in PIPELINE_MODULES} or selected
+
+    show_preview = "__preview__" in values
+    auto_mode = "__auto_mode__" in values
+    # Metadata and encoder are now controlled via module selection only
+    use_metadata = metadata_enabled  # Keep the default/configured value
+    modules = {str(value) for value in values if str(value) in PIPELINE_MODULES} or selected
+
+    return modules, show_preview, auto_mode, use_metadata
 
 
-def _join_path_parts(parts: tuple[str, ...]) -> str:
-    return " ".join(part for part in parts if part).strip()
+def release_artifacts_folder(root: Path) -> Path:
+    """Get the Release artifacts folder for a given root directory.
 
+    Args:
+        root: Root directory
 
-def _release_artifacts_folder(root: Path) -> Path:
+    Returns:
+        Path to Release folder
+    """
     return root / "Release"
 
 
-def _safe_release_folder_name(root: Path) -> str:
+def safe_release_folder_name(root: Path) -> str:
+    """Generate a safe release folder name from MKV files or directory name.
+
+    Args:
+        root: Root directory
+
+    Returns:
+        Sanitized release folder name
+    """
     mkv_files = sorted(root.glob("*.mkv"), key=lambda path: path.name.lower())
     if mkv_files:
         return release_name_from_mkv_paths(mkv_files)
     return sanitize_filename(root.name, replacement_text="_").strip(" .") or "release"
 
 
-def _release_payload_folder(root: Path) -> Path:
-    return _release_artifacts_folder(root) / _safe_release_folder_name(root)
+def release_payload_folder(root: Path) -> Path:
+    """Get the release payload folder (Release/{release_name}).
+
+    Args:
+        root: Root directory
+
+    Returns:
+        Path to release payload folder
+    """
+    return release_artifacts_folder(root) / safe_release_folder_name(root)
+
+
+# Deprecated aliases for backward compatibility
+_release_artifacts_folder = release_artifacts_folder
+_safe_release_folder_name = safe_release_folder_name
+_release_payload_folder = release_payload_folder
 
 
 def _pipeline_output_folder(work_folder: Path, root: Path | None = None) -> Path:
@@ -153,10 +315,7 @@ def _pipeline_output_folder(work_folder: Path, root: Path | None = None) -> Path
     return work_folder
 
 
-def _next_work_folder(root: Path, settings: dict) -> Path:
-    release_payload = _release_payload_folder(root)
-    if release_payload.exists() and release_payload.is_dir():
-        return release_payload
+def _try_cleanmkv_output(root: Path, settings: dict) -> Path | None:
     clean_settings = settings.get("modules", {}).get("cleanmkv", {})
     configured = str(
         clean_settings.get("output_dir_name", "Release/{release}") or "Release/{release}"
@@ -164,457 +323,193 @@ def _next_work_folder(root: Path, settings: dict) -> Path:
     clean_dir = root / configured.format(release=_safe_release_folder_name(root))
     if clean_dir.exists() and clean_dir.is_dir():
         return clean_dir
+    return None
+
+
+def _try_release_artifacts_child(root: Path) -> Path | None:
     release_dir = _release_artifacts_folder(root)
-    if release_dir.exists() and release_dir.is_dir():
-        candidates = [
-            item
-            for item in release_dir.iterdir()
-            if item.is_dir() and any(child.suffix.lower() == ".mkv" for child in item.iterdir())
-        ]
-        if len(candidates) == 1:
-            return candidates[0]
+    if not release_dir.exists() or not release_dir.is_dir():
+        return None
+    candidates = [
+        item
+        for item in release_dir.iterdir()
+        if item.is_dir() and any(child.suffix.lower() == ".mkv" for child in item.iterdir())
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
+def _next_work_folder(root: Path, settings: dict) -> Path:
+    release_payload = _release_payload_folder(root)
+    if release_payload.exists() and release_payload.is_dir():
+        return release_payload
+
+    cleanmkv_out = _try_cleanmkv_output(root, settings)
+    if cleanmkv_out is not None:
+        return cleanmkv_out
+
+    artifacts_child = _try_release_artifacts_child(root)
+    if artifacts_child is not None:
+        return artifacts_child
+
     legacy_clean_dir = root / "clean"
     return legacy_clean_dir if legacy_clean_dir.exists() and legacy_clean_dir.is_dir() else root
 
 
-def _run_step(label: str, callback: Callable[[], int]) -> int:
-    print_info(tr("pipeline.step.start", default="Starting: {step}", step=label))
+_WIZARD_MODULE_DEFAULTS: dict[str, dict] = {
+    "renamer": {"auto_detect": True},
+    "cleanmkv": {"preset": "keep_all", "apply_changes": True, "output_dir_name": "Clean"},
+    "nfo": {"template": "detailed", "locale": "en", "auto_metadata": True},
+    "torrent": {"private": True},
+    "prez": {
+        "format": "both",
+        "html_template": "magazine_dark",
+        "bbcode_template": "detailed",
+        "banner_design": "textual",
+    },
+}
+
+
+def _build_wizard_module_config(selected_modules: list[str] | set[str]) -> dict:
+    return {
+        module: defaults
+        for module, defaults in _WIZARD_MODULE_DEFAULTS.items()
+        if module in selected_modules
+    }
+
+
+def _save_wizard_preset(preset_name: str, preset_config: dict) -> int:
+    preset_dir = Path("Presets/Pipeline")
+    preset_dir.mkdir(parents=True, exist_ok=True)
+    preset_file = preset_dir / f"{preset_name}.yaml"
+
+    if preset_file.exists():
+        confirmed = confirm_choice(
+            title=tr(
+                "pipeline.wizard.overwrite",
+                default="Preset '{name}' already exists. Overwrite?",
+                name=preset_name,
+            ),
+            default=False,
+        )
+        if not confirmed:
+            print_info(tr("pipeline.wizard.cancelled", default="Preset creation cancelled"))
+            return 0
+
     try:
-        result = callback()
-    except KeyboardInterrupt:
-        print_error(tr("runtime.interrupted", default="Interrupted."))
-        return 130
+        with open(preset_file, "w", encoding="utf-8") as f:
+            yaml.dump({preset_name: preset_config}, f, default_flow_style=False, sort_keys=False)
+
+        print_success(
+            tr(
+                "pipeline.wizard.saved",
+                default="Preset saved: {path}",
+                path=str(preset_file),
+            )
+        )
+        return 0
     except Exception as exc:
+        from framekit.ui.console import print_exception_error
+
         print_exception_error(
             exc,
-            message=tr("pipeline.step.failed", default="Step failed: {step}", step=label),
+            message=tr("pipeline.wizard.save_failed", default="Failed to save preset"),
         )
         return 1
 
-    if result != 0:
-        print_error(tr("pipeline.step.failed", default="Step failed: {step}", step=label))
-    return result
 
+def _create_pipeline_preset_wizard() -> int:
+    """Interactive wizard to create a pipeline preset.
 
-def _renamer_step(root: Path, remove_terms: tuple[str, ...] = ()) -> int:
-    # Inside the pipeline, the term picker (if any) has already run upstream
-    # in `run_pipeline_command`. We force `select_terms=False` here so that
-    # `run_renamer_command` never re-opens the picker mid-pipeline, regardless
-    # of TTY state.
-    return run_renamer_command(
-        path=str(root),
-        lang=None,
-        apply_changes=True,
-        dry_run=False,
-        force_lang=False,
-        remove_terms=remove_terms,
-        select_terms=False,
-    )
+    Guides user through all configuration options and saves the preset.
+    """
+    print_module_banner("Pipeline Preset Wizard")
 
-
-def _cleanmkv_step(root: Path) -> int:
-    return run_cleanmkv_command(
-        path=str(root),
-        apply_changes=False,
-        dry_run=False,
-        preset_name=None,
-        preset_file=None,
-        external_preset=None,
-        wizard=False,
-        save_preset=None,
-        list_presets=False,
-    )
-
-
-def _resolve_pipeline_locale(settings: dict, nfo_locale: str | None) -> str:
-    configured = nfo_locale or str(settings.get("modules", {}).get("nfo", {}).get("locale", "auto"))
-    return resolve_nfo_locale(
-        configured,
-        ui_locale=str(settings.get("general", {}).get("locale", "en")),
-    )
-
-
-def _ensure_release_context(work_folder: Path, context: PipelineContext) -> ReleaseNfoData:
-    if context.release is not None:
-        return context.release
-    episodes = scan_nfo_folder(work_folder)
-    if not episodes:
-        raise ValueError(
-            tr(
-                "nfo.error.no_mkv",
-                default="No MKV files found in folder: {folder}",
-                folder=work_folder,
-            )
-        )
-    context.release = build_release_nfo(work_folder, episodes)
-    return context.release
-
-
-def _ensure_metadata_context(
-    release: ReleaseNfoData,
-    settings: dict,
-    context: PipelineContext,
-    locale: str,
-    *,
-    metadata_enabled: bool = True,
-) -> dict:
-    if not metadata_enabled:
-        context.metadata_context = {}
-        return {}
-    if context.metadata_context is not None:
-        return context.metadata_context
-    result = run_metadata_workflow(
-        release,
-        settings,
-        auto_accept=False,
-        show_ui=True,
-        language_override=metadata_language_for_nfo_locale(locale),
-    )
-    context.metadata_context = result.context if result.status == "resolved" else {}
-    return context.metadata_context
-
-
-def _formats_from_prez_setting(value: str | None) -> tuple[str, ...]:
-    selected = (value or "both").strip().lower()
-    if selected == "both":
-        return ("html", "bbcode")
-    if selected == "mediainfo":
-        return ()
-    return (selected,)
-
-
-def _nfo_step(
-    work_folder: Path,
-    nfo_locale: str | None,
-    context: PipelineContext | None = None,
-    settings: dict | None = None,
-    metadata_enabled: bool = True,
-    output_folder: Path | None = None,
-    nfo_mode: str | None = None,
-) -> int:
-    if context is None or settings is None:
-        return run_nfo_command(
-            path=str(work_folder),
-            template=None,
-            nfo_locale=nfo_locale,
-            write_requested=True,
-            with_metadata=metadata_enabled,
-            metadata_auto_accept=False,
-            list_templates=False,
-            import_template=None,
-            import_name=None,
-            import_scope=None,
-            import_location=None,
-            import_logo=None,
-            logo_name=None,
-            set_logo=None,
-            list_logos=False,
-            clear_logo=False,
-            mode=nfo_mode,
-        )
-
-    release = _ensure_release_context(work_folder, context)
-    resolved_locale = _resolve_pipeline_locale(settings, nfo_locale)
-    metadata_context = _ensure_metadata_context(
-        release,
-        settings,
-        context,
-        resolved_locale,
-        metadata_enabled=metadata_enabled,
-    )
-    nfo_settings = settings.setdefault("modules", {}).setdefault("nfo", {})
-    template_name = str(nfo_settings.get("active_template", "default") or "default")
-    logo_path = str(nfo_settings.get("logo_path", "") or "")
-
-    # Resolve effective mode for the pipeline NFO step:
-    # explicit `nfo_mode` arg > settings.modules.nfo.mode > "global".
-    settings_mode = str(nfo_settings.get("mode", "global") or "global").lower()
-    if settings_mode not in ("global", "per_file", "both"):
-        settings_mode = "global"
-    if nfo_mode is None:
-        effective_mode = settings_mode
-    else:
-        effective_mode = nfo_mode if nfo_mode in ("global", "per_file", "both") else settings_mode
-
-    service = NfoService()
-
-    written_global: Path | None = None
-    written_per_file: list[Path] = []
-
-    if effective_mode in ("global", "both"):
-        report, release, rendered = service.build_from_release(
-            work_folder,
-            release=release,
-            template_name=template_name,
-            logo_path=logo_path,
-            template_locale=resolved_locale,
-            extra_context=metadata_context,
-        )
-        resolved_template = str(report.details[0].after.get("template", template_name))
-        _write_report, written_global = service.write_rendered(
-            output_folder or work_folder,
-            release=release,
-            rendered=rendered,
-            template_name=resolved_template,
-            template_locale=resolved_locale,
-        )
-        print_info(tr("nfo.success.written", default="NFO written: {path}", path=written_global))
-
-    if effective_mode in ("per_file", "both"):
-        per_file_results = service.build_per_file(
-            work_folder,
-            template_name=template_name,
-            logo_path=logo_path,
-            template_locale=resolved_locale,
-            extra_context=metadata_context,
-        )
-        # `write_per_file` writes each NFO next to its source MKV — the
-        # `folder` argument is only used for reporting, so passing
-        # `work_folder` keeps log paths consistent.
-        _per_report, written_per_file = service.write_per_file(
-            work_folder,
-            results=per_file_results,
-            template_name=template_name,
-            template_locale=resolved_locale,
-        )
-        for path in written_per_file:
-            print_info(tr("nfo.success.written", default="NFO written: {path}", path=path))
-
-    # Keep `context.nfo_path` pointing to whichever output is most
-    # representative for downstream steps (torrent/prez look at it).
-    context.nfo_path = written_global or (written_per_file[0] if written_per_file else None)
-    return 0
-
-
-def _torrent_step(
-    work_folder: Path,
-    announce: str | None,
-    context: PipelineContext | None = None,
-    output_folder: Path | None = None,
-) -> int:
-    torrent_output = (
-        output_folder or work_folder.parent
-    ) / f"{torrent_name_from_payload(work_folder)}.torrent"
-    code = run_torrent_command(
-        path=str(work_folder),
-        output=str(torrent_output),
-        announce=announce,
-        private=None,
-        piece_length=None,
-        dry_run=False,
-    )
-    if context is not None and code == 0:
-        context.torrent_path = torrent_output
-    return code
-
-
-def _prez_step(
-    work_folder: Path,
-    nfo_locale: str | None,
-    context: PipelineContext | None = None,
-    settings: dict | None = None,
-    preset: str | None = None,
-    metadata_enabled: bool = True,
-    output_folder: Path | None = None,
-    select_templates: bool | None = None,
-) -> int:
-    if context is None or settings is None:
-        from framekit.commands.prez import run_prez_command
-
-        return run_prez_command(
-            path=str(work_folder),
-            output_dir=None,
-            output_format="both",
-            with_metadata=metadata_enabled,
-            locale=nfo_locale,
-            dry_run=False,
-            preset=preset,
-            select_templates=select_templates,
-        )
-
-    release = _ensure_release_context(work_folder, context)
-    resolved_locale = _resolve_pipeline_locale(settings, nfo_locale)
-    metadata_context = _ensure_metadata_context(
-        release,
-        settings,
-        context,
-        resolved_locale,
-        metadata_enabled=metadata_enabled,
-    )
-    prez_settings = settings.setdefault("modules", {}).setdefault("prez", {})
-    preset_name = (preset or str(prez_settings.get("preset", "default") or "default")).lower()
-    if preset_name not in PREZ_PRESETS:
-        preset_name = "default"
-    preset_values = PREZ_PRESETS[preset_name]
-    html_template = str(
-        (preset_values["html_template"] if preset else prez_settings.get("html_template"))
-        or preset_values["html_template"]
-    )
-    bbcode_template = str(
-        (preset_values["bbcode_template"] if preset else prez_settings.get("bbcode_template"))
-        or preset_values["bbcode_template"]
-    )
-    output_format = str(
-        (preset_values["format"] if preset else prez_settings.get("format"))
-        or preset_values["format"]
-    )
-    if select_templates is None:
-        should_select_templates = bool(sys.stdin.isatty() and not preset)
-    else:
-        should_select_templates = select_templates
-    if should_select_templates:
-        from framekit.commands.prez import _maybe_select_templates
-
-        html_template, bbcode_template = _maybe_select_templates(
-            formats=_formats_from_prez_setting(output_format),
-            html_template=html_template,
-            bbcode_template=bbcode_template,
-            explicit_html=False,
-            explicit_bbcode=False,
-            explicit_preset=bool(preset),
-            select_templates=True,
-        )
-    mediainfo_mode = str(
-        (preset_values["mediainfo_mode"] if preset else prez_settings.get("mediainfo_mode"))
-        or preset_values["mediainfo_mode"]
-    )
-    _report, result = PrezService().build(
-        work_folder,
-        options=PrezBuildOptions(
-            formats=_formats_from_prez_setting(output_format),
-            output_dir=output_folder,
-            metadata_context=metadata_context,
-            locale=resolved_locale,
-            mediainfo_mode=mediainfo_mode,
-            html_template=html_template,
-            bbcode_template=bbcode_template,
-            preset=preset_name,
-            release=release,
-        ),
-        write=True,
-    )
-    context.prez_outputs = result.outputs
-    for output in result.outputs:
-        print_info(tr("common.output", default="Output") + f": {output}")
-    return 0
-
-
-def _pipeline_explain_text() -> str:
-    return (
-        "1. renamer → normalize names\\n"
-        "2. cleanmkv → remux selected tracks\\n"
-        "3. nfo → build localized NFO and optional TMDb metadata\\n"
-        "4. torrent → prepare tracker torrent\\n"
-        "5. prez → generate HTML / BBCode presentation\\n\\n"
-        "Defaults used by pipeline:\\n"
-        "• enabled modules come from settings unless overridden\\n"
-        "• metadata is enabled by default and can be disabled with --no-metadata\\n"
-        "• --preview shows the planned run without writing outputs\\n"
-        "• --explain describes the workflow only and exits"
-    )
-
-
-def _print_pipeline_preview(
-    folder: Path,
-    release: ReleaseNfoData,
-    enabled_modules: tuple[str, ...],
-    *,
-    root: Path,
-    work_folder: Path,
-    output_folder: Path,
-    nfo_locale: str,
-    announce: str | None,
-    preset: str | None,
-    metadata_enabled: bool,
-    html_template: str | None = None,
-    bbcode_template: str | None = None,
-) -> None:
-    table = Table(
-        title=tr("pipeline.preview", default="Pipeline preview"), box=box.HEAVY, expand=True
-    )
-    table.add_column(tr("common.field", default="Field"), width=24, no_wrap=True)
-    table.add_column(tr("common.value", default="Value"), ratio=1)
-    completeness = inspect_release_completeness(release)
-    table.add_row(tr("common.folder", default="Folder"), str(folder))
-    table.add_row(tr("pipeline.preview.input_folder", default="Input folder"), str(root))
-    table.add_row(tr("pipeline.preview.payload_folder", default="Payload folder"), str(work_folder))
-    table.add_row(tr("pipeline.preview.output_folder", default="Output folder"), str(output_folder))
-    table.add_row(tr("common.release_title", default="Release Title"), release.release_title or "-")
-    table.add_row(tr("common.media_kind", default="Media Kind"), release.media_kind or "-")
-    table.add_row(
-        tr("pipeline.preview.modules", default="Modules"), ", ".join(enabled_modules) or "-"
-    )
-    table.add_row(
-        tr("common.metadata", default="Metadata"),
-        tr("common.enabled", default="Enabled")
-        if metadata_enabled
-        else tr("common.disabled", default="Disabled"),
-    )
-    table.add_row(tr("pipeline.preview.nfo_locale", default="NFO/Prez locale"), nfo_locale or "-")
-    table.add_row(tr("pipeline.preview.announce", default="Announce"), announce or "-")
-    table.add_row(tr("pipeline.preview.preset", default="Prez preset"), preset or "-")
-    table.add_row(tr("prez.template.html", default="HTML template"), html_template or "-")
-    table.add_row(tr("prez.template.bbcode", default="BBCode template"), bbcode_template or "-")
-    table.add_row(
-        tr("inspect.episode_completeness", default="Episode completeness"), completeness.label
-    )
-    table.add_row(
-        tr("pipeline.preview.expected_outputs", default="Expected outputs"),
-        " → ".join(name for name in PIPELINE_MODULES if name in enabled_modules),
-    )
-    console.print(table)
-
-
-def _print_pipeline_report(folder: Path, results: list[tuple[str, str, str]]) -> None:
-    table = Table(
-        title=tr("pipeline.report", default="Pipeline report"), box=box.HEAVY, expand=True
-    )
-    table.add_column(tr("common.module", default="Module"), width=16, no_wrap=True)
-    table.add_column(tr("common.status", default="Status"), width=12, no_wrap=True)
-    table.add_column(tr("common.details", default="Details"), ratio=1)
-    for module_name, status, details in results:
-        table.add_row(module_name, status, details)
-    console.print(table)
+    console.print()
     console.print(
-        Panel(
-            str(folder),
-            title=tr("common.folder", default="Folder"),
-            border_style="white",
-            expand=True,
+        tr(
+            "pipeline.wizard.intro",
+            default="This wizard will guide you through creating a custom pipeline preset.",
         )
     )
+    console.print()
+
+    preset_name = text_input(
+        title=tr("pipeline.wizard.preset_name", default="Preset name (filename without .yaml)"),
+        mandatory=True,
+    )
+
+    if not preset_name:
+        print_error(tr("pipeline.wizard.name_required", default="Preset name is required"))
+        return 1
+
+    display_name = text_input(
+        title=tr("pipeline.wizard.display_name", default="Display name"),
+        default=preset_name.replace("_", " ").title(),
+        mandatory=True,
+    )
+
+    description = text_input(
+        title=tr("pipeline.wizard.description", default="Description (optional)"),
+        mandatory=False,
+    )
+
+    module_entries: list[SelectorEntry] = [
+        SelectorDivider(tr("pipeline.wizard.modules", default="Select Modules")),
+        *[
+            SelectorOption(
+                value=module,
+                label=_module_label(module),
+                hint=tr(f"pipeline.wizard.module_{module}_hint", default=f"Enable {module}"),
+                selected=True,
+            )
+            for module in PIPELINE_MODULES
+        ],
+    ]
+
+    try:
+        selected_modules = select_many(
+            title=tr("pipeline.wizard.select_modules", default="Choose pipeline modules"),
+            entries=module_entries,
+            page_size=10,
+            minimal_count=1,
+        )
+    except KeyboardInterrupt:
+        print_info(tr("pipeline.wizard.cancelled", default="Preset creation cancelled"))
+        return 0
+
+    preset_config: dict = {
+        "name": display_name,
+        "modules": list(selected_modules),
+    }
+
+    if description:
+        preset_config["description"] = description
+
+    preset_config.update(_build_wizard_module_config(selected_modules))
+
+    return _save_wizard_preset(preset_name, preset_config)
 
 
-def print_warning(message: str) -> None:
-    print(f"Warning: {message}")
-
-
-def run_pipeline_command(
-    *,
+def _initialize_pipeline(
     path: str | None,
-    nfo_locale: str | None,
-    announce: str | None,
-    skip_renamer: bool,
-    skip_cleanmkv: bool,
-    skip_nfo: bool,
-    skip_torrent: bool,
-    skip_prez: bool,
-    preset: str | None = None,
-    preview: bool = False,
-    explain: bool = False,
-    with_metadata: bool | None = None,
-    remove_terms: tuple[str, ...] = (),
-    select_modules: bool | None = None,
-    select_templates: bool | None = None,
-    select_terms: bool | None = None,
-    nfo_mode: str | None = None,
-    enabled_modules: tuple[str, ...] | None = None,
-) -> int:
-    store = SettingsStore()
-    settings = store.load()
-    resolver = PathResolver(settings)
+    explain: bool,
+    resolver: PathResolver,
+) -> tuple[int, Path | None]:
+    """Initialize pipeline and validate inputs.
 
+    Args:
+        path: Path to release folder
+        explain: Whether to show explanation and exit
+        resolver: Path resolver instance
+
+    Returns:
+        Tuple of (exit_code, root_path). If exit_code is 0 and root_path is None,
+        explanation was shown. If exit_code is non-zero, an error occurred.
+    """
     print_module_banner("Pipeline")
+
     if explain:
         console.print(
             Panel(
@@ -624,15 +519,568 @@ def run_pipeline_command(
                 expand=True,
             )
         )
-        return 0
+        return 0, None
 
-    root = resolver.resolve_start_folder("pipeline", path or None)
+    if not path:
+        print_error(
+            tr("pipeline.error.no_path", default="Please specify a valid path to a release folder")
+        )
+        return 1, None
+
+    root = resolver.resolve_start_folder("pipeline", path)
     if not root.exists() or not root.is_dir():
         print_error(
             tr("cleanmkv.error.folder_not_found", default="Folder not found: {folder}", folder=root)
         )
-        return 1
+        return 1, None
 
+    return 0, root
+
+
+def _normalize_pipeline_nfo_template(
+    template_value: object | None,
+    mode_value: object | None,
+) -> str | None:
+    if isinstance(mode_value, str):
+        legacy_template = _PIPELINE_NFO_TEMPLATE_ALIASES.get(mode_value.strip().lower())
+        if legacy_template is not None:
+            return legacy_template
+
+    if not isinstance(template_value, str):
+        return None
+
+    candidate = template_value.strip()
+    if not candidate:
+        return None
+    return _PIPELINE_NFO_TEMPLATE_ALIASES.get(candidate.lower(), candidate)
+
+
+def _normalize_pipeline_nfo_mode(mode_value: object | None) -> str | None:
+    if not isinstance(mode_value, str):
+        return None
+
+    candidate = mode_value.strip().lower()
+    if not candidate:
+        return None
+    if candidate in _PIPELINE_NFO_OUTPUT_MODES:
+        return candidate
+    if candidate in _PIPELINE_NFO_TEMPLATE_ALIASES:
+        return "global"
+    return None
+
+
+def _normalize_pipeline_html_template(template_value: object | None) -> str | None:
+    if not isinstance(template_value, str):
+        return None
+
+    candidate = template_value.strip()
+    if not candidate:
+        return None
+    if candidate.lower() == "magazine":
+        return "magazine_dark"
+    return candidate
+
+
+def _apply_nfo_preset(nfo_preset: dict, mods: dict) -> None:
+    if not nfo_preset:
+        return
+    nfo_cfg = mods.setdefault("nfo", {})
+    if "locale" in nfo_preset:
+        nfo_cfg["locale"] = nfo_preset["locale"]
+
+    template_name = _normalize_pipeline_nfo_template(
+        nfo_preset.get("template"),
+        nfo_preset.get("mode"),
+    )
+    if template_name is not None:
+        nfo_cfg["active_template"] = template_name
+
+    output_mode = _normalize_pipeline_nfo_mode(nfo_preset.get("mode"))
+    if output_mode is not None:
+        nfo_cfg["mode"] = output_mode
+
+    if "auto_metadata" in nfo_preset:
+        mods.setdefault("pipeline", {})["with_metadata"] = bool(nfo_preset["auto_metadata"])
+
+
+def _apply_torrent_preset(torrent_preset: dict, mods: dict) -> None:
+    if not torrent_preset:
+        return
+    torrent_cfg = mods.setdefault("torrent", {})
+    for key in ("private", "announce", "comment"):
+        if key in torrent_preset:
+            torrent_cfg[key] = torrent_preset[key]
+
+
+def _apply_prez_preset(prez_preset: dict, mods: dict) -> None:
+    if not prez_preset:
+        return
+    prez_cfg = mods.setdefault("prez", {})
+    for yaml_key, settings_key in (
+        ("format", "format"),
+        ("bbcode_template", "bbcode_template"),
+        ("mediainfo_mode", "mediainfo_mode"),
+        ("preset", "preset"),
+        ("banner_design", "banner_design"),
+    ):
+        if yaml_key in prez_preset:
+            prez_cfg[settings_key] = prez_preset[yaml_key]
+
+    normalized_html_template = _normalize_pipeline_html_template(
+        prez_preset.get("html_template", "magazine_dark")
+    )
+    if normalized_html_template is not None:
+        prez_cfg["html_template"] = normalized_html_template
+
+    prez_cfg["banner_design"] = str(prez_preset.get("banner_design") or "textual")
+
+
+def _apply_preset_modules(preset_config: dict, settings: dict) -> None:
+    mods = settings.setdefault("modules", {})
+    _apply_nfo_preset(preset_config.get("nfo", {}), mods)
+    _apply_torrent_preset(preset_config.get("torrent", {}), mods)
+    _apply_prez_preset(preset_config.get("prez", {}), mods)
+
+
+def _load_and_apply_preset(
+    pipeline_preset: str | None,
+    auto_mode: bool,
+    settings: dict,
+    enabled_modules: tuple[str, ...] | None,
+) -> tuple[dict | None, tuple[str, ...] | None]:
+    """Load pipeline preset and apply configuration.
+
+    Args:
+        pipeline_preset: Name of preset to load
+        auto_mode: Whether in auto mode
+        settings: Settings dictionary (modified in place)
+        enabled_modules: Currently enabled modules
+
+    Returns:
+        Tuple of (preset_config, updated_enabled_modules)
+    """
+    preset_config = None
+    updated_modules = enabled_modules
+
+    if not pipeline_preset:
+        return preset_config, updated_modules
+
+    preset_config = _load_pipeline_preset(pipeline_preset)
+    if not preset_config:
+        print_error(
+            tr(
+                "pipeline.error.preset_not_found",
+                default="Pipeline preset not found: {name}",
+                name=pipeline_preset,
+            )
+        )
+        return None, updated_modules
+
+    print_info(
+        tr(
+            "pipeline.info.using_preset",
+            default="Using pipeline preset: {name}",
+            name=preset_config.get("name", pipeline_preset),
+        )
+    )
+
+    if enabled_modules is None and "modules" in preset_config:
+        updated_modules = tuple(preset_config["modules"])
+
+    _apply_preset_modules(preset_config, settings)
+
+    return preset_config, updated_modules
+
+
+def _try_interactive_preset_selection(
+    selected_modules: set[str],
+    pipeline_preset: str | None,
+    preset_config: dict | None,
+) -> set[str]:
+    if not sys.stdin.isatty() or pipeline_preset or preset_config is not None:
+        return selected_modules
+    preset_choice = _select_pipeline_preset()
+    if not preset_choice or not isinstance(preset_choice, str):  # pyright: ignore[reportUnnecessaryIsInstance]  # Defensive guard against interactive selectors returning non-str
+        return selected_modules
+    loaded_preset = _load_pipeline_preset(preset_choice)
+    if not loaded_preset:
+        return selected_modules
+    print_info(
+        tr(
+            "pipeline.info.using_preset",
+            default="Using pipeline preset: {name}",
+            name=loaded_preset.get("name", preset_choice),
+        )
+    )
+    if "modules" in loaded_preset:
+        return set(loaded_preset["modules"])
+    return selected_modules
+
+
+def _resolve_module_selection(
+    settings: dict,
+    enabled_modules: tuple[str, ...] | None,
+    select_modules: bool | None,
+    auto_mode: bool,
+    pipeline_preset: str | None,
+    preset_config: dict | None,
+    metadata_enabled: bool = True,
+) -> tuple[set[str], bool, bool, bool]:
+    """Resolve which modules should be enabled.
+
+    Args:
+        settings: Settings dictionary
+        enabled_modules: Explicitly enabled modules
+        select_modules: Whether to show module selector
+        auto_mode: Whether in auto mode
+        pipeline_preset: Pipeline preset name
+        preset_config: Loaded preset configuration
+        metadata_enabled: Whether metadata fetching is enabled
+
+    Returns:
+        Tuple of (selected_modules, show_preview, auto_mode_updated, metadata_enabled)
+    """
+    selected_modules = _resolve_enabled_modules(settings, enabled_modules)
+    show_preview = False
+    auto_mode_updated = auto_mode
+
+    if not auto_mode:
+        selected_modules, show_preview, auto_from_selector, metadata_enabled = (
+            _maybe_select_modules(settings, selected_modules, select_modules, metadata_enabled)
+        )
+        if auto_from_selector:
+            auto_mode_updated = True
+
+    if auto_mode_updated:
+        selected_modules = _try_interactive_preset_selection(
+            selected_modules, pipeline_preset, preset_config
+        )
+
+    return selected_modules, show_preview, auto_mode_updated, metadata_enabled
+
+
+def _show_interactive_preview(
+    root: Path,
+    release: ReleaseNfoData,
+    work_folder: Path,
+    output_folder: Path,
+    store: SettingsStore,
+    settings: dict,
+    selected_modules: set[str],
+    remove_terms: tuple[str, ...],
+    resolved_locale: str,
+    resolved_announce: str | None,
+    resolved_preset: str,
+    metadata_enabled: bool,
+) -> tuple[int, Path, Path]:
+    module_tuple = tuple(name for name in PIPELINE_MODULES if name in selected_modules)
+    preview_data = _gather_preview_data(
+        root,
+        work_folder,
+        store,
+        settings,
+        module_tuple,
+        remove_terms,
+        resolved_locale,
+    )
+
+    _print_pipeline_preview_comparison(
+        root,
+        release,
+        module_tuple,
+        preview_data,
+        root=root,
+        work_folder=work_folder,
+        output_folder=output_folder,
+        nfo_locale=resolved_locale,
+        announce=resolved_announce,
+        preset=resolved_preset,
+        metadata_enabled=metadata_enabled,
+    )
+
+    from framekit.ui.unified_selector import confirm_choice
+
+    confirmed = confirm_choice(
+        title=tr("pipeline.preview.confirm", default="Launch pipeline with these settings?"),
+        default=True,
+        yes_label=tr("pipeline.preview.launch", default="Launch Pipeline"),
+        no_label=tr("pipeline.preview.cancel", default="Cancel"),
+    )
+
+    if not confirmed:
+        print_info(tr("pipeline.preview.cancelled", default="Pipeline cancelled by user."))
+        return 1, work_folder, output_folder
+
+    console.print()
+    return 0, work_folder, output_folder
+
+
+def _show_headless_preview(
+    root: Path,
+    release: ReleaseNfoData,
+    work_folder: Path,
+    output_folder: Path,
+    settings: dict,
+    selected_modules: set[str],
+    resolved_locale: str,
+    resolved_announce: str | None,
+    resolved_preset: str,
+    metadata_enabled: bool,
+) -> tuple[int, Path, Path]:
+    prez_settings = settings.get("modules", {}).get("prez", {})
+    module_tuple = tuple(name for name in PIPELINE_MODULES if name in selected_modules)
+    _print_pipeline_preview(
+        root,
+        release,
+        module_tuple,
+        root=root,
+        work_folder=work_folder,
+        output_folder=output_folder,
+        nfo_locale=resolved_locale,
+        announce=resolved_announce,
+        preset=resolved_preset,
+        metadata_enabled=metadata_enabled,
+        html_template=str(prez_settings.get("html_template", "-") or "-"),
+        bbcode_template=str(prez_settings.get("bbcode_template", "-") or "-"),
+    )
+    return 1, work_folder, output_folder
+
+
+def _handle_preview_and_confirmation(
+    should_show_preview: bool,
+    preview_only: bool,
+    root: Path,
+    work_folder: Path,
+    output_folder: Path,
+    store: SettingsStore,
+    settings: dict,
+    selected_modules: set[str],
+    remove_terms: tuple[str, ...],
+    nfo_locale: str | None,
+    announce: str | None,
+    preset: str | None,
+    metadata_enabled: bool,
+    dry_run: bool = False,
+) -> tuple[int, Path, Path]:
+    """Handle preview display and user confirmation.
+
+    Args:
+        should_show_preview: Whether to show preview
+        preview_only: Whether to exit after preview
+        root: Root release folder
+        work_folder: Working folder
+        output_folder: Output folder
+        store: Settings store
+        settings: Settings dictionary
+        selected_modules: Selected modules
+        remove_terms: Terms to remove
+        nfo_locale: NFO locale
+        announce: Announce URL
+        preset: Prez preset
+        metadata_enabled: Whether metadata is enabled
+
+    Returns:
+        Tuple of (exit_code, updated_work_folder, updated_output_folder).
+        Exit code 0 means continue, 1 means user cancelled.
+    """
+    if not should_show_preview:
+        return 0, work_folder, output_folder
+
+    context = PipelineContext(dry_run=dry_run)
+    if dry_run:
+        print_info(tr("pipeline.dry_run.active", default="Dry-run mode: no files will be written."))
+    try:
+        release = _ensure_release_context(work_folder, context)
+    except Exception:
+        release = _ensure_release_context(root, context)
+        work_folder = root
+        output_folder = _pipeline_output_folder(work_folder, root)
+
+    prez_settings = settings.get("modules", {}).get("prez", {})
+    resolved_locale = _resolve_pipeline_locale(settings, nfo_locale)
+    resolved_announce = (
+        announce
+        or settings.get("modules", {}).get("torrent", {}).get("selected_announce")
+        or settings.get("modules", {}).get("torrent", {}).get("announce")
+    )
+    resolved_preset = preset or str(prez_settings.get("preset", "default") or "default")
+
+    if sys.stdin.isatty():
+        return _show_interactive_preview(
+            root,
+            release,
+            work_folder,
+            output_folder,
+            store,
+            settings,
+            selected_modules,
+            remove_terms,
+            resolved_locale,
+            resolved_announce,
+            resolved_preset,
+            metadata_enabled,
+        )
+
+    if preview_only:
+        return _show_headless_preview(
+            root,
+            release,
+            work_folder,
+            output_folder,
+            settings,
+            selected_modules,
+            resolved_locale,
+            resolved_announce,
+            resolved_preset,
+            metadata_enabled,
+        )
+
+    return 0, work_folder, output_folder
+
+
+def _should_open_term_picker(
+    select_terms: bool | None,
+    remove_terms: tuple[str, ...],
+) -> bool:
+    if select_terms is True:
+        return True
+    return select_terms is None and bool(sys.stdin.isatty()) and not remove_terms
+
+
+def _resolve_remove_terms(
+    selected_modules: set[str],
+    select_terms: bool | None,
+    auto_mode: bool,
+    root: Path,
+    remove_terms: tuple[str, ...],
+) -> tuple[int, tuple[str, ...]]:
+    """Resolve terms to remove via interactive selector or CLI args.
+
+    Args:
+        selected_modules: Selected modules
+        select_terms: Whether to show term selector
+        auto_mode: Whether in auto mode
+        root: Root release folder
+        remove_terms: Terms provided via CLI
+
+    Returns:
+        Tuple of (exit_code, effective_remove_terms). Exit code 1 means cancelled.
+    """
+    if "renamer" not in selected_modules or select_terms is False:
+        return 0, remove_terms
+
+    from framekit.commands.renamer import (
+        _run_term_selector,  # pyright: ignore[reportPrivateUsage]  # Internal helper shared between command modules
+    )
+
+    if auto_mode:
+        return 0, remove_terms
+
+    should_open_picker = _should_open_term_picker(select_terms, remove_terms)
+
+    if not should_open_picker:
+        return 0, remove_terms
+
+    try:
+        picker_result = _run_term_selector(root)
+    except Exception as exc:
+        print_warning(
+            tr(
+                "renamer.term_selector.failed",
+                default="Term picker failed: {message}",
+                message=str(exc),
+            )
+        )
+        return 0, remove_terms
+
+    if picker_result is None:
+        print_error(
+            tr(
+                "renamer.term_selector.cancelled",
+                default="Term selection cancelled.",
+            )
+        )
+        return 1, remove_terms
+
+    # Merge with existing remove_terms
+    seen: set[str] = set()
+    merged: list[str] = []
+    for term in (*remove_terms, *picker_result):
+        key = term.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(term)
+
+    return 0, tuple(merged)
+
+
+# Alias for backward compatibility - now delegates to orchestrator
+_execute_pipeline_modules = execute_pipeline_modules
+
+
+def run_pipeline_command(
+    *,
+    path: str | None,
+    nfo_locale: str | None,
+    announce: str | None,
+    preset: str | None = None,
+    preview: bool = False,
+    explain: bool = False,
+    dry_run: bool = False,
+    with_metadata: bool | None = None,
+    remove_terms: tuple[str, ...] = (),
+    select_modules: bool | None = None,
+    select_templates: bool | None = None,
+    select_terms: bool | None = None,
+    nfo_mode: str | None = None,
+    enabled_modules: tuple[str, ...] | None = None,
+    pipeline_preset: str | None = None,
+    auto_mode: bool = False,
+    skip_renamer: bool = False,
+    skip_cleanmkv: bool = False,
+    skip_encoder: bool = False,
+    skip_nfo: bool = False,
+    skip_torrent: bool = False,
+    skip_prez: bool = False,
+    skip_upload: bool = False,
+    step_callback: Callable[[str, str], None] | None = None,
+    result_callback: Callable[[dict[str, dict]], None] | None = None,
+) -> int:
+    """Execute the pipeline command with all modules.
+
+    This is the main entry point for the pipeline command. It orchestrates
+    the execution of multiple modules (renamer, cleanmkv, nfo, torrent, prez, upload)
+    in sequence, with support for presets, previews, and interactive configuration.
+    """
+    store = SettingsStore()
+    settings = store.load()
+    resolver = PathResolver(settings)
+
+    # Initialize and validate
+    exit_code, root = _initialize_pipeline(path, explain, resolver)
+    if exit_code != 0 or root is None:
+        return exit_code
+
+    enabled_modules = _apply_skip_flags(
+        enabled_modules,
+        skip_renamer=skip_renamer,
+        skip_cleanmkv=skip_cleanmkv,
+        skip_encoder=skip_encoder,
+        skip_nfo=skip_nfo,
+        skip_torrent=skip_torrent,
+        skip_prez=skip_prez,
+        skip_upload=skip_upload,
+    )
+
+    # Load and apply preset configuration
+    preset_config, enabled_modules = _load_and_apply_preset(
+        pipeline_preset, auto_mode, settings, enabled_modules
+    )
+    if preset_config is None and pipeline_preset:
+        return 1  # Preset loading failed
+
+    # Determine metadata settings
     stop_on_error = bool(settings.get("modules", {}).get("pipeline", {}).get("stop_on_error", True))
     metadata_default = bool(
         settings.get("modules", {})
@@ -644,364 +1092,333 @@ def run_pipeline_command(
     )
     metadata_enabled = metadata_default if with_metadata is None else with_metadata
 
-    selected_modules = _resolve_enabled_modules(settings, enabled_modules)
-    selected_modules = _maybe_select_modules(settings, selected_modules, select_modules)
-    if skip_renamer:
-        selected_modules.discard("renamer")
-    if skip_cleanmkv:
-        selected_modules.discard("cleanmkv")
-    if skip_nfo:
-        selected_modules.discard("nfo")
-    if skip_torrent:
-        selected_modules.discard("torrent")
-    if skip_prez:
-        selected_modules.discard("prez")
-
-    work_folder = _next_work_folder(root, settings)
-    output_folder = _pipeline_output_folder(work_folder, root)
-
-    # Resolve the renamer's `remove_terms` once at pipeline level so the
-    # picker (if any) opens at most one time, before any step runs. We hand
-    # the resolved tuple down to `_renamer_step`, which itself instructs the
-    # underlying renamer command to skip its own picker.
-    effective_remove_terms = remove_terms
-    if "renamer" in selected_modules and select_terms is not False:
-        from framekit.commands.renamer import _run_term_selector
-
-        should_open_picker = select_terms is True or (
-            select_terms is None and bool(sys.stdin.isatty()) and not remove_terms
-        )
-        if should_open_picker:
-            try:
-                picker_result = _run_term_selector(root)
-            except Exception as exc:  # noqa: BLE001
-                # Picker failures should not abort the pipeline — log and fall
-                # back to whatever the caller passed via `--remove-term`.
-                print_warning(
-                    tr(
-                        "renamer.term_selector.failed",
-                        default="Term picker failed: {message}",
-                        message=str(exc),
-                    )
-                )
-                picker_result = ()
-            if picker_result is None:
-                print_error(
-                    tr(
-                        "renamer.term_selector.cancelled",
-                        default="Term selection cancelled.",
-                    )
-                )
-                return 1
-            seen: set[str] = set()
-            merged: list[str] = []
-            for term in (*remove_terms, *picker_result):
-                key = term.upper()
-                if key in seen:
-                    continue
-                seen.add(key)
-                merged.append(term)
-            effective_remove_terms = tuple(merged)
-
-    if preview:
-        context = PipelineContext()
-        try:
-            release = _ensure_release_context(work_folder, context)
-        except Exception:
-            release = _ensure_release_context(root, context)
-            work_folder = root
-            output_folder = _pipeline_output_folder(work_folder, root)
-        prez_settings = settings.get("modules", {}).get("prez", {})
-        _print_pipeline_preview(
-            root,
-            release,
-            tuple(name for name in PIPELINE_MODULES if name in selected_modules),
-            root=root,
-            work_folder=work_folder,
-            output_folder=output_folder,
-            nfo_locale=_resolve_pipeline_locale(settings, nfo_locale),
-            announce=announce
-            or settings.get("modules", {}).get("torrent", {}).get("selected_announce")
-            or settings.get("modules", {}).get("torrent", {}).get("announce"),
-            preset=preset or str(prez_settings.get("preset", "default") or "default"),
-            metadata_enabled=metadata_enabled,
-            html_template=str(prez_settings.get("html_template", "-") or "-"),
-            bbcode_template=str(prez_settings.get("bbcode_template", "-") or "-"),
-        )
-        return 0
-
-    report_rows: list[tuple[str, str, str]] = []
-    failures = 0
-
-    steps: list[PipelineStep] = []
-    if "renamer" in selected_modules:
-        if effective_remove_terms:
-            terms_for_step = effective_remove_terms
-            steps.append(
-                ("renamer", _module_label("renamer"), lambda: _renamer_step(root, terms_for_step))
-            )
-        else:
-            steps.append(("renamer", _module_label("renamer"), lambda: _renamer_step(root)))
-    if "cleanmkv" in selected_modules:
-        steps.append(("cleanmkv", _module_label("cleanmkv"), lambda: _cleanmkv_step(root)))
-
-    for module_name, label, callback in steps:
-        code = _run_step(label, callback)
-        if code != 0:
-            failures += 1
-            report_rows.append((module_name, tr("common.failed", default="Failed"), label))
-            if stop_on_error:
-                return code
-        else:
-            report_rows.append((module_name, tr("common.success", default="OK"), label))
-
-    work_folder = _next_work_folder(root, settings)
-    output_folder = _pipeline_output_folder(work_folder, root)
-    print_info(
-        tr("pipeline.info.work_folder", default="Release folder for output steps")
-        + f": {work_folder}"
+    # Resolve module selection
+    selected_modules, show_preview, auto_mode, metadata_enabled = _resolve_module_selection(
+        settings,
+        enabled_modules,
+        select_modules,
+        auto_mode,
+        pipeline_preset,
+        preset_config,
+        metadata_enabled,
     )
-    print_info(tr("pipeline.info.output_folder", default="Output folder") + f": {output_folder}")
 
-    context = PipelineContext()
+    # Handle preview and confirmation
+    work_folder = _next_work_folder(root, settings)
+    output_folder = _pipeline_output_folder(work_folder, root)
+    should_show_preview = preview or show_preview
 
-    output_steps: list[PipelineStep] = []
-    if "nfo" in selected_modules:
-        # Capture `nfo_mode` in a local for the closure so it survives the
-        # `lambda` wrapping. The pipeline command always resolves the mode
-        # ahead of time (CLI > settings > "global"); `_nfo_step` itself
-        # falls back to settings if it receives `None`.
-        nfo_mode_for_step = nfo_mode
-        output_steps.append(
-            (
-                "nfo",
-                _module_label("nfo"),
-                lambda: _nfo_step(
-                    work_folder,
-                    nfo_locale,
-                    context,
-                    settings,
-                    metadata_enabled,
-                    output_folder,
-                    nfo_mode_for_step,
-                ),
-            )
-        )
-    if "torrent" in selected_modules:
-        output_steps.append(
-            (
-                "torrent",
-                _module_label("torrent"),
-                lambda: _torrent_step(work_folder, announce, context, output_folder),
-            )
-        )
-    if "prez" in selected_modules:
-        output_steps.append(
-            (
-                "prez",
-                _module_label("prez"),
-                lambda: _prez_step(
-                    work_folder,
-                    nfo_locale,
-                    context,
-                    settings,
-                    preset,
-                    metadata_enabled,
-                    output_folder,
-                    select_templates,
-                ),
-            )
-        )
+    exit_code, work_folder, output_folder = _handle_preview_and_confirmation(
+        should_show_preview,
+        preview,
+        root,
+        work_folder,
+        output_folder,
+        store,
+        settings,
+        selected_modules,
+        remove_terms,
+        nfo_locale,
+        announce,
+        preset,
+        metadata_enabled,
+        dry_run=dry_run,
+    )
+    if exit_code != 0:
+        return exit_code
 
-    for module_name, label, callback in output_steps:
-        code = _run_step(label, callback)
-        if code != 0:
-            failures += 1
-            report_rows.append((module_name, tr("common.failed", default="Failed"), label))
-            if stop_on_error:
-                return code
-        else:
-            report_rows.append((module_name, tr("common.success", default="OK"), label))
+    # Resolve terms to remove
+    exit_code, effective_remove_terms = _resolve_remove_terms(
+        selected_modules, select_terms, auto_mode, root, remove_terms
+    )
+    if exit_code != 0:
+        return exit_code
 
-    settings.setdefault("modules", {}).setdefault("pipeline", {})["last_folder"] = str(root)
-    store.save(settings)
-
-    _print_pipeline_report(root, report_rows)
-
-    if failures:
-        print_error(
-            tr(
-                "pipeline.error.completed_with_failures",
-                default="Pipeline completed with {count} failed step(s).",
-                count=failures,
-            )
-        )
-        return 1
-
-    print_success(tr("pipeline.success.completed", default="Pipeline completed."))
-    return 0
+    # Execute pipeline with all modules
+    return execute_pipeline_modules(
+        work_folder=work_folder,
+        output_folder=output_folder,
+        selected_modules=selected_modules,
+        effective_remove_terms=effective_remove_terms,
+        settings=settings,
+        nfo_locale=nfo_locale,
+        nfo_mode=nfo_mode,
+        select_templates=select_templates,
+        metadata_enabled=metadata_enabled,
+        announce=announce,
+        preset=preset,
+        stop_on_error=stop_on_error,
+        step_callback=step_callback,
+        result_callback=result_callback,
+        preset_config=preset_config,
+        auto_mode=auto_mode,
+        dry_run=dry_run,
+    )
 
 
-@click.command(
-    "pipeline",
-    help=tr("cli.pipeline.help", default="Run renamer → cleanmkv → NFO/metadata → torrent → prez."),
-)
-@click.argument("path_parts", nargs=-1)
+def _coerce_optional_flags(
+    select_modules: bool,
+    select_templates: bool,
+    select_terms: bool,
+    enabled_modules: tuple[str, ...],
+) -> tuple[bool | None, bool | None, bool | None, tuple[str, ...] | None]:
+    return (
+        select_modules or None,
+        select_templates or None,
+        select_terms or None,
+        enabled_modules or None,
+    )
+
+
+def _apply_skip_flags(
+    enabled_modules: tuple[str, ...] | None,
+    *,
+    skip_renamer: bool = False,
+    skip_cleanmkv: bool = False,
+    skip_encoder: bool = False,
+    skip_nfo: bool = False,
+    skip_torrent: bool = False,
+    skip_prez: bool = False,
+    skip_upload: bool = False,
+) -> tuple[str, ...] | None:
+    skip_map = {
+        "renamer": skip_renamer,
+        "cleanmkv": skip_cleanmkv,
+        "encoder": skip_encoder,
+        "nfo": skip_nfo,
+        "torrent": skip_torrent,
+        "prez": skip_prez,
+        "upload": skip_upload,
+    }
+    if not any(skip_map.values()):
+        return enabled_modules
+    source = enabled_modules or PIPELINE_MODULES_DEFAULT
+    return tuple(name for name in source if not skip_map.get(name, False))
+
+
+@click.command(name="pipeline")
+@click.argument("path", type=click.Path(exists=False), required=False)
+@click.option("-l", "--nfo-locale", type=str, help="NFO locale (e.g., 'en', 'fr', 'es')")
+@click.option("-a", "--announce", type=str, help="Torrent announce URL")
+@click.option("--skip-renamer", is_flag=True, help="Skip renamer module")
+@click.option("--skip-cleanmkv", is_flag=True, help="Skip cleanmkv module")
+@click.option("--skip-encoder", is_flag=True, help="Skip encoder module")
+@click.option("--skip-nfo", is_flag=True, help="Skip NFO module")
+@click.option("--skip-torrent", is_flag=True, help="Skip torrent module")
+@click.option("--skip-prez", is_flag=True, help="Skip prez module")
+@click.option("--skip-upload", is_flag=True, help="Skip upload module")
+@click.option("--ren", "opt_renamer", is_flag=True, help="Enable renamer module")
+@click.option("--cmk", "opt_cleanmkv", is_flag=True, help="Enable cleanmkv module")
+@click.option("--enc", "opt_encoder", is_flag=True, help="Enable encoder module")
+@click.option("--nfo", "opt_nfo", is_flag=True, help="Enable NFO module")
+@click.option("--tor", "opt_torrent", is_flag=True, help="Enable torrent module")
+@click.option("--prez", "opt_prez", is_flag=True, help="Enable prez module")
+@click.option("--up", "opt_upload", is_flag=True, help="Enable upload module")
 @click.option(
-    "--locale",
-    "nfo_locale",
-    type=click.Choice(["auto", "en", "fr", "es"]),
-    help=tr("cli.pipeline.option.locale", default="NFO/prez output language."),
+    "--all", "all_modules", is_flag=True, help="Run all modules without interactive prompt"
 )
+@click.option("-P", "--preset", type=str, help="Prez preset name")
+@click.option("-p", "--preview", is_flag=True, help="Show preview and exit")
 @click.option(
-    "--announce",
-    help=tr("cli.pipeline.option.announce", default="Tracker announce URL for torrent creation."),
+    "-d", "--dry-run", "dry_run", is_flag=True, help="Execute pipeline without writing output files"
 )
+@click.option("-e", "--explain", is_flag=True, help="Show explanation and exit")
 @click.option(
-    "--skip-renamer",
-    is_flag=True,
-    help=tr("cli.pipeline.option.skip_renamer", default="Skip renamer step."),
+    "--with-metadata/--no-metadata", default=None, help="Enable/disable metadata fetching"
 )
+@click.option("--remove-term", "remove_terms", multiple=True, help="Terms to remove from filenames")
+@click.option("-S", "--select-modules", is_flag=True, help="Interactively select modules")
+@click.option("--select-templates", is_flag=True, help="Interactively select templates")
+@click.option("--select-terms", is_flag=True, help="Interactively select terms to remove")
 @click.option(
-    "--skip-cleanmkv",
-    is_flag=True,
-    help=tr("cli.pipeline.option.skip_cleanmkv", default="Skip CleanMKV step."),
+    "--nfo-mode", type=click.Choice(["global", "per_file", "both"]), help="NFO generation mode"
 )
+@click.option("--modules", "enabled_modules", multiple=True, help="Explicitly enable modules")
+@click.option("--pipeline-preset", type=str, help="Pipeline preset name")
+@click.option("--auto", "auto_mode", is_flag=True, help="Run in fully autonomous mode")
+@click.option("--batch", is_flag=True, help="Run in batch mode")
+@click.option("--batch-auto", is_flag=True, help="Auto-scan parent folder in batch mode")
+@click.option("--create-preset", is_flag=True, help="Create a new pipeline preset")
 @click.option(
-    "--skip-nfo",
-    is_flag=True,
-    help=tr("cli.pipeline.option.skip_nfo", default="Skip NFO/metadata step."),
-)
-@click.option(
-    "--skip-torrent",
-    is_flag=True,
-    help=tr("cli.pipeline.option.skip_torrent", default="Skip torrent step."),
-)
-@click.option(
-    "--skip-prez",
-    is_flag=True,
-    help=tr("cli.pipeline.option.skip_prez", default="Skip prez step."),
-)
-@click.option(
-    "--select-modules/--no-select-modules",
-    default=None,
-    help=tr(
-        "cli.pipeline.option.select_modules",
-        default="Open or bypass the interactive pipeline module selector.",
-    ),
-)
-@click.option(
-    "--modules",
-    "enabled_modules_option",
-    help=tr(
-        "cli.pipeline.option.modules",
-        default="Comma-separated modules for this run: renamer,cleanmkv,nfo,torrent,prez.",
-    ),
-)
-@click.option(
-    "--select-templates/--no-select-templates",
-    default=None,
-    help=tr(
-        "cli.pipeline.option.select_templates",
-        default="Open or bypass the interactive Prez template selector during pipeline.",
-    ),
-)
-@click.option(
-    "--preset",
-    type=click.Choice(list(PREZ_PRESETS)),
-    help=tr("cli.pipeline.option.preset", default="Prez preset for pipeline output."),
-)
-@click.option(
-    "--preview",
-    is_flag=True,
-    help=tr("cli.pipeline.option.preview", default="Preview the planned pipeline run and exit."),
-)
-@click.option(
-    "--explain",
-    is_flag=True,
-    help=tr("cli.pipeline.option.explain", default="Explain the pipeline workflow and exit."),
-)
-@click.option(
-    "--remove-term",
-    "remove_terms",
-    multiple=True,
-    help=tr(
-        "cli.pipeline.option.remove_term",
-        default="Remove a term during the Renamer step. Can be used multiple times.",
-    ),
-)
-@click.option(
-    "--select-terms/--no-select-terms",
-    "select_terms",
-    default=None,
-    help=tr(
-        "cli.pipeline.option.select_terms",
-        default="Open or bypass the interactive Renamer term picker before any step runs.",
-    ),
-)
-@click.option(
-    "--nfo-mode",
-    "nfo_mode",
-    type=click.Choice(["global", "per_file", "both"]),
-    default=None,
-    help=tr(
-        "cli.pipeline.option.nfo_mode",
-        default="NFO output mode: 'global' (single release NFO), 'per_file' (one NFO per file), or 'both'.",
-    ),
-)
-@click.option(
-    "-m/-nm",
-    "--with-metadata/--no-metadata",
-    "with_metadata",
-    default=None,
-    help=tr(
-        "cli.pipeline.option.with_metadata",
-        default="Enable metadata for NFO/Prez in pipeline. Use --no-metadata or -nm to disable metadata for this run.",
-    ),
+    "--verbose",
+    "-v",
+    count=True,
+    help="Increase verbosity (-v, -vv, -vvv)",
 )
 def pipeline_command(
-    path_parts: tuple[str, ...],
+    path: str | None,
     nfo_locale: str | None,
     announce: str | None,
     skip_renamer: bool,
     skip_cleanmkv: bool,
+    skip_encoder: bool,
     skip_nfo: bool,
     skip_torrent: bool,
     skip_prez: bool,
-    select_modules: bool | None = None,
-    select_templates: bool | None = None,
-    select_terms: bool | None = None,
-    nfo_mode: str | None = None,
-    enabled_modules_option: str | None = None,
-    preset: str | None = None,
-    preview: bool = False,
-    explain: bool = False,
-    with_metadata: bool | None = None,
-    remove_terms: tuple[str, ...] = (),
-) -> int:
-    return run_pipeline_command(
-        path=_join_path_parts(path_parts) or None,
-        nfo_locale=nfo_locale,
-        announce=announce,
-        skip_renamer=skip_renamer,
-        skip_cleanmkv=skip_cleanmkv,
-        skip_nfo=skip_nfo,
-        skip_torrent=skip_torrent,
-        skip_prez=skip_prez,
-        preset=preset,
-        preview=preview,
-        explain=explain,
-        with_metadata=with_metadata,
-        remove_terms=remove_terms,
-        select_modules=select_modules,
-        select_templates=select_templates,
-        select_terms=select_terms,
-        nfo_mode=nfo_mode,
-        enabled_modules=tuple(
-            item.strip().lower()
-            for item in (enabled_modules_option or "").split(",")
-            if item.strip()
+    skip_upload: bool,
+    opt_renamer: bool,
+    opt_cleanmkv: bool,
+    opt_encoder: bool,
+    opt_nfo: bool,
+    opt_torrent: bool,
+    opt_prez: bool,
+    opt_upload: bool,
+    all_modules: bool,
+    preset: str | None,
+    preview: bool,
+    dry_run: bool,
+    explain: bool,
+    with_metadata: bool | None,
+    remove_terms: tuple[str, ...],
+    select_modules: bool,
+    select_templates: bool,
+    select_terms: bool,
+    nfo_mode: str | None,
+    enabled_modules: tuple[str, ...],
+    pipeline_preset: str | None,
+    auto_mode: bool,
+    batch: bool,
+    batch_auto: bool,
+    create_preset: bool,
+    verbose: int,
+) -> None:
+    """Execute the complete pipeline: renamer → cleanmkv → nfo → torrent → prez → upload."""
+    configure_verbosity(verbose)
+    if is_verbose():
+        logger.info(f"Pipeline execution with verbosity level {verbose}")
+
+    if create_preset:
+        sys.exit(_create_pipeline_preset_wizard())
+
+    # Opt-in module resolution.
+    # --ren/--cmk/--nfo/... runs only those modules without prompting.
+    # --all runs the default module set without prompting.
+    opt_in: list[str] = []
+    if opt_renamer:
+        opt_in.append("renamer")
+    if opt_cleanmkv:
+        opt_in.append("cleanmkv")
+    if opt_encoder:
+        opt_in.append("encoder")
+    if opt_nfo:
+        opt_in.append("nfo")
+    if opt_torrent:
+        opt_in.append("torrent")
+    if opt_prez:
+        opt_in.append("prez")
+    if opt_upload:
+        opt_in.append("upload")
+
+    skip_requested = any(
+        (
+            skip_renamer,
+            skip_cleanmkv,
+            skip_encoder,
+            skip_nfo,
+            skip_torrent,
+            skip_prez,
+            skip_upload,
         )
-        if enabled_modules_option
-        else None,
     )
+    sel_tmpl: bool | None = None
+    sel_terms: bool | None = None
+    if all_modules:
+        final_enabled: tuple[str, ...] | None = _apply_skip_flags(
+            PIPELINE_MODULES_DEFAULT,
+            skip_renamer=skip_renamer,
+            skip_cleanmkv=skip_cleanmkv,
+            skip_encoder=skip_encoder,
+            skip_nfo=skip_nfo,
+            skip_torrent=skip_torrent,
+            skip_prez=skip_prez,
+            skip_upload=skip_upload,
+        )
+        final_select: bool | None = False
+    elif opt_in:
+        final_enabled = _apply_skip_flags(
+            tuple(opt_in),
+            skip_renamer=skip_renamer,
+            skip_cleanmkv=skip_cleanmkv,
+            skip_encoder=skip_encoder,
+            skip_nfo=skip_nfo,
+            skip_torrent=skip_torrent,
+            skip_prez=skip_prez,
+            skip_upload=skip_upload,
+        )
+        final_select = False
+    elif skip_requested:
+        final_enabled = _apply_skip_flags(
+            PIPELINE_MODULES_DEFAULT,
+            skip_renamer=skip_renamer,
+            skip_cleanmkv=skip_cleanmkv,
+            skip_encoder=skip_encoder,
+            skip_nfo=skip_nfo,
+            skip_torrent=skip_torrent,
+            skip_prez=skip_prez,
+            skip_upload=skip_upload,
+        )
+        final_select = False
+    else:
+        sel_mod, sel_tmpl, sel_terms, en_mod = _coerce_optional_flags(
+            select_modules,
+            select_templates,
+            select_terms,
+            enabled_modules,
+        )
+        final_enabled = en_mod
+        final_select = sel_mod
+
+    if all_modules or opt_in or skip_requested:
+        sel_tmpl = select_templates or None
+        sel_terms = select_terms or None
+
+    if batch or batch_auto:
+        sys.exit(
+            run_batch_pipeline(
+                path=path,
+                nfo_locale=nfo_locale,
+                announce=announce,
+                preset=preset,
+                with_metadata=with_metadata,
+                remove_terms=remove_terms,
+                select_modules=final_select,
+                select_templates=sel_tmpl,
+                select_terms=sel_terms,
+                nfo_mode=nfo_mode,
+                enabled_modules=final_enabled,
+                batch_auto=batch_auto,
+                pipeline_preset=pipeline_preset,
+                auto_mode=auto_mode,
+            )
+        )
+
+    sys.exit(
+        run_pipeline_command(
+            path=path,
+            nfo_locale=nfo_locale,
+            announce=announce,
+            preset=preset,
+            preview=preview,
+            explain=explain,
+            dry_run=dry_run,
+            with_metadata=with_metadata,
+            remove_terms=remove_terms,
+            select_modules=final_select,
+            select_templates=sel_tmpl,
+            select_terms=sel_terms,
+            nfo_mode=nfo_mode,
+            enabled_modules=final_enabled,
+            pipeline_preset=pipeline_preset,
+            auto_mode=auto_mode,
+            skip_renamer=skip_renamer,
+            skip_cleanmkv=skip_cleanmkv,
+            skip_encoder=skip_encoder,
+            skip_nfo=skip_nfo,
+            skip_torrent=skip_torrent,
+            skip_prez=skip_prez,
+            skip_upload=skip_upload,
+        )
+    )
+
+
+select_many = _select_many  # backwards-compatible patch target for tests

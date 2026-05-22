@@ -1,0 +1,333 @@
+# CleanMKV Preset Examples
+# ========================
+# This file contains example presets for the CleanMKV module.
+# CleanMKV presets control which audio and subtitle tracks to keep when remuxing MKV files.
+#
+# IMPORTANT: This file uses YAML format, but CleanMKV currently saves presets as JSON.
+# These examples show the structure you should follow when creating presets.
+# You can convert these to JSON format or use them as reference.
+
+# ==============================================================================
+# PRESET STRUCTURE
+# ==============================================================================
+# Each preset contains the following fields:
+#
+# name: (string, required)
+#   Display name for the preset
+#
+# keep_audio_filters: (list of strings)
+#   Language filters for audio tracks to keep
+#   Examples: "french", "english", "japanese", "spanish:latam"
+#   Special formats: "language:variant" (e.g., "english:us", "french:canada")
+#
+# default_audio_filter: (string or null)
+#   Which audio language filter should be marked as default
+#   Must be one of the filters in keep_audio_filters, or null for no default
+#
+# keep_subtitle_filters: (list of strings)
+#   Language filters for subtitle tracks to keep
+#   Same format as keep_audio_filters
+#
+# keep_subtitle_variants: (list of strings)
+#   Which subtitle variants to keep
+#   Valid values: "forced", "full", "sdh"
+#
+# default_subtitle_filter: (string or null)
+#   Which subtitle language filter should be marked as default
+#   Must be one of the filters in keep_subtitle_filters, or null
+#
+# default_subtitle_variant: (string or null)
+#   Which subtitle variant should be marked as default
+#   Must be one of the variants in keep_subtitle_variants, or null
+#
+# audio_default_explicit: (boolean, default: false)
+#   When true, absence of default_audio_filter means "no default" (explicit choice)
+#   When false, CleanMKV may fall back to source file's default flag
+#
+# subtitle_default_explicit: (boolean, default: false)
+#   Same as audio_default_explicit but for subtitles
+#
+# ADVANCED FIELDS (for track-specific selection):
+# keep_audio_track_refs: (list of strings)
+#   Specific audio track references to keep (format: "lang:variant:codec")
+#
+# default_audio_track_ref: (string or null)
+#   Specific audio track reference to mark as default
+#
+# keep_subtitle_track_refs: (list of strings)
+#   Specific subtitle track references to keep
+#
+# default_subtitle_track_ref: (string or null)
+#   Specific subtitle track reference to mark as default
+
+# ==============================================================================
+# EXAMPLE 1: Keep All Tracks
+# ==============================================================================
+# This preset keeps all audio and subtitle tracks without filtering.
+# Useful when you want to preserve everything from the source file.
+
+keep_all:
+  name: "Keep All Tracks"
+  keep_audio_filters: []
+  default_audio_filter: null
+  keep_subtitle_filters: []
+  keep_subtitle_variants: []
+  default_subtitle_filter: null
+  default_subtitle_variant: null
+  audio_default_explicit: false
+  subtitle_default_explicit: false
+
+# ==============================================================================
+# EXAMPLE 2: French Only
+# ==============================================================================
+# Keep only French audio and subtitles, with French audio as default.
+# No default subtitle track.
+
+french_only:
+  name: "French Only"
+  keep_audio_filters:
+    - "french"
+  default_audio_filter: "french"
+  keep_subtitle_filters:
+    - "french"
+  keep_subtitle_variants:
+    - "forced"
+    - "full"
+  default_subtitle_filter: null
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+
+# ==============================================================================
+# EXAMPLE 3: English + French (Bilingual)
+# ==============================================================================
+# Keep both English and French tracks, with English audio as default.
+# Keep forced and full subtitles for both languages.
+
+bilingual_en_fr:
+  name: "English + French"
+  keep_audio_filters:
+    - "english"
+    - "french"
+  default_audio_filter: "english"
+  keep_subtitle_filters:
+    - "english"
+    - "french"
+  keep_subtitle_variants:
+    - "forced"
+    - "full"
+  default_subtitle_filter: "english"
+  default_subtitle_variant: "forced"
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+
+# ==============================================================================
+# EXAMPLE 4: Multi-Language (International)
+# ==============================================================================
+# Keep multiple languages for international releases.
+# Includes English, French, Spanish, German, Italian, and Japanese.
+
+international:
+  name: "International Multi-Language"
+  keep_audio_filters:
+    - "english"
+    - "french"
+    - "spanish"
+    - "german"
+    - "italian"
+    - "japanese"
+  default_audio_filter: "english"
+  keep_subtitle_filters:
+    - "english"
+    - "french"
+    - "spanish"
+    - "german"
+    - "italian"
+    - "japanese"
+  keep_subtitle_variants:
+    - "forced"
+    - "full"
+  default_subtitle_filter: null
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+
+# ==============================================================================
+# EXAMPLE 5: English with SDH
+# ==============================================================================
+# Keep English audio and subtitles, including SDH (Subtitles for Deaf/Hard-of-Hearing).
+# SDH subtitles are marked as default.
+
+english_sdh:
+  name: "English with SDH"
+  keep_audio_filters:
+    - "english"
+  default_audio_filter: "english"
+  keep_subtitle_filters:
+    - "english"
+  keep_subtitle_variants:
+    - "forced"
+    - "full"
+    - "sdh"
+  default_subtitle_filter: "english"
+  default_subtitle_variant: "sdh"
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+
+# ==============================================================================
+# EXAMPLE 6: Regional Variants
+# ==============================================================================
+# Keep specific regional variants of languages.
+# Useful for distinguishing between US English, UK English, Latin American Spanish, etc.
+
+regional_variants:
+  name: "Regional Variants"
+  keep_audio_filters:
+    - "english:us"
+    - "english:uk"
+    - "spanish:latam"
+    - "french:canada"
+  default_audio_filter: "english:us"
+  keep_subtitle_filters:
+    - "english:us"
+    - "english:uk"
+    - "spanish:latam"
+    - "french:canada"
+  keep_subtitle_variants:
+    - "forced"
+    - "full"
+  default_subtitle_filter: "english:us"
+  default_subtitle_variant: "forced"
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+
+# ==============================================================================
+# EXAMPLE 7: Anime (Japanese + English)
+# ==============================================================================
+# Typical anime preset: Japanese audio with English subtitles.
+# Keeps both forced and full English subtitles.
+
+anime:
+  name: "Anime (Japanese + English Subs)"
+  keep_audio_filters:
+    - "japanese"
+    - "english"
+  default_audio_filter: "japanese"
+  keep_subtitle_filters:
+    - "english"
+  keep_subtitle_variants:
+    - "forced"
+    - "full"
+  default_subtitle_filter: "english"
+  default_subtitle_variant: "full"
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+
+# ==============================================================================
+# EXAMPLE 8: Forced Subtitles Only
+# ==============================================================================
+# Keep all audio languages but only forced subtitles.
+# Useful for foreign language parts in otherwise English content.
+
+forced_only:
+  name: "Forced Subtitles Only"
+  keep_audio_filters:
+    - "english"
+    - "french"
+    - "spanish"
+    - "german"
+    - "italian"
+  default_audio_filter: "english"
+  keep_subtitle_filters:
+    - "english"
+    - "french"
+    - "spanish"
+    - "german"
+    - "italian"
+  keep_subtitle_variants:
+    - "forced"
+  default_subtitle_filter: null
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+
+# ==============================================================================
+# EXAMPLE 9: No Subtitles
+# ==============================================================================
+# Keep audio tracks but remove all subtitles.
+# Useful for creating clean releases without subtitle clutter.
+
+no_subtitles:
+  name: "No Subtitles"
+  keep_audio_filters:
+    - "english"
+    - "french"
+  default_audio_filter: "english"
+  keep_subtitle_filters: []
+  keep_subtitle_variants: []
+  default_subtitle_filter: null
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: false
+
+# ==============================================================================
+# USAGE NOTES
+# ==============================================================================
+#
+# 1. SAVING PRESETS:
+#    - Use the CleanMKV wizard (--wizard flag) to create presets interactively
+#    - Save presets with: framekit cleanmkv --wizard --save-preset "preset_name"
+#    - Presets are saved to: Presets/CleanMKV/ (or legacy location for compatibility)
+#
+# 2. LOADING PRESETS:
+#    - Use built-in presets: framekit cleanmkv --preset keep_all
+#    - Use external presets: framekit cleanmkv --external-preset "my_preset"
+#    - Use preset files: framekit cleanmkv --preset-file "path/to/preset.json"
+#
+# 3. LANGUAGE FILTERS:
+#    - Basic format: "language" (e.g., "english", "french", "japanese")
+#    - With variant: "language:variant" (e.g., "english:us", "spanish:latam")
+#    - Filters match tracks based on language codes and metadata
+#
+# 4. SUBTITLE VARIANTS:
+#    - "forced": Subtitles for foreign language parts only
+#    - "full": Complete subtitles for the entire content
+#    - "sdh": Subtitles for Deaf/Hard-of-Hearing (includes sound effects)
+#
+# 5. DEFAULT TRACKS:
+#    - Only one audio and one subtitle track can be marked as default
+#    - Default tracks are automatically selected by media players
+#    - Set to null for no default track
+#
+# 6. EXPLICIT FLAGS:
+#    - audio_default_explicit: true = "I explicitly chose no default audio"
+#    - audio_default_explicit: false = "Use source file's default if available"
+#    - Same logic applies to subtitle_default_explicit
+#
+# 7. TRACK REFERENCES (Advanced):
+#    - Use keep_audio_track_refs for specific track selection
+#    - Format: "language:variant:codec" (e.g., "english:us:aac")
+#    - Useful when you need precise control over which tracks to keep
+#
+# ==============================================================================
+# CONVERTING TO JSON
+# ==============================================================================
+# CleanMKV currently saves presets as JSON. To convert these YAML examples:
+#
+# 1. Choose a preset from above
+# 2. Convert YAML to JSON format
+# 3. Save as .json file in Presets/CleanMKV/
+#
+# Example JSON format:
+# {
+#   "name": "French Only",
+#   "keep_audio_filters": ["french"],
+#   "default_audio_filter": "french",
+#   "keep_subtitle_filters": ["french"],
+#   "keep_subtitle_variants": ["forced", "full"],
+#   "default_subtitle_filter": null,
+#   "default_subtitle_variant": null,
+#   "audio_default_explicit": true,
+#   "subtitle_default_explicit": true
+# }
+

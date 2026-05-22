@@ -1,5 +1,4 @@
-"""
-Framekit package version.
+"""Framekit package version.
 
 This value should be kept in sync with the version declared in the project's
 ``pyproject.toml`` file. It is updated as part of every release to reflect
@@ -9,4 +8,4 @@ parse package metadata at runtime.
 """
 
 # Keep this value in sync with the version declared in pyproject.toml.
-__version__ = "1.1.2"
+__version__ = "2.0.0"

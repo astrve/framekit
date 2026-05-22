@@ -2,20 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# Prefer rich_click if available; fall back to click when the rich integration is not installed.
-try:
-    import rich_click as click  # type: ignore[import-not-found]
-except Exception:
-    import click  # type: ignore[import-not-found]
 from rich import box
 from rich.panel import Panel
 from rich.table import Table
 
+from framekit.core.cli_helpers import join_path_parts
 from framekit.core.i18n import tr
 from framekit.core.paths import PathResolver
 from framekit.core.settings import SettingsStore
 from framekit.modules.metadata.config import (
-    looks_like_tmdb_api_key,
     looks_like_tmdb_read_access_token,
     mask_secret,
     normalize_secret_input,
@@ -25,6 +20,9 @@ from framekit.modules.metadata.workflow import run_metadata_workflow
 from framekit.modules.nfo.builder import build_release_nfo
 from framekit.modules.nfo.scanner import scan_nfo_folder
 from framekit.ui.branding import print_module_banner
+
+# Prefer rich_click if available; fall back to click when the rich integration is not installed.
+from framekit.ui.click_helper import click
 from framekit.ui.console import (
     console,
     print_error,
@@ -33,10 +31,6 @@ from framekit.ui.console import (
     print_success,
     print_warning,
 )
-
-
-def _join_path_parts(parts: tuple[str, ...]) -> str:
-    return " ".join(part for part in parts if part).strip()
 
 
 def _format_metadata_exception(exc: Exception) -> str:
@@ -101,7 +95,6 @@ def _print_doctor(config) -> None:
         tr("common.read_access_token", default="Read Access Token"),
         mask_secret(config.tmdb_read_access_token or ""),
     )
-    table.add_row(tr("common.api_key", default="API Key"), mask_secret(config.tmdb_api_key or ""))
 
     console.print(table)
 
@@ -136,8 +129,7 @@ def _store_token_interactive(settings: dict, store: SettingsStore) -> int:
 
         if raw.lower() == "clear":
             settings.setdefault("metadata", {})
-            settings["metadata"]["tmdb_read_access_token"] = ""
-            settings["metadata"]["tmdb_api_key"] = ""
+            settings["metadata"]["tmdb_read_access_token"] = ""  # nosec B105
             store.save(settings)
             print_success(tr("metadata.success.token_cleared", default="TMDb token cleared."))
             return 0
@@ -147,15 +139,6 @@ def _store_token_interactive(settings: dict, store: SettingsStore) -> int:
             continue
 
         token = normalize_secret_input(raw)
-
-        if looks_like_tmdb_api_key(token):
-            print_error(
-                tr(
-                    "metadata.error.api_key_instead_token",
-                    default="That looks like a TMDb API key, not a TMDb read access token.",
-                )
-            )
-            continue
 
         if not looks_like_tmdb_read_access_token(token):
             print_error(
@@ -168,7 +151,6 @@ def _store_token_interactive(settings: dict, store: SettingsStore) -> int:
 
         settings.setdefault("metadata", {})
         settings["metadata"]["tmdb_read_access_token"] = token
-        settings["metadata"]["tmdb_api_key"] = ""
         store.save(settings)
         print_success(tr("metadata.success.token_saved", default="TMDb token saved."))
         return 0
@@ -176,15 +158,6 @@ def _store_token_interactive(settings: dict, store: SettingsStore) -> int:
 
 def _store_token_value(settings: dict, store: SettingsStore, raw_value: str) -> int:
     token = normalize_secret_input(raw_value)
-
-    if looks_like_tmdb_api_key(token):
-        print_error(
-            tr(
-                "metadata.error.api_key_instead_token",
-                default="That looks like a TMDb API key, not a TMDb read access token.",
-            )
-        )
-        return 1
 
     if not looks_like_tmdb_read_access_token(token):
         print_error(
@@ -195,12 +168,69 @@ def _store_token_value(settings: dict, store: SettingsStore, raw_value: str) -> 
         )
         return 1
 
-    settings.setdefault("metadata", {})
-    settings["metadata"]["tmdb_read_access_token"] = token
-    settings["metadata"]["tmdb_api_key"] = ""
-    store.save(settings)
-    print_success(tr("metadata.success.token_saved", default="TMDb token saved."))
+    from framekit.core.settings import Settings
+
+    settings_obj = Settings()
+    if settings_obj.is_security_enabled():
+        settings_obj.set_tmdb_token(token)
+        print_success(
+            tr(
+                "metadata.success.token_saved_encrypted",
+                default="TMDb token saved securely (encrypted).",
+            )
+        )
+    else:
+        settings.setdefault("metadata", {})
+        settings["metadata"]["tmdb_read_access_token"] = token
+        store.save(settings)
+        print_success(tr("metadata.success.token_saved", default="TMDb token saved."))
     return 0
+
+
+def _resolved_value(resolved, attr: str):
+    return getattr(resolved, attr, None)
+
+
+def _resolved_title_and_year(resolved) -> tuple[str | None, str | None]:
+    title = (
+        _resolved_value(resolved, "title")
+        or _resolved_value(resolved, "episode_title")
+        or _resolved_value(resolved, "series_title")
+    )
+    year = _resolved_value(resolved, "year") or _resolved_value(resolved, "series_year")
+    return title, year
+
+
+def _metadata_rows(resolved) -> list[tuple[str, str]]:
+    title, year = _resolved_title_and_year(resolved)
+    season_number = _resolved_value(resolved, "season_number")
+    episode_number = _resolved_value(resolved, "episode_number")
+    return [
+        (
+            tr("common.provider", default="Provider"),
+            _resolved_value(resolved, "provider_name") or "-",
+        ),
+        (
+            tr("metadata.provider_id", default="Provider ID"),
+            _resolved_value(resolved, "provider_id") or "-",
+        ),
+        (tr("common.title", default="Title"), title or "-"),
+        (tr("common.year", default="Year"), str(year) if year is not None else "-"),
+        (
+            tr("metadata.season", default="Season"),
+            str(season_number) if season_number is not None else "-",
+        ),
+        (
+            tr("metadata.episode", default="Episode"),
+            str(episode_number) if episode_number is not None else "-",
+        ),
+        (tr("metadata.air_date", default="Air Date"), _resolved_value(resolved, "air_date") or "-"),
+        (tr("metadata.imdb_id", default="IMDb ID"), _resolved_value(resolved, "imdb_id") or "-"),
+        (
+            tr("metadata.imdb_url", default="IMDb URL"),
+            _resolved_value(resolved, "external_url") or "-",
+        ),
+    ]
 
 
 def _print_resolved_metadata(resolved) -> None:
@@ -213,40 +243,12 @@ def _print_resolved_metadata(resolved) -> None:
     table.add_column(tr("common.field", default="Field"), width=20, no_wrap=True)
     table.add_column(tr("common.value", default="Value"), ratio=1)
 
-    provider_name = getattr(resolved, "provider_name", None)
-    provider_id = getattr(resolved, "provider_id", None)
-    imdb_id = getattr(resolved, "imdb_id", None)
-    external_url = getattr(resolved, "external_url", None)
-
-    title = (
-        getattr(resolved, "title", None)
-        or getattr(resolved, "episode_title", None)
-        or getattr(resolved, "series_title", None)
-    )
-    year = getattr(resolved, "year", None) or getattr(resolved, "series_year", None)
-    season_number = getattr(resolved, "season_number", None)
-    episode_number = getattr(resolved, "episode_number", None)
-    air_date = getattr(resolved, "air_date", None)
-    overview = getattr(resolved, "overview", None)
-
-    table.add_row(tr("common.provider", default="Provider"), provider_name or "-")
-    table.add_row(tr("metadata.provider_id", default="Provider ID"), provider_id or "-")
-    table.add_row(tr("common.title", default="Title"), title or "-")
-    table.add_row(tr("common.year", default="Year"), str(year) if year is not None else "-")
-    table.add_row(
-        tr("metadata.season", default="Season"),
-        str(season_number) if season_number is not None else "-",
-    )
-    table.add_row(
-        tr("metadata.episode", default="Episode"),
-        str(episode_number) if episode_number is not None else "-",
-    )
-    table.add_row(tr("metadata.air_date", default="Air Date"), air_date or "-")
-    table.add_row(tr("metadata.imdb_id", default="IMDb ID"), imdb_id or "-")
-    table.add_row(tr("metadata.imdb_url", default="IMDb URL"), external_url or "-")
+    for label, value in _metadata_rows(resolved):
+        table.add_row(label, value)
 
     console.print(table)
 
+    overview = _resolved_value(resolved, "overview")
     if overview:
         console.print(
             Panel(
@@ -259,6 +261,248 @@ def _print_resolved_metadata(resolved) -> None:
         )
 
 
+def _emit_status_json(config) -> None:
+    from framekit.core.json_output import emit_json, json_envelope
+
+    emit_json(
+        json_envelope(
+            command="metadata.status",
+            data={
+                "provider": config.provider,
+                "language": config.language,
+                "interactive_confirmation": config.interactive_confirmation,
+                "cache_ttl_hours": config.cache_ttl_hours,
+                "has_credentials": config.has_credentials,
+                "credential_source": config.credential_source,
+                "auth_mode": config.auth_mode,
+                "read_access_token_masked": mask_secret(config.tmdb_read_access_token or ""),
+            },
+        )
+    )
+
+
+def _resolve_release_target(resolver: PathResolver, path: str | None):
+    folder = resolver.resolve_start_folder("nfo", path or None)
+    if not folder.exists():
+        raise FileNotFoundError(
+            tr(
+                "cleanmkv.error.folder_not_found",
+                default="Folder not found: {folder}",
+                folder=folder,
+            )
+        )
+
+    if folder.is_file():
+        if folder.suffix.lower() != ".mkv":
+            raise ValueError(
+                tr(
+                    "cleanmkv.error.invalid_file_type",
+                    default="File is not an MKV: {file}",
+                    file=folder,
+                )
+            )
+        episodes = scan_nfo_folder(folder.parent)
+        episodes = [ep for ep in episodes if ep.file_path == folder]
+        if not episodes:
+            raise ValueError(
+                tr(
+                    "nfo.error.no_mkv",
+                    default="No MKV files found in folder: {folder}",
+                    folder=folder,
+                )
+            )
+        return folder, build_release_nfo(folder.parent, episodes)
+
+    if not folder.is_dir():
+        raise FileNotFoundError(
+            tr(
+                "cleanmkv.error.folder_not_found",
+                default="Folder not found: {folder}",
+                folder=folder,
+            )
+        )
+    return folder, _build_release_from_folder(folder)
+
+
+def _emit_workflow_error_json(error: str, *, skipped: bool = False) -> None:
+    from framekit.core.json_output import emit_json, json_envelope
+
+    emit_json(
+        json_envelope(
+            command="metadata.resolve",
+            status="skipped" if skipped else "error",
+            error=error,
+            exit_code=1,
+        )
+    )
+
+
+def _handle_missing_credentials(json_output: bool) -> int:
+    if json_output:
+        _emit_workflow_error_json("missing_credentials")
+        return 1
+    print_warning(
+        tr(
+            "metadata.warning.missing_credentials",
+            default="Metadata credentials are missing.",
+        )
+    )
+    print_info(tr("metadata.info.run_setup", default="Run: framekit setup"))
+    print_info(tr("metadata.info.check_status", default="Or check status with: framekit md -s"))
+    return 1
+
+
+def _handle_unsupported_specials(result, json_output: bool) -> int:
+    if json_output:
+        _emit_workflow_error_json("unsupported_specials", skipped=True)
+        return 1
+    print_warning(
+        result.message
+        or tr(
+            "metadata.warning.unsupported_specials",
+            default="Special season detected. Metadata is not supported for this case yet.",
+        )
+    )
+    return 1
+
+
+def _handle_simple_workflow_error(
+    status: str,
+    *,
+    json_output: bool,
+    json_error: str,
+    message_key: str,
+    default_message: str,
+    skipped: bool = False,
+) -> int:
+    if json_output:
+        _emit_workflow_error_json(json_error, skipped=skipped)
+        return 1
+    if status == "cancelled":
+        print_warning(tr(message_key, default=default_message))
+    else:
+        print_warning(tr(message_key, default=default_message))
+    return 1
+
+
+def _handle_workflow_failure(result, json_output: bool) -> int | None:
+    status = result.status
+    if status == "missing_credentials":
+        return _handle_missing_credentials(json_output)
+    if status == "unsupported_specials":
+        return _handle_unsupported_specials(result, json_output)
+    simple_failures: dict[str, tuple[str, str, bool]] = {
+        "no_candidates": (
+            "no_candidates",
+            tr("metadata.warning.no_candidates", default="No metadata candidates found."),
+            False,
+        ),
+        "cancelled": (
+            "cancelled",
+            tr("metadata.warning.selection_cancelled", default="Metadata selection cancelled."),
+            True,
+        ),
+    }
+    if status in simple_failures:
+        json_error, message, skipped = simple_failures[status]
+        if json_output:
+            _emit_workflow_error_json(json_error, skipped=skipped)
+        else:
+            print_warning(message)
+        return 1
+    if result.status != "resolved":
+        message = result.message or tr(
+            "metadata.error.workflow_failed", default="Metadata workflow failed."
+        )
+        if json_output:
+            _emit_workflow_error_json(message)
+        else:
+            print_error(message)
+        return 1
+    return None
+
+
+def _emit_resolved_json(result) -> None:
+    from framekit.core.json_output import emit_json, json_envelope
+
+    resolved = result.resolved
+    emit_json(
+        json_envelope(
+            command="metadata.resolve",
+            data={
+                "provider_name": getattr(resolved, "provider_name", None),
+                "provider_id": getattr(resolved, "provider_id", None),
+                "imdb_id": getattr(resolved, "imdb_id", None),
+                "external_url": getattr(resolved, "external_url", None),
+                "title": (
+                    getattr(resolved, "title", None)
+                    or getattr(resolved, "episode_title", None)
+                    or getattr(resolved, "series_title", None)
+                ),
+                "year": getattr(resolved, "year", None) or getattr(resolved, "series_year", None),
+                "season_number": getattr(resolved, "season_number", None),
+                "episode_number": getattr(resolved, "episode_number", None),
+                "air_date": getattr(resolved, "air_date", None),
+                "overview": getattr(resolved, "overview", None),
+            },
+        )
+    )
+
+
+def _handle_metadata_token_actions(
+    *,
+    settings: dict,
+    store: SettingsStore,
+    clear_requested: bool,
+    prompt_token: bool,
+    set_token: str | None,
+    json_output: bool,
+) -> int | None:
+    from framekit.core.json_output import emit_json, json_envelope
+
+    if clear_requested:
+        settings.setdefault("metadata", {})
+        settings["metadata"]["tmdb_read_access_token"] = ""  # nosec B105
+        store.save(settings)
+        if json_output:
+            emit_json(json_envelope(command="metadata.clear", data={"cleared": True}))
+        else:
+            print_success(tr("metadata.success.token_cleared", default="TMDb token cleared."))
+        return 0
+    if prompt_token:
+        return _store_token_interactive(settings, store)
+    if set_token:
+        return _store_token_value(settings, store, set_token)
+    return None
+
+
+def _handle_metadata_info_actions(
+    *, config, status_requested: bool, help_requested: bool, json_output: bool
+) -> int | None:
+    if status_requested:
+        if json_output:
+            _emit_status_json(config)
+        else:
+            _print_doctor(config)
+        return 0
+    if help_requested:
+        _print_setup_help()
+        return 0
+    return None
+
+
+def _resolve_release_for_metadata(resolver: PathResolver, path: str | None):
+    try:
+        _folder, release = _resolve_release_target(resolver, path)
+        return release, None
+    except (FileNotFoundError, ValueError) as exc:
+        print_error(str(exc))
+        return None, 1
+    except Exception as exc:
+        print_exception_error(exc)
+        return None, 1
+
+
 def run_metadata_command(
     *,
     path: str | None,
@@ -268,100 +512,43 @@ def run_metadata_command(
     prompt_token: bool,
     set_token: str | None,
     clear_requested: bool,
+    json_output: bool = False,
 ) -> int:
+    """Drive the ``framekit metadata`` command end-to-end.
+
+    When ``json_output`` is ``True`` the command emits a structured envelope
+    on stdout for every meaningful exit path (status, error, no candidates,
+    resolved metadata) — see :func:`framekit.core.json_output.json_envelope`.
+    """
     store = SettingsStore()
     settings = store.load()
     resolver = PathResolver(settings)
 
-    if clear_requested:
-        settings.setdefault("metadata", {})
-        settings["metadata"]["tmdb_read_access_token"] = ""
-        settings["metadata"]["tmdb_api_key"] = ""
-        store.save(settings)
-        print_success(tr("metadata.success.token_cleared", default="TMDb token cleared."))
-        return 0
-
-    if prompt_token:
-        return _store_token_interactive(settings, store)
-
-    if set_token:
-        return _store_token_value(settings, store, set_token)
+    action_exit = _handle_metadata_token_actions(
+        settings=settings,
+        store=store,
+        clear_requested=clear_requested,
+        prompt_token=prompt_token,
+        set_token=set_token,
+        json_output=json_output,
+    )
+    if action_exit is not None:
+        return action_exit
 
     config = resolve_metadata_config(settings)
+    info_exit = _handle_metadata_info_actions(
+        config=config,
+        status_requested=status_requested,
+        help_requested=help_requested,
+        json_output=json_output,
+    )
+    if info_exit is not None:
+        return info_exit
 
-    if status_requested:
-        _print_doctor(config)
-        return 0
-
-    if help_requested:
-        _print_setup_help()
-        return 0
-
-    folder = resolver.resolve_start_folder("nfo", path or None)
-    # Support both directories and single MKV files.  When a file is provided
-    # ensure it is an MKV; otherwise report an error.  This avoids requiring
-    # callers to create a separate folder for each episode when resolving
-    # metadata.
-    if not folder.exists():
-        print_error(
-            tr(
-                "cleanmkv.error.folder_not_found",
-                default="Folder not found: {folder}",
-                folder=folder,
-            )
-        )
-        return 1
-
-    is_single_file = False
-    selected_file: Path | None = None
-    scan_root = folder
-    if folder.is_file():
-        # Validate that the provided file is an MKV.  Metadata resolution
-        # operates only on MKV containers.
-        if folder.suffix.lower() != ".mkv":
-            print_error(
-                tr(
-                    "cleanmkv.error.invalid_file_type",
-                    default="File is not an MKV: {file}",
-                    file=folder,
-                )
-            )
-            return 1
-        is_single_file = True
-        selected_file = folder
-        scan_root = folder.parent
-    elif not folder.is_dir():
-        # Neither a file nor a directory
-        print_error(
-            tr(
-                "cleanmkv.error.folder_not_found",
-                default="Folder not found: {folder}",
-                folder=folder,
-            )
-        )
-        return 1
-
-    try:
-        if is_single_file:
-            # Build a release using only the selected file.  Scan the parent
-            # directory for episodes then filter to the chosen file.  If no
-            # matching episode is found, report an error.
-            episodes = scan_nfo_folder(scan_root)
-            episodes = [ep for ep in episodes if ep.file_path == selected_file]
-            if not episodes:
-                print_error(
-                    tr(
-                        "nfo.error.no_mkv",
-                        default="No MKV files found in folder: {folder}",
-                        folder=folder,
-                    )
-                )
-                return 1
-            release = build_release_nfo(scan_root, episodes)
-        else:
-            release = _build_release_from_folder(folder)
-    except Exception as exc:
-        print_exception_error(exc)
+    release, resolve_exit = _resolve_release_for_metadata(resolver, path)
+    if resolve_exit is not None:
+        return resolve_exit
+    if release is None:
         return 1
 
     print_module_banner("Metadata")
@@ -377,48 +564,51 @@ def run_metadata_command(
         print_exception_error(exc, message=_format_metadata_exception(exc))
         return 1
 
-    if result.status == "missing_credentials":
-        print_warning(
-            tr("metadata.warning.missing_credentials", default="Metadata credentials are missing.")
-        )
-        print_info(tr("metadata.info.run_setup", default="Run: framekit setup"))
-        print_info(tr("metadata.info.check_status", default="Or check status with: framekit md -s"))
-        return 1
+    workflow_failure = _handle_workflow_failure(result, json_output)
+    if workflow_failure is not None:
+        return workflow_failure
 
-    if result.status == "unsupported_specials":
-        print_warning(
-            result.message
-            or tr(
-                "metadata.warning.unsupported_specials",
-                default="Special season detected. Metadata is not supported for this case yet.",
-            )
-        )
-        return 1
-
-    if result.status == "no_candidates":
-        print_warning(tr("metadata.warning.no_candidates", default="No metadata candidates found."))
-        return 1
-
-    if result.status == "cancelled":
-        print_warning(
-            tr("metadata.warning.selection_cancelled", default="Metadata selection cancelled.")
-        )
-        return 1
-
-    if result.status != "resolved":
-        print_error(
-            result.message
-            or tr("metadata.error.workflow_failed", default="Metadata workflow failed.")
-        )
-        return 1
-
-    _print_resolved_metadata(result.resolved)
-    print_success(tr("metadata.success.resolved", default="Metadata resolved successfully."))
+    if json_output:
+        _emit_resolved_json(result)
+    else:
+        _print_resolved_metadata(result.resolved)
+        print_success(tr("metadata.success.resolved", default="Metadata resolved successfully."))
     return 0
 
 
 @click.command(
-    "metadata", help=tr("cli.metadata.help", default="Search and resolve metadata for a folder.")
+    "metadata",
+    help=tr(
+        "cli.metadata.help",
+        default=(
+            "Search and resolve TMDb metadata for movies and TV shows.\n\n"
+            "The metadata command searches The Movie Database (TMDb) for matching content, "
+            "presents candidates, and resolves the correct metadata for your release.\n\n"
+            "Quick examples:\n"
+            "  fk metadata <folder>                    # Interactive metadata search\n"
+            "  fk meta <folder> -y                     # Auto-accept top match\n"
+            "  fk md <file.mkv>                        # Resolve single episode\n"
+            "  fk metadata --status                    # Check configuration\n"
+            "  fk meta --token                         # Set TMDb API token\n\n"
+            "Setup:\n"
+            "  1. Get a TMDb Read Access Token from https://www.themoviedb.org/settings/api\n"
+            "  2. Run: fk metadata --token\n"
+            "  3. Paste your token when prompted\n"
+            "  4. Test with: fk meta <folder>\n\n"
+            "Features:\n"
+            "  • Automatic movie/TV show detection\n"
+            "  • Multi-language support\n"
+            "  • Interactive candidate selection\n"
+            "  • Intelligent caching\n"
+            "  • IMDb ID resolution\n\n"
+            "Best practices:\n"
+            "  • Use descriptive folder/file names for better matching\n"
+            "  • Check status with --status before first use\n"
+            "  • Use -y for batch processing with confidence\n"
+            "  • Clear token with --clear if needed\n\n"
+            "Related commands: nfo, prez, pipeline"
+        ),
+    ),
 )
 @click.argument("path_parts", nargs=-1)
 @click.option(
@@ -433,15 +623,6 @@ def run_metadata_command(
 @click.option(
     "-s",
     "--status",
-    "status_requested",
-    is_flag=True,
-    help=tr(
-        "cli.metadata.option.status", default="Show metadata credential and configuration status."
-    ),
-)
-@click.option(
-    "-d",
-    "--doctor",
     "status_requested",
     is_flag=True,
     help=tr(
@@ -478,6 +659,16 @@ def run_metadata_command(
     is_flag=True,
     help=tr("cli.metadata.option.clear", default="Clear the locally stored TMDb token."),
 )
+@click.option(
+    "-j",
+    "--json",
+    "json_output",
+    is_flag=True,
+    help=tr(
+        "cli.metadata.option.json",
+        default="Emit resolved metadata or status as JSON on stdout.",
+    ),
+)
 def metadata_command(
     path_parts: tuple[str, ...],
     auto_accept: bool,
@@ -486,8 +677,10 @@ def metadata_command(
     prompt_token: bool,
     set_token: str | None,
     clear_requested: bool,
+    json_output: bool,
 ) -> int:
-    path_value = _join_path_parts(path_parts) or None
+    """Resolve TMDb metadata for a folder or single MKV file."""
+    path_value = join_path_parts(path_parts) or None
     return run_metadata_command(
         path=path_value,
         auto_accept=auto_accept,
@@ -496,4 +689,5 @@ def metadata_command(
         prompt_token=prompt_token,
         set_token=set_token,
         clear_requested=clear_requested,
+        json_output=json_output,
     )

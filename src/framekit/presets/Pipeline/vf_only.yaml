@@ -1,0 +1,38 @@
+# VF Only Pipeline Preset
+# ========================
+# French audio only + French subs (forced, full and SDH if available)
+# Prez: detailed / NFO: detailed / HTML: Magazine Dark
+
+vf_only:
+  name: "VF Only - FR audio + FR subs"
+  description: "Keep only French audio and French subtitles (forced/full/SDH), first French subtitle as default"
+  modules:
+    - "renamer"
+    - "cleanmkv"
+    - "nfo"
+    - "torrent"
+    - "prez"
+  renamer:
+    auto_detect: true
+  cleanmkv:
+    external_preset: "vf_only"
+    apply_changes: true
+    output_dir_name: "Release/{release}"
+  nfo:
+    template: "detailed"
+    locale: "fr"
+    mode: "global"
+    auto_metadata: true
+  torrent:
+    private: true
+  prez:
+    format: "both"
+    bbcode_template: "detailed"
+    html_template: "magazine_dark"
+    banner_design: "textual"
+    detail_level: "detailed"
+    mediainfo_mode: "spoiler"
+    show_tmdb: "true"
+    show_mediainfo: "true"
+
+

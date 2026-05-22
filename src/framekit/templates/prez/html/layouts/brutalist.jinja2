@@ -1,0 +1,382 @@
+{# Brutalist Layout - Raw, unpolished aesthetic with bold typography #}
+{% extends "_base.jinja2" %}
+{% import "_macros.jinja2" as macros %}
+
+{% block layout_styles %}
+<style>
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0;
+    background: var(--primary);
+  }
+  
+  /* Brutalist header - raw and bold */
+  header {
+    background: var(--secondary);
+    border: 8px solid var(--accent);
+    padding: 50px 40px;
+    margin-bottom: 0;
+  }
+  
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-bottom: 30px;
+  }
+  
+  .badge {
+    background: var(--accent);
+    color: var(--primary);
+    padding: 12px 24px;
+    font-weight: 900;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 4px solid var(--primary);
+    margin-right: -4px;
+    margin-bottom: -4px;
+  }
+  
+  h1 {
+    font-size: clamp(3rem, 8vw, 7rem);
+    line-height: 0.85;
+    margin: 0 0 20px;
+    letter-spacing: -0.05em;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: var(--text);
+    text-shadow: 4px 4px 0 var(--accent);
+  }
+  
+  h2 {
+    color: var(--accent);
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 16px;
+    font-weight: 900;
+    border-bottom: 4px solid var(--accent);
+    display: inline-block;
+    padding-bottom: 4px;
+  }
+  
+  h3 {
+    color: var(--muted);
+    font-size: 1rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    margin: 12px 0;
+  }
+  
+  /* Asymmetric grid layout - Optimized for 1200px */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 0;
+  }
+  
+  .poster-column {
+    background: var(--secondary);
+    border-right: 8px solid var(--accent);
+    padding: 40px;
+    position: sticky;
+    top: 0;
+    height: fit-content;
+  }
+  
+  .poster {
+    width: 100%;
+    border: 6px solid var(--accent);
+    box-shadow: 12px 12px 0 var(--line);
+  }
+  
+  .content-column {
+    background: var(--primary);
+  }
+  
+  /* Brutalist sections */
+  section {
+    border-bottom: 8px solid var(--line);
+    padding: 40px;
+    background: var(--card);
+  }
+  
+  section:nth-child(even) {
+    background: var(--secondary);
+  }
+  
+  section h2 {
+    margin-bottom: 30px;
+  }
+  
+  /* Info grid - asymmetric - Optimized for 1200px */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 24px;
+  }
+  
+  .info-card {
+    background: var(--primary);
+    border: 4px solid var(--line);
+    padding: 20px;
+    position: relative;
+  }
+  
+  .info-card:hover {
+    border-color: var(--accent);
+    transform: translate(-4px, -4px);
+    box-shadow: 4px 4px 0 var(--accent);
+  }
+  
+  .info-card.wide {
+    grid-column: span 2;
+  }
+  
+  .info-card span {
+    display: block;
+    color: var(--accent);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 900;
+    margin-bottom: 10px;
+  }
+  
+  .info-card strong {
+    display: block;
+    font-size: 1.1rem;
+    color: var(--text);
+    font-weight: 900;
+  }
+  
+  /* Brutalist tables */
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 20px;
+    border: 4px solid var(--line);
+    table-layout: fixed;
+  }
+  
+  th, td {
+    padding: 16px;
+    text-align: left;
+    border-bottom: 4px solid var(--line);
+    border-right: 4px solid var(--line);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  th:last-child, td:last-child {
+    border-right: none;
+  }
+  
+  tr:last-child td {
+    border-bottom: none;
+  }
+  
+  th {
+    background: var(--accent);
+    color: var(--primary);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    font-weight: 900;
+  }
+  
+  /* Fixed column widths for audio/subtitle tables */
+  th:nth-child(1), td:nth-child(1) { width: 30%; } /* Language */
+  th:nth-child(2), td:nth-child(2) { width: 25%; } /* Codec/Type */
+  th:nth-child(3), td:nth-child(3) { width: 20%; } /* Channels/Format */
+  th:nth-child(4), td:nth-child(4) { width: 25%; } /* Bitrate/Additional */
+  
+  tr:nth-child(even) {
+    background: var(--secondary);
+  }
+  
+  /* Synopsis - bold statement */
+  .synopsis {
+    background: var(--accent) !important;
+    color: var(--primary);
+  }
+  
+  .synopsis h2 {
+    color: var(--primary);
+    border-color: var(--primary);
+  }
+  
+  .synopsis p {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  
+  /* MediaInfo */
+  .mediainfo {
+    margin: 0;
+    border: 8px solid var(--line);
+    padding: 30px;
+    background: var(--card);
+  }
+  
+  summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 1rem;
+    padding: 16px;
+    background: var(--secondary);
+    border: 4px solid var(--accent);
+  }
+  
+  summary:hover {
+    background: var(--accent);
+    color: var(--primary);
+  }
+  
+  pre {
+    margin-top: 20px;
+    padding: 24px;
+    background: var(--primary);
+    border: 4px solid var(--line);
+    overflow-x: auto;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    font-weight: 700;
+  }
+  
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .content-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .poster-column {
+      position: relative;
+      border-right: none;
+      border-bottom: 8px solid var(--accent);
+    }
+    
+    .info-card.wide {
+      grid-column: span 1;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    header {
+      padding: 30px 24px;
+      border-width: 4px;
+    }
+    
+    section {
+      padding: 30px 24px;
+      border-bottom-width: 4px;
+    }
+    
+    .poster-column {
+      padding: 30px 24px;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+      text-shadow: 2px 2px 0 var(--accent);
+    }
+    
+    .badge {
+      border-width: 2px;
+    }
+    
+    .info-card {
+      border-width: 2px;
+    }
+    
+    table {
+      border-width: 2px;
+    }
+    
+    th, td {
+      border-width: 2px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main>
+  <header>
+    <div class="badges">
+      {% for badge in data.badges %}<span class="badge">{{ badge }}</span>{% endfor %}
+    </div>
+    <h1>{{ data.title }}</h1>
+    {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+    {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+    {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+    {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+    <p style="margin-top: 24px; font-size: 1.2rem; font-weight: 900; text-transform: uppercase;">{{ data.technical_summary }}</p>
+  </header>
+  
+  <div class="content-grid">
+    <aside class="poster-column">
+      {% if data.poster_url != '-' %}
+        <img class="poster" src="{{ data.poster_url }}" alt="poster">
+      {% endif %}
+    </aside>
+    
+    <div class="content-column">
+      {% if data.info_fields %}
+      <section class="info-section">
+        <h2>{{ tr('prez.section.infos', default='Informations') }}</h2>
+        {{ macros.render_info_grid(data.info_fields) }}
+      </section>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if data.overview != '-' %}
+  <section class="synopsis">
+    <h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2>
+    <p>{{ data.overview }}</p>
+  </section>
+  {% endif %}
+
+  {% if data.release_fields %}
+  <section class="release-section">
+    <h2>{{ tr('prez.section.release', default='Release') }}</h2>
+    {{ macros.render_info_grid(data.release_fields) }}
+  </section>
+  {% endif %}
+
+  {% if data.has_metadata_section %}
+  <section class="metadata-section">
+    <h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>
+    {{ macros.render_metadata(data.metadata_fields, data.cast, data.crew) }}
+  </section>
+  {% endif %}
+
+  {% if data.video_fields %}
+  <section class="video-section">
+    <h2>{{ tr('prez.section.video', default='Video') }}</h2>
+    {{ macros.render_info_grid(data.video_fields) }}
+  </section>
+  {% endif %}
+
+  <section class="audio-section">
+    <h2>{{ tr('prez.section.audio', default='Audio') }}</h2>
+    {{ macros.render_audio_tracks(data.audio_track_groups) }}
+  </section>
+
+  <section class="subtitle-section">
+    <h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>
+    {{ macros.render_subtitle_tracks(data.subtitle_track_groups) }}
+  </section>
+
+  {{ macros.render_mediainfo(data.has_mediainfo, data.mediainfo_text) }}
+</main>
+{% endblock %}

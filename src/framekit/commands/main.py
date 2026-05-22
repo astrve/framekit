@@ -2,55 +2,129 @@ from __future__ import annotations
 
 from importlib import metadata as importlib_metadata
 
-# Prefer rich_click if available; fall back to click when the rich integration is not installed.
-try:
-    import rich_click as click  # type: ignore[import-not-found]
-except Exception:
-    import click  # type: ignore[import-not-found]
-
+from framekit.commands.alias import alias_command
+from framekit.commands.batch import batch_command
+from framekit.commands.browse import browse_command
 from framekit.commands.cleanmkv import cleanmkv_command
 from framekit.commands.doctor import doctor_command
+from framekit.commands.encoder import encode_group
+from framekit.commands.examples import examples_command
+from framekit.commands.extract import extract_command
+from framekit.commands.init import init_command
 from framekit.commands.inspect import inspect_command
 from framekit.commands.language import language_command
+from framekit.commands.logs import logs_command
 from framekit.commands.metadata import metadata_command
 from framekit.commands.nfo import nfo_command
 from framekit.commands.pipeline import pipeline_command
 from framekit.commands.prez import prez_command
+from framekit.commands.profile import profile_group
 from framekit.commands.renamer import renamer_command
+from framekit.commands.rollback import rollback_command
+from framekit.commands.screenshot import screenshot_command
+from framekit.commands.seedbox import seedbox_group
 from framekit.commands.settings import settings_command
 from framekit.commands.setup import setup_command
+from framekit.commands.sort import sort_command
+from framekit.commands.tools import rename_parent_command
 from framekit.commands.torrent import torrent_command
+from framekit.commands.upload import upload_group
+from framekit.commands.validate import validate_command
+from framekit.commands.watch import watch_group
 from framekit.core.i18n import tr
 
+# Prefer rich_click if available; fall back to click when the rich integration is not installed.
+from framekit.ui.click_helper import click
 
-class AliasedGroup(click.Group):
+
+# ---------------------------------------------------------------------------
+# rich_click command groups — organizes `fk -h` into named sections
+# ---------------------------------------------------------------------------
+def _configure_rich_click() -> None:
+    try:
+        import rich_click
+    except ImportError:
+        return
+
+    rich_click.rich_click.COMMAND_GROUPS = {
+        "framekit": [
+            {
+                "name": tr("cli.section.configuration", default="Configuration"),
+                "commands": ["init", "setup", "language", "about"],
+            },
+            {
+                "name": tr("cli.section.tools", default="Tools"),
+                "commands": [
+                    "settings",
+                    "alias",
+                    "doctor",
+                    "logs",
+                    "rollback",
+                    "examples",
+                    "rename-parent",
+                    "validate",
+                ],
+            },
+            {
+                "name": tr("cli.section.navigation", default="Navigation"),
+                "commands": ["profile", "inspect", "browse", "sort"],
+            },
+            {
+                "name": tr("cli.section.media", default="Media processing"),
+                "commands": ["extract", "screenshot", "encode", "watch", "seedbox"],
+            },
+            {
+                "name": tr("cli.section.workflow", default="Workflow"),
+                "commands": [
+                    "renamer",
+                    "cleanmkv",
+                    "metadata",
+                    "nfo",
+                    "torrent",
+                    "prez",
+                    "upload",
+                    "pipeline",
+                    "batch",
+                ],
+            },
+        ],
+    }
+
+
+_configure_rich_click()
+
+
+try:
+    from rich_click import RichGroup as _BaseGroup
+except ImportError:
+    _BaseGroup = click.Group  # type: ignore[misc,assignment]
+
+
+class AliasedGroup(_BaseGroup):  # type: ignore[misc]
+    """Aliased group."""
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._aliases: dict[str, str] = {}
 
     def add_alias(self, alias: str, target: str) -> None:
+        """Handle add alias."""
         self._aliases[alias] = target
 
     def get_command(self, ctx: click.Context, cmd_name: str):
+        """Return the command."""
         resolved_name = self._aliases.get(cmd_name, cmd_name)
         return super().get_command(ctx, resolved_name)
 
 
 def _get_version() -> str:
-    """
-    Return the installed Framekit version.
-
-    The public PyPI distribution is named ``framekit-cli`` while the import
-    package remains ``framekit``. Prefer the distribution name used for
-    publication, then fall back to the import package metadata and finally to
-    the in-package ``__version__`` constant for editable/local checkouts.
-    """
+    """Return the installed Framekit version."""
     for distribution_name in ("framekit-cli", "framekit"):
         try:
             return importlib_metadata.version(distribution_name)
         except importlib_metadata.PackageNotFoundError:
             continue
-        except Exception:
+        except Exception:  # nosec B112
             continue
 
     try:
@@ -58,7 +132,7 @@ def _get_version() -> str:
 
         return __version__
     except Exception:
-        return "1.1.2"
+        return "2.0.0"
 
 
 @click.command(
@@ -66,6 +140,7 @@ def _get_version() -> str:
     help=tr("cli.about.help", default="Show Framekit version, copyright and license information."),
 )
 def about_command() -> None:
+    """Handle about command."""
     version = _get_version()
     click.echo(
         "\n"
@@ -87,34 +162,8 @@ def about_command() -> None:
         "cli.main.help",
         default=(
             "Framekit — tracker-ready media workflow toolkit.\n\n"
-            "Core workflow:\n"
-            "  ren / renamer   Normalize release file names.\n"
-            "  cmk / cleanmkv  Select audio/subtitle tracks and remux clean MKV copies.\n"
-            "  nf / nfo        Build localized tracker-ready NFO files.\n"
-            "  md / metadata   Search and resolve TMDb metadata.\n\n"
-            "General commands:\n"
-            "  about / license Show version, copyright and license information.\n"
-            "  doctor / doc    Check tools, settings, metadata and templates.\n"
-            "  inspect / ins   Inspect a release folder and detect completeness.\n"
-            "  settings / cfg  Inspect and edit Framekit settings.\n"
-            "  language / lang Show or change the interface language.\n"
-            "  setup / init    Run the guided setup.\n\n"
-            "Diagnostics:\n"
-            "  --debug               Print tracebacks and write a debug log.\n"
-            "  --log-file <path>     Write structured JSONL logs to a custom path.\n"
-            "  FRAMEKIT_DEBUG=1      Enable debug mode from the environment.\n"
-            "  FRAMEKIT_LOG_FILE=... Write logs from the environment.\n\n"
-            "Useful examples:\n"
-            "  fk ren <folder>       Preview then confirm renaming.\n"
-            "  fk cmk <folder>       Open the track selector, preview, then confirm remux.\n"
-            "  fk nf <folder> -m     Build an NFO with matching localized TMDb metadata.\n"
-            "  fk pipe <folder> --announce https://tracker/announce\n"
-            "  fk --debug cmk <folder>\n"
-            "  fk cfg get general.locale\n"
-            "  fk lang set fr\n"
-            "  fk about\n"
-            "  fk doctor\n\n"
-            "Use '<command> -h' for every option and advanced mode. Add --dry-run where available to preview only."
+            "Use '<command> -h' for detailed help on any command.\n"
+            "Add --dry-run where available to preview changes."
         ),
     ),
 )
@@ -123,32 +172,94 @@ def about_command() -> None:
     prog_name="framekit",
 )
 def cli() -> None:
-    pass
+    """Handle cli."""
 
 
+# Configuration
 cli.add_command(about_command, "about")
-cli.add_command(doctor_command, "doctor")
+cli.add_command(init_command, "init")
+cli.add_command(setup_command, "setup")
 cli.add_command(language_command, "language")
+
+# Tools
 cli.add_command(settings_command, "settings")
+cli.add_command(alias_command, "alias")
+cli.add_command(doctor_command, "doctor")
+cli.add_command(logs_command, "logs")
+cli.add_command(rollback_command, "rollback")
+cli.add_command(examples_command, "examples")
+cli.add_command(rename_parent_command, "rename-parent")
+cli.add_command(validate_command, "validate")
+
+# Navigation
+cli.add_command(profile_group, "profile")
 cli.add_command(inspect_command, "inspect")
+cli.add_command(browse_command, "browse")
+cli.add_command(sort_command, "sort")
+
+# Media processing
+cli.add_command(extract_command, "extract")
+cli.add_command(screenshot_command, "screenshot")
+cli.add_command(encode_group, "encode")
+cli.add_command(watch_group, "watch")
+cli.add_command(seedbox_group, "seedbox")
+
+# Workflow
 cli.add_command(renamer_command, "renamer")
 cli.add_command(cleanmkv_command, "cleanmkv")
-cli.add_command(nfo_command, "nfo")
 cli.add_command(metadata_command, "metadata")
+cli.add_command(nfo_command, "nfo")
 cli.add_command(torrent_command, "torrent")
 cli.add_command(prez_command, "prez")
+cli.add_command(upload_group, "upload")
 cli.add_command(pipeline_command, "pipeline")
-cli.add_command(setup_command, "setup")
+cli.add_command(batch_command, "batch")
 
+# Aliases
 cli.add_alias("license", "about")
 cli.add_alias("doc", "doctor")
+cli.add_alias("diag", "doctor")
 cli.add_alias("lang", "language")
 cli.add_alias("cfg", "settings")
+cli.add_alias("set", "settings")
 cli.add_alias("ins", "inspect")
 cli.add_alias("ren", "renamer")
 cli.add_alias("cmk", "cleanmkv")
 cli.add_alias("nf", "nfo")
+cli.add_alias("meta", "metadata")
 cli.add_alias("md", "metadata")
 cli.add_alias("tor", "torrent")
+cli.add_alias("sc", "screenshot")
+cli.add_alias("screens", "screenshot")
+cli.add_alias("ext", "extract")
 cli.add_alias("pipe", "pipeline")
-cli.add_alias("init", "setup")
+cli.add_alias("pr", "pipeline")
+cli.add_alias("ex", "examples")
+cli.add_alias("bat", "batch")
+cli.add_alias("enc", "encode")
+cli.add_alias("up", "upload")
+cli.add_alias("rp", "rename-parent")
+
+
+# ---------------------------------------------------------------------------
+# Third-party plugins (``framekit.modules`` entry-points)
+# ---------------------------------------------------------------------------
+def _load_third_party_plugins() -> None:
+    import os
+
+    if os.environ.get("FRAMEKIT_DISABLE_PLUGINS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return
+    try:
+        from framekit.core.plugins import load_plugins
+
+        load_plugins(cli)
+    except Exception:  # nosec B110
+        pass
+
+
+_load_third_party_plugins()

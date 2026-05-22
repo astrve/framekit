@@ -1,3 +1,5 @@
+"""Tests for NFO template selector - interactive template selection."""
+
 from framekit.modules.nfo.template_selector import (
     TemplateOption,
     TemplateSelector,
@@ -10,6 +12,8 @@ from framekit.modules.nfo.template_selector import (
 
 
 def test_build_template_options():
+    """Test building template options from records."""
+
     class DummyRecord:
         def __init__(self, display_name, template_name, source, scope):
             self.display_name = display_name
@@ -33,6 +37,7 @@ def test_build_template_options():
 
 
 def test_find_template_option():
+    """Test finding a template option by name."""
     options = [
         TemplateOption(
             display_name="Default", template_name="default", source="builtin", scope="universal"
@@ -52,6 +57,7 @@ def test_find_template_option():
 
 
 def test_template_selector_run_returns_selected(monkeypatch):
+    """Test that template selector returns the selected option."""
     options = [
         TemplateOption(
             display_name="Default", template_name="default", source="builtin", scope="universal"
@@ -65,7 +71,12 @@ def test_template_selector_run_returns_selected(monkeypatch):
         assert title == "NFO Template Selector"
         assert page_size == 8
         assert len(entries) == 2
-        assert all(entry.selected is False for entry in entries)
+        # ``preferred_name="detailed"`` must pre-select that entry so the
+        # cursor lands on it. The fix for the "selected detailed → got
+        # default" bug relies on this contract; see
+        # ``tests/test_nfo_template_selector_preferred.py``.
+        assert entries[0].selected is False
+        assert entries[1].selected is True
         return options[1]
 
     monkeypatch.setattr("framekit.modules.nfo.template_selector.select_one", fake_select_one)
@@ -76,6 +87,7 @@ def test_template_selector_run_returns_selected(monkeypatch):
 
 
 def test_template_selector_returns_none_on_keyboard_interrupt(monkeypatch):
+    """Test that template selector handles keyboard interrupt gracefully."""
     options = [
         TemplateOption(
             display_name="Default", template_name="default", source="builtin", scope="universal"
@@ -93,6 +105,8 @@ def test_template_selector_returns_none_on_keyboard_interrupt(monkeypatch):
 
 
 def test_choose_template_scope(monkeypatch):
+    """Test choosing a template scope."""
+
     def fake_run(self):
         return TemplateOption("Movie", "movie", "scope", "movie")
 
@@ -102,6 +116,8 @@ def test_choose_template_scope(monkeypatch):
 
 
 def test_choose_import_location(monkeypatch):
+    """Test choosing an import location."""
+
     def fake_run(self):
         return TemplateOption("Project Folder", "project", "location", "project")
 
@@ -111,6 +127,7 @@ def test_choose_import_location(monkeypatch):
 
 
 def test_choose_template(monkeypatch):
+    """Test choosing a template from options."""
     options = [
         TemplateOption(
             display_name="Default", template_name="default", source="builtin", scope="universal"

@@ -1,0 +1,38 @@
+name: "Animes Japonais - h265 to h264"
+description: "Optimized preset for Japanese anime (CRF 19, veryslow, tune animation, high)"
+aliases:
+  - a264
+  - anime264
+  - jp264
+source_codec: h265
+target_codec: h264
+encoder: libx264
+
+video:
+  crf: 19
+  preset: veryslow
+  tune: animation
+  profile: high
+  level: "4.1"
+  pix_fmt: yuv420p
+
+audio:
+  copy: true
+
+subtitles:
+  copy: true
+
+metadata:
+  preserve: true
+
+chapters:
+  preserve: true
+
+advanced:
+  two_pass: false
+  x264_params:
+    - "aq-mode=3"
+    - "aq-strength=0.8"
+    - "deblock=-2:-2"
+    - "psy-rd=0.8:0.1"
+    - "bframes=8"

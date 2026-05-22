@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from framekit.ui.selector import confirm_choice
+from framekit.ui.unified_selector import confirm_choice
 
 
 def choose_yes_no(
@@ -9,6 +9,7 @@ def choose_yes_no(
     no_label: str = "No",
     default_yes: bool = True,
 ) -> bool | None:
+    """Handle choose yes no."""
     try:
         return confirm_choice(
             title=title,

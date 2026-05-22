@@ -1,0 +1,15 @@
+# MULTI.JP CleanMKV Preset
+# ========================
+# Keep all tracks, Japanese audio as default, first Japanese subtitle as default (forced preferred)
+
+multi_jp:
+  name: "MULTI.JP - All tracks, JP audio default, JP sub default"
+  keep_audio_filters: []
+  default_audio_filter: "japanese"
+  keep_subtitle_filters: []
+  keep_subtitle_variants: []
+  default_subtitle_filter: "japanese"
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+

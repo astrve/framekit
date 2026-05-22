@@ -1,0 +1,432 @@
+{# Neon Cyberpunk Layout - Glowing neon accents with dark background #}
+{% extends "_base.jinja2" %}
+{% import "_macros.jinja2" as macros %}
+
+{% block layout_styles %}
+<style>
+  @keyframes neon-glow {
+    0%, 100% { text-shadow: 0 0 10px var(--accent), 0 0 20px var(--accent), 0 0 30px var(--accent); }
+    50% { text-shadow: 0 0 20px var(--accent), 0 0 30px var(--accent), 0 0 40px var(--accent); }
+  }
+  
+  @keyframes grid-move {
+    0% { background-position: 0 0; }
+    100% { background-position: 50px 50px; }
+  }
+  
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 60px 30px;
+    background: 
+      linear-gradient(90deg, var(--line) 1px, transparent 1px),
+      linear-gradient(0deg, var(--line) 1px, transparent 1px),
+      var(--primary);
+    background-size: 50px 50px;
+    animation: grid-move 20s linear infinite;
+    position: relative;
+  }
+  
+  main::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at 50% 50%, transparent 0%, var(--primary) 70%);
+    pointer-events: none;
+  }
+  
+  /* Neon header */
+  header {
+    text-align: center;
+    margin-bottom: 60px;
+    padding: 50px 40px;
+    background: var(--card);
+    border: 2px solid var(--accent);
+    box-shadow: 
+      0 0 20px var(--accent),
+      inset 0 0 20px color-mix(in srgb, var(--accent) 10%, transparent);
+    position: relative;
+    z-index: 1;
+  }
+  
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 30px;
+  }
+  
+  .badge {
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    padding: 8px 20px;
+    font-weight: 800;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    box-shadow: 0 0 10px var(--accent), inset 0 0 10px color-mix(in srgb, var(--accent) 20%, transparent);
+    transition: all 0.3s ease;
+  }
+  
+  .badge:hover {
+    background: var(--accent);
+    color: var(--primary);
+    box-shadow: 0 0 20px var(--accent);
+  }
+  
+  h1 {
+    font-size: clamp(2.8rem, 6vw, 5.5rem);
+    line-height: 1;
+    margin: 0 0 20px;
+    letter-spacing: 0.05em;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: var(--accent);
+    animation: neon-glow 2s ease-in-out infinite;
+  }
+  
+  h2 {
+    color: var(--accent);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin: 0 0 12px;
+    font-weight: 700;
+    text-shadow: 0 0 10px var(--accent);
+  }
+  
+  /* Neon poster frame */
+  .poster-container {
+    text-align: center;
+    margin: 50px 0;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .poster-frame {
+    display: inline-block;
+    padding: 8px;
+    background: var(--card);
+    border: 3px solid var(--accent);
+    box-shadow: 
+      0 0 30px var(--accent),
+      inset 0 0 30px color-mix(in srgb, var(--accent) 15%, transparent);
+    position: relative;
+  }
+  
+  .poster-frame::before,
+  .poster-frame::after {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--line);
+  }
+  
+  .poster-frame::before {
+    top: -3px;
+    left: -3px;
+    border-right: none;
+    border-bottom: none;
+  }
+  
+  .poster-frame::after {
+    bottom: -3px;
+    right: -3px;
+    border-left: none;
+    border-top: none;
+  }
+  
+  .poster {
+    max-width: 350px;
+    width: 100%;
+    display: block;
+    filter: brightness(1.1) contrast(1.1);
+  }
+  
+  /* Neon sections */
+  section {
+    background: var(--card);
+    border: 2px solid var(--line);
+    padding: 35px;
+    margin-bottom: 30px;
+    box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 30%, transparent);
+    position: relative;
+    z-index: 1;
+  }
+  
+  section::before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    left: 20px;
+    right: 20px;
+    height: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+  }
+  
+  section h2 {
+    margin-bottom: 25px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--accent);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 30%, transparent);
+    text-align: center;
+  }
+  
+  /* Info grid with neon effect - Optimized for 1200px */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 26px;
+  }
+  
+  .info-card {
+    background: var(--secondary);
+    border: 1px solid var(--line);
+    padding: 18px;
+    transition: all 0.3s ease;
+    position: relative;
+  }
+  
+  .info-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .info-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  
+  .info-card:hover::before {
+    opacity: 1;
+  }
+  
+  .info-card.wide {
+    grid-column: span 2;
+  }
+  
+  .info-card span {
+    display: block;
+    color: var(--accent);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 800;
+    margin-bottom: 8px;
+    text-shadow: 0 0 5px var(--accent);
+  }
+  
+  .info-card strong {
+    display: block;
+    font-size: 1rem;
+    color: var(--text);
+  }
+  
+  /* Neon tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    table-layout: fixed;
+  }
+  
+  th, td {
+    padding: 14px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  th {
+    background: var(--secondary);
+    color: var(--accent);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    font-weight: 800;
+    text-shadow: 0 0 5px var(--accent);
+  }
+  
+  /* Fixed column widths for audio/subtitle tables */
+  th:nth-child(1), td:nth-child(1) { width: 30%; } /* Language */
+  th:nth-child(2), td:nth-child(2) { width: 25%; } /* Codec/Type */
+  th:nth-child(3), td:nth-child(3) { width: 20%; } /* Channels/Format */
+  th:nth-child(4), td:nth-child(4) { width: 25%; } /* Bitrate/Additional */
+    border-bottom: 2px solid var(--accent);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  
+  tr:hover {
+    background: color-mix(in srgb, var(--line) 30%, transparent);
+  }
+  
+  /* Synopsis with neon glow */
+  .synopsis p {
+    font-size: 1.1rem;
+    line-height: 1.75;
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto;
+    color: var(--text);
+  }
+  
+  /* MediaInfo */
+  .mediainfo {
+    background: var(--card);
+    border: 2px solid var(--line);
+    padding: 25px;
+    margin-top: 30px;
+    box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 30%, transparent);
+    position: relative;
+    z-index: 1;
+  }
+  
+  summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    text-align: center;
+    padding: 14px;
+    background: var(--secondary);
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent);
+    transition: all 0.3s ease;
+  }
+  
+  summary:hover {
+    box-shadow: 0 0 20px var(--accent);
+    text-shadow: 0 0 10px var(--accent);
+  }
+  
+  pre {
+    margin-top: 20px;
+    padding: 20px;
+    background: var(--primary);
+    border: 1px solid var(--line);
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--accent);
+    text-shadow: 0 0 2px var(--accent);
+  }
+  
+  /* Responsive */
+  @media (max-width: 900px) {
+    .info-card.wide {
+      grid-column: span 1;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    main {
+      padding: 40px 20px;
+      background-size: 30px 30px;
+    }
+    
+    header {
+      padding: 35px 25px;
+    }
+    
+    section {
+      padding: 25px 20px;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+    }
+    
+    .synopsis p {
+      text-align: left;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main>
+  <header>
+    <div class="badges">
+      {% for badge in data.badges %}<span class="badge">{{ badge }}</span>{% endfor %}
+    </div>
+    <h1>{{ data.title }}</h1>
+    {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+    {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+    {% if data.season_episode_range != '-' %}<h3 class="episode-heading" style="color: var(--muted); text-shadow: 0 0 5px var(--muted);">{{ data.season_episode_range }}</h3>{% endif %}
+    {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+    <p style="margin-top: 20px; font-size: 1.05rem; font-weight: 700; color: var(--accent); text-shadow: 0 0 5px var(--accent);">{{ data.technical_summary }}</p>
+  </header>
+  
+  {% if data.poster_url != '-' %}
+  <div class="poster-container">
+    <div class="poster-frame">
+      <img class="poster" src="{{ data.poster_url }}" alt="poster">
+    </div>
+  </div>
+  {% endif %}
+  
+  {% if data.overview != '-' %}
+  <section class="synopsis">
+    <h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2>
+    <p>{{ data.overview }}</p>
+  </section>
+  {% endif %}
+  
+  {% if data.info_fields %}
+  <section class="info-section">
+    <h2>{{ tr('prez.section.infos', default='Informations') }}</h2>
+    {{ macros.render_info_grid(data.info_fields) }}
+  </section>
+  {% endif %}
+  
+  {% if data.release_fields %}
+  <section class="release-section">
+    <h2>{{ tr('prez.section.release', default='Release') }}</h2>
+    {{ macros.render_info_grid(data.release_fields) }}
+  </section>
+  {% endif %}
+  
+  {% if data.has_metadata_section %}
+  <section class="metadata-section">
+    <h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>
+    {{ macros.render_metadata(data.metadata_fields, data.cast, data.crew) }}
+  </section>
+  {% endif %}
+  
+  {% if data.video_fields %}
+  <section class="video-section">
+    <h2>{{ tr('prez.section.video', default='Video') }}</h2>
+    {{ macros.render_info_grid(data.video_fields) }}
+  </section>
+  {% endif %}
+  
+  <section class="audio-section">
+    <h2>{{ tr('prez.section.audio', default='Audio') }}</h2>
+    {{ macros.render_audio_tracks(data.audio_track_groups) }}
+  </section>
+  
+  <section class="subtitle-section">
+    <h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>
+    {{ macros.render_subtitle_tracks(data.subtitle_track_groups) }}
+  </section>
+  
+  {{ macros.render_mediainfo(data.has_mediainfo, data.mediainfo_text) }}
+</main>
+{% endblock %}

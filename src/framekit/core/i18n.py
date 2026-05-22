@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from functools import cache, lru_cache
+
+# nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2
 from importlib import resources
 from typing import Any
 
@@ -50,6 +52,7 @@ def _load_catalog(locale_code: str) -> dict[str, str]:
 
 @lru_cache(maxsize=1)
 def get_locale() -> str:
+    """Return the locale."""
     env_candidates = [
         os.environ.get("FRAMEKIT_LOCALE", ""),
         os.environ.get("LC_ALL", ""),
@@ -66,17 +69,20 @@ def get_locale() -> str:
 
 
 def get_supported_locales() -> tuple[str, ...]:
+    """Return the supported locales."""
     return tuple(sorted(SUPPORTED_LOCALES))
 
 
 def set_locale(locale_code: str) -> None:
+    """Set locale."""
     normalized = _normalize_locale(locale_code)
     os.environ["FRAMEKIT_LOCALE"] = normalized
     get_locale.cache_clear()
 
 
 @contextmanager
-def temporary_locale(locale_code: str | None) -> Iterator[None]:
+def temporary_locale(locale_code: str | None) -> Generator[None, None, None]:
+    """Handle temporary locale."""
     previous = get_locale()
     if locale_code:
         set_locale(locale_code)
@@ -87,6 +93,7 @@ def temporary_locale(locale_code: str | None) -> Iterator[None]:
 
 
 def tr(key: str, default: str | None = None, **kwargs: Any) -> str:
+    """Handle tr."""
     locale_code = get_locale()
     template = (
         _load_catalog(locale_code).get(key)

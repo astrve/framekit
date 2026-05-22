@@ -1,0 +1,39 @@
+name: "Animated Series - h264 to h265"
+description: "Optimized preset for Western animated series (CRF 20, slow, tune animation, main10)"
+aliases:
+  - sa265
+  - anim265
+  - cartoon265
+  - sa264-265
+  - anim264-265
+source_codec: h264
+target_codec: h265
+encoder: libx265
+
+video:
+  crf: 20
+  preset: slow
+  tune: animation
+  profile: main10
+  level: "5.1"
+  pix_fmt: yuv420p10le
+
+audio:
+  copy: true
+
+subtitles:
+  copy: true
+
+metadata:
+  preserve: true
+
+chapters:
+  preserve: true
+
+advanced:
+  two_pass: false
+  x265_params:
+    - "aq-mode=3"
+    - "aq-strength=0.8"
+    - "deblock=-2,-2"
+    - "psy-rd=1.5"

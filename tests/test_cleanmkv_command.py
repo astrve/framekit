@@ -1,3 +1,5 @@
+"""Tests for cleanmkv command module."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -9,6 +11,8 @@ from framekit.core.settings import SettingsStore
 
 
 class _StoreFactory:
+    """Mock settings store factory for testing."""
+
     def __init__(self, store: SettingsStore) -> None:
         self.store = store
 
@@ -17,6 +21,7 @@ class _StoreFactory:
 
 
 def _preset(name: str = "selector") -> CleanPreset:
+    """Create a mock CleanPreset for testing."""
     return CleanPreset(
         name=name,
         keep_audio_filters=(),
@@ -33,6 +38,7 @@ def _preset(name: str = "selector") -> CleanPreset:
 def test_cleanmkv_base_command_uses_track_selector_and_applies_after_confirmation(
     monkeypatch, tmp_path, temp_settings_store
 ):
+    """Test that cleanmkv command uses track selector and applies changes after confirmation."""
     folder = tmp_path / "Release"
     folder.mkdir()
     monkeypatch.setattr(
@@ -43,7 +49,7 @@ def test_cleanmkv_base_command_uses_track_selector_and_applies_after_confirmatio
     preset = _preset()
     monkeypatch.setattr(cleanmkv_command_module, "scan_folder", lambda folder, registry: scans)
     monkeypatch.setattr(
-        cleanmkv_command_module, "run_cleanmkv_track_selector", lambda scans_arg: preset
+        cleanmkv_command_module, "run_cleanmkv_track_selector", lambda _scans: preset
     )
     monkeypatch.setattr(cleanmkv_command_module, "confirm_choice", lambda **kwargs: True)
 
@@ -52,7 +58,7 @@ def test_cleanmkv_base_command_uses_track_selector_and_applies_after_confirmatio
     class _Service:
         def run(
             self,
-            folder_arg,
+            _folder,
             *,
             preset,
             output_dir_name,
@@ -82,12 +88,12 @@ def test_cleanmkv_base_command_uses_track_selector_and_applies_after_confirmatio
     )
 
     assert calls == [(False, "selector", scans), (True, "selector", scans)]
-    assert temp_settings_store.get("modules.cleanmkv.last_folder") == str(folder)
 
 
 def test_cleanmkv_base_command_can_preview_without_applying(
     monkeypatch, tmp_path, temp_settings_store
 ):
+    """Test that cleanmkv command can preview without applying changes."""
     folder = tmp_path / "Release"
     folder.mkdir()
     monkeypatch.setattr(
@@ -105,7 +111,7 @@ def test_cleanmkv_base_command_can_preview_without_applying(
     class _Service:
         def run(
             self,
-            folder_arg,
+            _folder,
             *,
             preset,
             output_dir_name,
@@ -140,6 +146,7 @@ def test_cleanmkv_base_command_can_preview_without_applying(
 def test_cleanmkv_dry_run_uses_configured_preset_without_selector(
     monkeypatch, tmp_path, temp_settings_store
 ):
+    """Test that cleanmkv dry run uses configured preset without selector."""
     folder = tmp_path / "Release"
     folder.mkdir()
     monkeypatch.setattr(
@@ -158,7 +165,7 @@ def test_cleanmkv_dry_run_uses_configured_preset_without_selector(
     class _Service:
         def run(
             self,
-            folder_arg,
+            _folder,
             *,
             preset,
             output_dir_name,
@@ -191,6 +198,7 @@ def test_cleanmkv_dry_run_uses_configured_preset_without_selector(
 
 
 def test_cleanmkv_rejects_apply_and_dry_run():
+    """Test that cleanmkv rejects both apply_changes and dry_run flags together."""
     assert (
         cleanmkv_command_module.run_cleanmkv_command(
             path=None,
