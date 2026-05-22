@@ -155,7 +155,7 @@ jobs:
         run: vulture src tests --min-confidence 80
 
       - name: Run Codespell
-        run: codespell .
+        run: codespell --toml pyproject.toml .
 
       - name: Run Interrogate
         run: >
@@ -273,7 +273,13 @@ jobs:
       - name: Generate man pages
         run: |
           mkdir -p dist/man
-          click-man --target dist/man framekit
+          PYTHONUTF8=1 python - <<'PY'
+          from click_man.core import write_man_pages
+
+          from framekit.commands.main import cli
+
+          write_man_pages("framekit", cli, version="2.0.0", target_dir="dist/man")
+          PY
           ls -la dist/man
 
       - name: Upload man pages

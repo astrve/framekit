@@ -330,6 +330,3 @@ class TestScreenshotReport:
             total_failures=10,
         )
         assert report.success_rate == 0.0
-
-
-# Made with Bob

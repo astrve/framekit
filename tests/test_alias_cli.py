@@ -283,6 +283,3 @@ class TestAliasCommandHelp:
 
         assert result.exit_code == 0
         assert "add" in result.output.lower()
-
-
-# Made with Bob

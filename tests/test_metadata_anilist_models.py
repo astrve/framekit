@@ -315,6 +315,3 @@ class TestAniListMedia:
 
         metadata = media.to_season_metadata(season_number=1)
         assert metadata.vote_average is None
-
-
-# Made with Bob

@@ -99,21 +99,24 @@ def mock_sleep(monkeypatch: pytest.MonkeyPatch) -> Mock:
 
 @pytest.fixture(autouse=True)
 def reset_locale_and_diagnostics() -> Generator[None, None, None]:
-    """Reset locale and diagnostics state before and after each test.
+    """Reset global mutable state before and after each test.
 
-    Tests rely on a clean slate: a previous test that switched the UI locale
-    or installed a loguru handler must not leak into the next one.
+    Tests rely on a clean slate: locale, diagnostics, and path security
+    settings must not leak into the next test or the same xdist worker.
     """
     from framekit.core.diagnostics import reset_diagnostics
     from framekit.core.i18n import set_locale
+    from framekit.core.path_validation import configure_security
 
     set_locale("en")
     reset_diagnostics()
+    configure_security(strict_mode=False, allowed_base_dirs=[], allow_symlinks=True)
     try:
         yield
     finally:
         set_locale("en")
         reset_diagnostics()
+        configure_security(strict_mode=False, allowed_base_dirs=[], allow_symlinks=True)
 
 
 @pytest.fixture

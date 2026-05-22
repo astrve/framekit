@@ -15,7 +15,7 @@
 {% if data.poster_url != '-' %}
 [center][img]{{ bb(data.poster_url) }}[/img][/center]
 {% endif %}
-{% if data.banner_information %}{{ bbcode_banner(data.banner_information) }}{% else %}[size=16][b]{{ tr("prez.section.infos", default='Informations') }}[/b][/size]{% endif %}
+{% if data.banner_information %}{{ bbcode_banner(data.banner_information) }}{% else %}[size=16][b]{{ tr("prez.section.infos", default='Information') }}[/b][/size]{% endif %}
 {% for field in data.info_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
 {% endfor %}
 {% if data.overview != '-' %}

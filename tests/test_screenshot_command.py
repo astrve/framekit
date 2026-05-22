@@ -683,6 +683,3 @@ class TestScreenshotDirectorySupport:
         call_args = mock_service.extract_screenshots.call_args
         video_paths = call_args.kwargs["video_paths"]
         assert len(video_paths) == 2
-
-
-# Made with Bob

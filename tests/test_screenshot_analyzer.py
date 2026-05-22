@@ -335,6 +335,3 @@ class TestTimestampGeneration:
 
         # Should return maximum possible (100 / 10 = 10, plus 1 for endpoints)
         assert len(timestamps) <= 11  # 100 / 10 + 1
-
-
-# Made with Bob

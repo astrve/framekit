@@ -223,6 +223,3 @@ class TestBrowseCommand:
         config = call_args[0]
         assert ".mkv" in config.filter_extensions
         assert ".mp4" in config.filter_extensions
-
-
-# Made with Bob

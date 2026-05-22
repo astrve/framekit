@@ -259,6 +259,3 @@ class TestProgressMetricsFormatting:
         minutes = int((seconds % 3600) / 60)
         result = f"{hours}h {minutes}m"
         assert result == "1h 0m"
-
-
-# Made with Bob

@@ -445,6 +445,3 @@ class TestScreenshotService:
         assert report.total_failures == 0
         assert report.success_rate == 1.0
         assert report.elapsed_seconds >= 0
-
-
-# Made with Bob

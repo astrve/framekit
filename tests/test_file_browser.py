@@ -385,6 +385,3 @@ class TestFileBrowserEngine:
             # All entries before first file should be directories
             for i in range(first_file_idx):
                 assert engine.state.entries[i].is_directory
-
-
-# Made with Bob

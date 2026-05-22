@@ -17,7 +17,7 @@
 {% endif %}
 [hr]
 
-[b]{{ tr('prez.section.infos', default='Informations') }}[/b]
+[b]{{ tr('prez.section.infos', default='Information') }}[/b]
 {% for field in data.info_fields %}• [b]{{ field.label }}[/b] : {{ field_url_bbcode(field) }}
 {% endfor %}{% if data.overview != '-' %}
 [b]{{ tr('prez.section.synopsis', default='Synopsis') }}[/b]

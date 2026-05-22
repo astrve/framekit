@@ -279,6 +279,3 @@ class TestTraktShow:
         assert metadata.genres == ["drama", "sci-fi"]
         assert metadata.vote_average == 9.0
         assert "trakt.tv" in metadata.external_url
-
-
-# Made with Bob

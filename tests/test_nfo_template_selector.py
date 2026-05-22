@@ -71,7 +71,7 @@ def test_template_selector_run_returns_selected(monkeypatch):
         assert title == "NFO Template Selector"
         assert page_size == 8
         assert len(entries) == 2
-        # ``preferred_name="detailed"`` must pre-select that entry so the
+        # ``preferred_name="detailed"`` must preselect that entry so the
         # cursor lands on it. The fix for the "selected detailed → got
         # default" bug relies on this contract; see
         # ``tests/test_nfo_template_selector_preferred.py``.

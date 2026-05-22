@@ -1,7 +1,7 @@
 """Opt-out PyPI update check.
 
 Compares the installed ``framekit-cli`` version against the latest release on
-PyPI no more than once per day, and prints a discreet upgrade banner when a
+PyPI no more than once per day, and prints a subtle upgrade banner when a
 newer version is available.
 
 The check is intentionally lightweight:

@@ -302,6 +302,3 @@ def test_build_metadata_provider_language_override():
     provider = build_metadata_provider(settings, config=config)
 
     assert provider is not None
-
-
-# Made with Bob

@@ -332,6 +332,3 @@ class TestDryRunIntegration:
         # Calculate total savings: (1000-500) + (2000-1000) + (1500-750) = 500 + 1000 + 750 = 2250
         total_savings = sum(op.metadata.get("savings", 0) for op in recorder.operations)
         assert total_savings == 2250
-
-
-# Made with Bob

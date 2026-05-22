@@ -417,6 +417,3 @@ class TestTraktSeasonDetails:
         assert metadata.series_title == "Test Show"
         assert metadata.season_number == 1
         assert metadata.genres == ["drama", "sci-fi"]
-
-
-# Made with Bob

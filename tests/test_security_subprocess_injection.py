@@ -379,6 +379,3 @@ class TestPathTraversalPrevention:
 
         # Reset configuration
         configure_security(allow_symlinks=True, strict_mode=False)
-
-
-# Made with Bob

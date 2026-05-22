@@ -337,6 +337,3 @@ class TestToolRegistryEdgeCases:
 
             # Should fall back to PATH search, not use empty string
             assert status.configured_path is None or status.configured_path == ""
-
-
-# Made with Bob

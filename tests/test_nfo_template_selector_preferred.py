@@ -3,7 +3,7 @@
 Bug: ``run()`` used to build every entry with ``selected=False``, so the
 cursor always landed on the first option (``Default``). A user with
 ``active_template = "detailed"`` saw the cursor on Default and accidentally
-confirmed it by pressing Enter without scrolling. The fix pre-selects the
+confirmed it by pressing Enter without scrolling. The fix preselects the
 entry whose ``template_name`` matches ``preferred_name``.
 """
 
@@ -67,7 +67,7 @@ def test_preferred_entry_label_is_annotated() -> None:
 
 
 def test_unknown_preferred_leaves_no_selection() -> None:
-    """If ``preferred_name`` does not match, no entry is pre-selected."""
+    """If ``preferred_name`` does not match, no entry is preselected."""
     captured: dict = {}
 
     def _spy(*, title, entries, page_size):
@@ -83,7 +83,7 @@ def test_unknown_preferred_leaves_no_selection() -> None:
 
 
 def test_none_preferred_leaves_no_selection() -> None:
-    """``preferred_name=None`` keeps the previous behaviour (no pre-selection)."""
+    """``preferred_name=None`` keeps the previous behaviour (no preselection)."""
     captured: dict = {}
 
     def _spy(*, title, entries, page_size):

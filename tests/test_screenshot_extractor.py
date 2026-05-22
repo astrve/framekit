@@ -448,6 +448,3 @@ class TestErrorHandling:
             )
 
             assert result is False
-
-
-# Made with Bob

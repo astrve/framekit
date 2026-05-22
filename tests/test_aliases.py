@@ -408,6 +408,3 @@ class TestAliasResolutionResult:
         assert "alias-b" in result.chain
         assert "alias-c" in result.chain
         assert len(result.chain) == 3
-
-
-# Made with Bob
