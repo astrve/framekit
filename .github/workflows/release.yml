@@ -139,7 +139,7 @@ jobs:
         run: twine check dist/*
 
       - name: Upload dist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: framekit-dist
           path: dist/
@@ -165,7 +165,7 @@ jobs:
             ./dist/*.whl
 
       - name: Upload signature bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: framekit-sigstore
           path: |
@@ -213,7 +213,7 @@ jobs:
         run: mv dist/framekit${{ matrix.ext }} dist/${{ matrix.asset_name }}${{ matrix.ext }}
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset_name }}
           path: dist/${{ matrix.asset_name }}${{ matrix.ext }}
