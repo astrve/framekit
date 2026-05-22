@@ -1,212 +1,225 @@
 # Framekit
 
-[Framekit](https://github.com/astrve/framekit) is a CLI‑first, headless‑friendly toolkit for preparing media releases. Created by **astrve**.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Type-checked: pyright](https://img.shields.io/badge/type--checked-pyright-2A6DB2.svg)](https://github.com/microsoft/pyright)
 
-## License
+Framekit is a CLI-first media release toolkit for local, headless-friendly workflows:
+rename, clean MKV tracks, fetch metadata, build NFO and presentation files, create
+torrents, validate releases, process batches, and automate repeatable pipelines.
 
-Framekit is distributed under the terms of the GNU General Public License v3.0.
+## Status
 
-Copyright (C) 2026 astrve
+Framekit `2.0.0` is the first public v2 release.
 
-See the [LICENSE](LICENSE) file for details.
+Beta modules:
+- `fk upload`
+- `fk extract`
+- `fk watch`
+
+These modules are usable, tested, and documented, but their command surfaces may still
+change faster than the stable core workflow.
+
+## Requirements
+
+- Python `3.12` or newer
+- `ffmpeg` and `ffprobe` for screenshots, extraction, and encoding
+- `mkvtoolnix` (`mkvmerge`, `mkvextract`, `mkvpropedit`) for MKV cleanup and subtitle extraction
+- `mediainfo` for release inspection and technical metadata
+
+Framekit GitHub Release binaries package Framekit itself. They do not bundle these
+external tools; install them separately and make sure they are available on `PATH`.
 
 ## Installation
 
-Framekit requires **Python 3.11** or newer. Install the latest release from PyPI with:
+### From GitHub Release
+
+Download the binary matching your platform from the GitHub Release page:
+
+- `framekit-windows-x86_64.exe`
+- `framekit-linux-x86_64`
+- `framekit-macos-arm64`
+
+Then run:
 
 ```bash
-pip install framekit-cli
+framekit --version
+framekit doctor
 ```
 
-If you want to use the latest development version directly from GitHub, install with:
+### From Source
 
 ```bash
-pip install git+https://github.com/astrve/framekit.git
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+pip install -e .
 ```
 
-## Quickstart
-
-1. Inspect your release folder to detect missing files and see what would be changed:
-
-    ```bash
-    fk inspect "Release folder"
-    ```
-2. Run the full pipeline in preview mode to see planned changes without modifying anything:
-
-    ```bash
-    fk pipe "Release folder" --preview
-    ```
-3. When satisfied, run the pipeline to apply the changes and generate NFO/Prez/Torrent artifacts:
-
-    ```bash
-    fk pipe "Release folder"
-    ```
-
-These quickstart commands orchestrate all modules. You can also call individual modules (e.g. ``fk ren``, ``fk cmk``, ``fk nfo``, ``fk prez``, ``fk torrent``) as shown below.
-
-## Core workflow
+Short command alias:
 
 ```bash
-fk inspect "Release folder"
-fk ren "Release folder"
-fk cmk "Release folder"
-fk nfo "Release folder"
-fk prez "Release folder"
-fk torrent "Release folder"
-fk pipe "Release folder"
+fk --version
 ```
 
-## Recommended pipeline
+## Quick Start
 
 ```bash
 fk setup
-fk pipe "Release folder" --preview
-fk pipe "Release folder"
-```
-
-The pipeline can run all modules or a subset:
-
-```bash
-fk pipe "Release folder" --modules cleanmkv,nfo,prez,torrent
-fk pipe "Release folder" -nm
-```
-
-## CleanMKV
-
-CleanMKV prepares a payload folder under `Release/<release-name>/`. The release name is derived from the MKV filename. For season packs, the episode token is removed from the first MKV name.
-
-```bash
-fk cmk "Release folder"
-fk cmk "Release folder" --details
-fk cmk "Release folder" --apply --preset multi
-```
-
-CleanMKV writes cleaned MKV files into a dedicated subfolder named `Release/<release>` where
-`<release>` is derived from the first MKV name and sanitised to remove any characters
-illegal on your platform (colons, question marks, etc.). For season packs, the episode
-token (for example, `E03`) is removed from the name. The same sanitisation helper is used
-throughout the pipeline so that NFO, Prez and Torrent always operate on the same
-payload folder. You can override the output folder name pattern via the
-`modules.cleanmkv.output_dir_name` setting; the placeholder `{release}` will be
-replaced with the sanitised release name.
-
-## Renamer
-
-```bash
-fk ren "Release folder"
-fk ren "Release folder" --details
-fk ren "Release folder" --apply
-```
-
-## Torrent
-
-Configure one or more announce URLs:
-
-```bash
-fk torrent --add-announce https://tracker.example/announce
-fk torrent --list-announces
-fk torrent --select-announce
-```
-
-Create a torrent:
-
-```bash
-fk torrent "Release/Release.Name"
-```
-### Content modes
-
-Framekit detects the media payload to include in a torrent so that sidecar files (NFO,
-TXT, Prez HTML/BBCode, screenshots) are ignored by default. You can control this via
-the `--content` option:
-
-- `auto` (default) – detect the payload automatically: include only the MKV files from
-  the detected release or season pack;
-- `media` – include only recognised media files (MKV, MP4, M4V, AVI);
-- `folder` – include everything in the folder, including sidecars (except existing `.torrent` files);
-- `select` – interactively choose one of several detected media groups when multiple
-  candidates exist.
-
-You can also override the default mode by configuring `modules.torrent.content_mode` in
-`settings.json` or by passing `--content` on the CLI. When running in headless mode,
-ambiguous payloads will cause an error instead of silently selecting a default.
-
-Torrent filenames are derived from the payload name using the same sanitisation logic
-as CleanMKV and never keep the `.mkv` suffix.
-
-## Prez
-
-```bash
-fk prez "Release folder"
-fk prez "Release folder" --list-templates
-fk prez "Release folder" --html-template timeline --bbcode-template tracker
-```
-
-Metadata is enabled by default. Disable it with:
-
-```bash
-fk prez "Release folder" -nm
-fk nfo "Release folder" -nm
-fk pipe "Release folder" -nm
-```
-
-## TMDb credentials
-
-Framekit uses [The Movie Database](https://www.themoviedb.org/) (TMDb) to fetch movie and TV metadata. To enable these features you must provide a TMDb **read access token** (v4) or an **API key** (v3). Without valid credentials you may encounter errors like “Invalid API key: You must be granted a valid key.”
-
-To get started:
-
-1. Create a free TMDb account at [themoviedb.org](https://www.themoviedb.org/) and navigate to your account settings → *API*.
-2. Generate a **API Read Access Token (v4 auth)** or obtain your existing **API Key (v3 auth)**.
-3. Run `fk md -t` or `fk setup` and paste the token when prompted. Framekit will store the token securely in your settings and clear any previously stored API key.
-4. To remove stored credentials, run `fk md --clear`.
-
-Always keep your TMDb credentials private and do not share them publicly.
-
-
-## Diagnostics
-
-```bash
 fk doctor
-fk settings
 fk inspect "Release folder"
+fk pipeline "Release folder" --preview
+fk pipeline "Release folder"
 ```
 
-## External tools
-
-Some workflow steps also require external tools to be installed separately.
-
-For the full workflow, install:
-
-- `mkvmerge` from **MKVToolNix** — required for CleanMKV/remux workflows.
-- `mediainfo` / **libmediainfo** — required for detailed media inspection and technical metadata.
-
-On Windows, install MKVToolNix and MediaInfo separately, then make sure their command-line tools are available in your `PATH`.
-
-You can verify your setup with:
+Headless mode:
 
 ```bash
-fk doctor
+fk pipeline "Release folder" --auto
+fk batch "Parent folder" --auto
 ```
 
-Framekit does not bundle these external binaries.
+## Core Workflow
 
+- `fk inspect` checks release folder structure.
+- `fk renamer` normalizes file names and release tags.
+- `fk cleanmkv` remuxes MKV files and removes unwanted tracks.
+- `fk metadata` resolves metadata from TMDb and optional fallback providers.
+- `fk nfo` creates tracker-ready NFO files.
+- `fk prez` creates BBCode and HTML presentation files.
+- `fk torrent` builds private or public `.torrent` files.
+- `fk validate` runs pre-upload release checks.
+- `fk pipeline` orchestrates the full workflow.
+- `fk batch` processes multiple releases.
 
-## Settings and security
+Beta workflow modules:
+- `fk upload` uploads torrents to supported tracker APIs.
+- `fk extract` extracts subtitle, audio, and video streams.
+- `fk watch` monitors folders and triggers pipeline presets.
 
-Framekit stores user-specific configuration and metadata in a settings file located in your platform's user config directory (for example, `~/.config/framekit/settings.json` on Linux).
-Do **not** commit this file to version control, as it may contain API keys and private torrent announce URLs. When printing settings via `fk settings` or diagnostics via `fk doctor`,
-secret values are redacted so that API keys and tokens are never displayed in plain text.
-Logs and debug output follow the same redaction rules.
+## Automation
 
-**Headless vs interactive**: When running commands in a non-interactive environment (such as in a CI pipeline), Framekit operates in headless mode. In headless mode, any operation that would normally prompt the user to make a selection (such as choosing between multiple detected payloads or selecting a template) will instead raise a clear error. To avoid ambiguity, you can explicitly choose the payload detection mode with `--content` (`auto`, `media` or `folder`) or enable interactive selection with `--select-content`. Use `--preview` to see planned changes without writing files, and `--apply` to commit the changes.
+Framekit avoids project-directory assumptions where possible:
 
+- Presets are discovered from package resources and project/user preset folders.
+- Prez HTML and BBCode templates are discovered from packaged template files.
+- NFO logos are scanned from bundled resources and user imports.
+- Banner designs are discovered from the online banner catalog, cached locally, and backed by an offline fallback list.
+- Pipeline presets can be reused in batch and watch workflows.
 
-### Important flags
+## Commands
 
-- `--preview`: Show what would be done without applying changes.
-- `--apply`: Perform the operation and write files.
-- `--details`: Show detailed per-file information.
-- `--dry-run`: For the renamer, shows the planned renames without renaming any files.
-- `--no-metadata`: Skip metadata downloading and embedding for NFO and Prez.
-- `--content <mode>`: Choose the payload detection mode for torrent creation (`auto`, `media`, `folder`).
-- `--select-content`: Interactively choose one of several detected payloads when multiple candidates exist.
+| Command | Alias(es) | Description |
+| --- | --- | --- |
+| `about` | `license` | Show version, license, and repository information. |
+| `init` | - | Create a starter local configuration. |
+| `setup` | - | Run the guided setup wizard. |
+| `language` | `lang` | Manage CLI language preferences. |
+| `settings` | `cfg`, `set` | View and edit local settings. |
+| `alias` | - | Manage custom command aliases. |
+| `doctor` | `doc`, `diag` | Check the local environment and toolchain. |
+| `logs` | - | Inspect Framekit logs. |
+| `rollback` | - | Roll back tracked file operations. |
+| `examples` | `ex` | Show command examples. |
+| `rename-parent` | `rp` | Rename a parent folder from release metadata. |
+| `validate` | - | Run pre-upload release checks. |
+| `profile` | - | Manage settings profiles. |
+| `inspect` | `ins` | Inspect a release folder. |
+| `browse` | - | Browse release folders from the terminal. |
+| `sort` | - | Sort release folders. |
+| `extract` | `ext` | Beta stream extraction commands. |
+| `screenshot` | `sc`, `screens` | Create screenshots and image sets. |
+| `encode` | `enc` | Encode video files with presets. |
+| `watch` | - | Beta folder watcher automation. |
+| `seedbox` | - | Seedbox transfer helpers. |
+| `renamer` | `ren` | Normalize file and folder names. |
+| `cleanmkv` | `cmk` | Clean and remux MKV files. |
+| `metadata` | `meta`, `md` | Resolve metadata from configured providers. |
+| `nfo` | `nf` | Generate tracker-ready NFO files. |
+| `torrent` | `tor` | Create torrent files. |
+| `prez` | - | Generate BBCode and HTML presentations. |
+| `upload` | `up` | Beta tracker upload commands. |
+| `pipeline` | `pipe`, `pr` | Run the workflow pipeline. |
+| `batch` | `bat` | Process multiple releases. |
+
+Common global flags:
+
+```text
+--yes / -y       Skip confirmations where supported
+--dry-run        Preview changes without writing
+--debug          Show tracebacks and write debug logs
+--log-file PATH  Write JSONL logs to a custom path
+--no-color       Disable terminal colors
+-h / --help      Show command help
+--version        Show installed version
+```
+
+## Configuration
+
+Run the setup wizard:
+
+```bash
+fk setup
+```
+
+Or start from the example:
+
+```bash
+cp framekit.example.yaml framekit.yaml
+```
+
+`framekit.yaml` is ignored by Git because it may contain local paths, tracker URLs,
+or plaintext secrets if the encrypted vault is disabled.
+
+## Secrets
+
+Framekit stores sensitive values in an encrypted vault when `security.enabled` is true:
+
+- TMDb tokens
+- tracker API keys
+- announce URLs and passkeys
+- torrent client credentials
+- image host API keys
+
+Secret values are redacted from settings output, diagnostics, logs, and error messages.
+
+Supported override pattern:
+
+```bash
+FRAMEKIT_CONFIG=/path/to/framekit.yaml fk doctor
+```
+
+## Documentation
+
+Minimal docs live in [`docs/Home.md`](docs/Home.md).
+
+The public wiki can reuse the same pages later without changing the CLI package.
+
+## Development
+
+```bash
+python -m venv .venv
+pip install -e ".[dev,docs,build-binary]"
+pre-commit install
+```
+
+Quality checks:
+
+```bash
+ruff format --check src tests
+ruff check src tests
+pyright
+pytest
+bandit -r src
+pip-audit
+detect-secrets scan
+python -m build
+twine check dist/*
+```
+
+## License
+
+Framekit is released under the GNU General Public License v3.0.
+
+See [LICENSE](LICENSE).

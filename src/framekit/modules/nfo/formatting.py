@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 def format_bytes_human(value: int | None) -> str:
+    """Format bytes human."""
     if value is None:
         return "-"
 
@@ -18,6 +19,7 @@ def format_bytes_human(value: int | None) -> str:
 
 
 def format_duration_ms_human(value: int | None) -> str:
+    """Format duration ms human."""
     if value is None:
         return "-"
 
@@ -33,6 +35,7 @@ def format_duration_ms_human(value: int | None) -> str:
 
 
 def format_percent_human(value: float | None) -> str:
+    """Format percent human."""
     if value is None:
         return "-"
 
@@ -44,6 +47,7 @@ def format_percent_human(value: float | None) -> str:
 
 
 def format_bitrate_human(value: int | None) -> str:
+    """Format bitrate human."""
     if value is None:
         return "-"
 
@@ -57,6 +61,7 @@ def format_bitrate_human(value: int | None) -> str:
 
 
 def format_kbps_human(value: int | None) -> str:
+    """Format kbps human."""
     if value is None:
         return "-"
 
@@ -68,12 +73,14 @@ def format_kbps_human(value: int | None) -> str:
 
 
 def format_fps_human(value: float | None) -> str:
+    """Format fps human."""
     if value is None:
         return "-"
     return f"{value:.3f} fps"
 
 
 def format_bit_depth_human(value: int | None) -> str:
+    """Format bit depth human."""
     if value is None:
         return "-"
     return f"{value}-bit"

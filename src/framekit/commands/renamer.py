@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import sys
-
-# Prefer rich_click if available; fall back to click when the rich integration is not installed.
-try:
-    import rich_click as click  # type: ignore[import-not-found]
-except Exception:
-    import click  # type: ignore[import-not-found]
 from pathlib import Path
 
 from rich import box
 from rich.table import Table
 
+from framekit.core.cli_helpers import join_path_parts
 from framekit.core.i18n import tr
 from framekit.core.paths import PathResolver
 from framekit.core.settings import SettingsStore
@@ -22,18 +17,19 @@ from framekit.modules.renamer.term_selector import (
     derive_remove_terms,
 )
 from framekit.ui.branding import print_module_banner
+
+# Prefer rich_click if available; fall back to click when the rich integration is not installed.
+from framekit.ui.click_helper import click
 from framekit.ui.console import console, print_error, print_info, print_success, print_warning
-from framekit.ui.selector import (
+from framekit.ui.unified_selector import (
     SelectorDivider,
     SelectorEntry,
     SelectorOption,
     confirm_choice,
-    select_many,
 )
-
-
-def _join_path_parts(parts: tuple[str, ...]) -> str:
-    return " ".join(part for part in parts if part).strip()
+from framekit.ui.unified_selector import (
+    select_many as _select_many,
+)
 
 
 def _status_style(status: str) -> str:
@@ -54,20 +50,37 @@ def _status_label(status: str) -> str:
 
 
 def _rename_example(report) -> str:
+    changed = _first_rename_example(report, changed_only=True)
+    if changed:
+        return changed
+    any_example = _first_rename_example(report, changed_only=False)
+    return any_example or "-"
+
+
+def _first_rename_example(report, *, changed_only: bool) -> str | None:
     for detail in report.details:
         source_name = str(detail.before.get("name", "") or "")
         target_name = str(detail.after.get("name", "") or "")
-        if source_name and target_name and source_name != target_name:
-            return f"{source_name} → {target_name}"
-    for detail in report.details:
-        source_name = str(detail.before.get("name", "") or "")
-        target_name = str(detail.after.get("name", "") or "")
-        if source_name and target_name:
-            return f"{source_name} → {target_name}"
-    return "-"
+        if not source_name or not target_name:
+            continue
+        if changed_only and source_name == target_name:
+            continue
+        return f"{source_name} → {target_name}"
+    return None
 
 
-def _print_rename_preview(report, *, details: bool = False, applied: bool = False) -> None:
+def _rename_counts(report) -> tuple[int, int, int]:
+    changed = sum(
+        1
+        for detail in report.details
+        if detail.status in {"renamed", "planned", "case-only", "planned-case-only"}
+    )
+    unchanged = sum(1 for detail in report.details if detail.status == "unchanged")
+    collisions = sum(1 for detail in report.details if detail.status == "collision")
+    return changed, unchanged, collisions
+
+
+def _preview_summary_table(report, *, applied: bool) -> Table:
     summary = Table(
         title=tr("renamer.preview_summary", default="Renamer Preview Summary"),
         expand=True,
@@ -76,13 +89,7 @@ def _print_rename_preview(report, *, details: bool = False, applied: bool = Fals
     )
     summary.add_column(tr("common.field", default="Field"), width=24, no_wrap=True)
     summary.add_column(tr("common.value", default="Value"), ratio=1)
-    changed = sum(
-        1
-        for detail in report.details
-        if detail.status in {"renamed", "planned", "case-only", "planned-case-only"}
-    )
-    unchanged = sum(1 for detail in report.details if detail.status == "unchanged")
-    collisions = sum(1 for detail in report.details if detail.status == "collision")
+    changed, unchanged, collisions = _rename_counts(report)
     summary.add_row(tr("common.scanned", default="Scanned"), str(report.scanned))
     summary.add_row(tr("common.processed", default="Processed"), str(report.processed))
     summary.add_row(
@@ -94,30 +101,115 @@ def _print_rename_preview(report, *, details: bool = False, applied: bool = Fals
     summary.add_row(tr("common.unchanged", default="Unchanged"), str(unchanged))
     summary.add_row(tr("common.errors", default="Errors"), str(collisions + len(report.errors)))
     summary.add_row(tr("common.example", default="Example"), _rename_example(report))
-    console.print(summary)
+    return summary
+
+
+def _print_rename_detail_table(detail, *, index: int) -> None:
+    status_color = _status_style(detail.status)
+    table = Table(
+        title=tr("common.item_number", default="Item {index}", index=index),
+        expand=True,
+        box=box.HEAVY,
+        border_style="white",
+    )
+    table.add_column(tr("common.field", default="Field"), width=22, no_wrap=True)
+    table.add_column(tr("common.value", default="Value"), ratio=1, overflow="fold")
+    table.add_row(tr("common.source", default="Source"), str(detail.before.get("name", "-")))
+    table.add_row(tr("common.target", default="Target"), str(detail.after.get("name", "-")))
+    table.add_row(
+        tr("common.status", default="Status"),
+        f"[{status_color}]{_status_label(detail.status)}[/{status_color}]",
+    )
+    table.add_row(tr("common.message", default="Message"), detail.message or "-")
+    console.print(table)
+
+
+def _print_rename_preview(report, *, details: bool = False, applied: bool = False) -> None:
+    console.print(_preview_summary_table(report, applied=applied))
 
     if not details:
         return
 
     console.print()
     for index, detail in enumerate(report.details, start=1):
-        status_color = _status_style(detail.status)
-        table = Table(
-            title=tr("common.item_number", default="Item {index}", index=index),
-            expand=True,
-            box=box.HEAVY,
-            border_style="white",
+        _print_rename_detail_table(detail, index=index)
+
+
+def _resolve_renamer_context(
+    path: str | None, lang: str | None
+) -> tuple[Path, RenamerService, str] | None:
+    store = SettingsStore()
+    settings = store.load()
+    resolver = PathResolver(settings)
+
+    folder = resolver.resolve_start_folder("renamer", path or None)
+    if not folder.exists() or not folder.is_dir():
+        print_error(
+            tr(
+                "cleanmkv.error.folder_not_found",
+                default="Folder not found: {folder}",
+                folder=folder,
+            )
         )
-        table.add_column(tr("common.field", default="Field"), width=22, no_wrap=True)
-        table.add_column(tr("common.value", default="Value"), ratio=1, overflow="fold")
-        table.add_row(tr("common.source", default="Source"), str(detail.before.get("name", "-")))
-        table.add_row(tr("common.target", default="Target"), str(detail.after.get("name", "-")))
-        table.add_row(
-            tr("common.status", default="Status"),
-            f"[{status_color}]{_status_label(detail.status)}[/{status_color}]",
+        return None
+    service = RenamerService()
+    default_lang = _default_language(settings, lang)
+    return folder, service, default_lang
+
+
+def _run_renamer_preview_then_confirm(
+    *,
+    interactive_confirmation: bool,
+    service: RenamerService,
+    folder: Path,
+    default_lang: str,
+    force_lang: bool,
+    remove_terms: tuple[str, ...],
+    insert_after_pairs: tuple[tuple[str, str], ...],
+    show_details: bool,
+    apply_changes: bool,
+) -> int | None:
+    first_error, _first_report = _run_renamer_once(
+        service=service,
+        folder=folder,
+        default_lang=default_lang,
+        apply_changes=apply_changes,
+        force_lang=force_lang,
+        remove_terms=remove_terms,
+        insert_after_pairs=insert_after_pairs,
+        show_details=show_details,
+    )
+    if first_error is not None:
+        return first_error
+    if not interactive_confirmation:
+        return None
+
+    should_apply = confirm_choice(
+        title=tr("renamer.confirm.apply_changes", default="Apply this rename plan now?"),
+        default=True,
+        yes_label=tr("common.apply", default="Apply"),
+        no_label=tr("common.cancel", default="Cancel"),
+    )
+    if should_apply is None or not should_apply:
+        print_success(
+            tr(
+                "renamer.success.preview_no_apply",
+                default="Renamer preview completed without applying changes.",
+            )
         )
-        table.add_row(tr("common.message", default="Message"), detail.message or "-")
-        console.print(table)
+        return 0
+
+    second_error, _report = _run_renamer_once(
+        service=service,
+        folder=folder,
+        default_lang=default_lang,
+        apply_changes=True,
+        force_lang=force_lang,
+        remove_terms=remove_terms,
+        insert_after_pairs=insert_after_pairs,
+        show_details=show_details,
+    )
+    return second_error
 
 
 def _category_label(category: str) -> str:
@@ -178,10 +270,10 @@ def _print_term_inventory_summary(inventory: TermInventory, folder: Path) -> Non
 
 
 def _build_term_selector_entries(inventory: TermInventory) -> list[SelectorEntry]:
-    """
-    Build the entries for the interactive term selector. Locked entries are
-    rendered as `disabled` SelectorOption rows so the user can see them but
-    cannot toggle them off.
+    """Build the entries for the interactive term selector.
+
+    Locked entries are rendered as ``disabled`` SelectorOption rows so the user
+    can see them but cannot toggle them off.
     """
     entries: list[SelectorEntry] = []
 
@@ -236,10 +328,10 @@ def _build_term_selector_entries(inventory: TermInventory) -> list[SelectorEntry
 
 
 def _run_term_selector(folder: Path) -> tuple[str, ...] | None:
-    """
-    Open the interactive term picker for `folder` and return the resulting
-    `remove_terms` tuple. Returns `None` if the user cancelled or if there
-    are no selectable terms (no point asking).
+    """Open the interactive term picker for ``folder``.
+
+    Returns the resulting ``remove_terms`` tuple, or ``None`` if the user
+    cancelled or if there are no selectable terms (no point asking).
 
     `RuntimeError` raised by the underlying selector in headless mode is
     caught and surfaced as a regular warning so the caller can fall back to
@@ -292,6 +384,286 @@ def _run_term_selector(folder: Path) -> tuple[str, ...] | None:
     return derive_remove_terms(inventory, kept)
 
 
+def _validate_renamer_flags(*, apply_changes: bool, dry_run: bool) -> int | None:
+    if not (apply_changes and dry_run):
+        return None
+    print_error(
+        tr(
+            "common.error.apply_and_dry_run",
+            default="--apply and --dry-run cannot be used together.",
+        )
+    )
+    return 1
+
+
+def _resolve_renamer_folder(path: str | None) -> tuple[PathResolver, Path] | tuple[None, None]:
+    store = SettingsStore()
+    settings = store.load()
+    resolver = PathResolver(settings)
+    folder = resolver.resolve_start_folder("renamer", path or None)
+    if folder.exists() and folder.is_dir():
+        return resolver, folder
+    print_error(
+        tr(
+            "cleanmkv.error.folder_not_found",
+            default="Folder not found: {folder}",
+            folder=folder,
+        )
+    )
+    return None, None
+
+
+def _default_language(settings: dict, lang: str | None) -> str:
+    return str(lang or settings["modules"]["renamer"]["default_language_tag"] or "")
+
+
+def _should_run_picker(
+    *,
+    select_terms: bool | None,
+    remove_terms: tuple[str, ...],
+    apply_changes: bool,
+    dry_run: bool,
+) -> bool:
+    if select_terms is True:
+        return True
+    if select_terms is False:
+        return False
+    return bool(sys.stdin.isatty()) and not remove_terms and not apply_changes and not dry_run
+
+
+def _merge_remove_terms(
+    *, cli_terms: tuple[str, ...], picker_terms: tuple[str, ...]
+) -> tuple[str, ...]:
+    seen: set[str] = set()
+    merged: list[str] = []
+    for term in (*cli_terms, *picker_terms):
+        key = term.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(term)
+    return tuple(merged)
+
+
+def _resolve_effective_remove_terms(
+    *,
+    folder: Path,
+    remove_terms: tuple[str, ...],
+    select_terms: bool | None,
+    apply_changes: bool,
+    dry_run: bool,
+) -> tuple[int | None, tuple[str, ...]]:
+    run_picker = _should_run_picker(
+        select_terms=select_terms,
+        remove_terms=remove_terms,
+        apply_changes=apply_changes,
+        dry_run=dry_run,
+    )
+    if not run_picker:
+        return None, tuple(remove_terms)
+
+    picker_result = _run_term_selector(folder)
+    if picker_result is None:
+        print_warning(
+            tr(
+                "renamer.term_selector.cancelled",
+                default="Term selection cancelled.",
+            )
+        )
+        return 1, ()
+
+    effective_remove_terms = _merge_remove_terms(cli_terms=remove_terms, picker_terms=picker_result)
+    if effective_remove_terms:
+        print_info(
+            tr(
+                "renamer.term_selector.removing",
+                default="Removing terms: {terms}",
+                terms=", ".join(effective_remove_terms),
+            )
+        )
+    return None, effective_remove_terms
+
+
+def _print_renamer_run_summary(report, *, folder: Path, apply_changes: bool) -> None:
+    print_info(tr("common.folder", default="Folder") + f": {folder}")
+    print_info(tr("nfo.info.scanned", default="Scanned: {count}", count=report.scanned))
+    print_info(tr("nfo.info.processed", default="Processed: {count}", count=report.processed))
+    if apply_changes:
+        print_info(tr("common.modified", default="Modified") + f": {report.modified}")
+    else:
+        print_info(tr("common.planned_changes", default="Planned changes") + f": {report.modified}")
+    print_info(tr("common.skipped", default="Skipped") + f": {report.skipped}")
+    if apply_changes:
+        for output in report.outputs:
+            if output.startswith("run_id="):
+                operation_id = output[len("run_id=") :]
+                print_info(
+                    tr("common.operation_id", default="Operation ID")
+                    + f": [bold]{operation_id}[/bold]"
+                    + "  [dim](use [cyan]fk rollback "
+                    + operation_id
+                    + "[/cyan] to undo)[/dim]"
+                )
+
+
+def _report_errors_if_any(report) -> int | None:
+    if not report.errors:
+        return None
+    for error in report.errors:
+        print_error(error.message)
+    return 1
+
+
+def _resolve_multi_language_tags_interactive(
+    plan: list,
+    *,
+    service: RenamerService,
+) -> list:
+    """Prompt for ambiguous single-language tags in interactive mode.
+
+    Returns a possibly mutated plan when multiple audio tracks are detected.
+    """
+    if not sys.stdin.isatty():
+        return plan
+
+    from framekit.modules.renamer.rules import replace_language_tag
+
+    for i, item in enumerate(plan):
+        if not item.multi_language_detected or not item.changed:
+            continue
+
+        existing = item.existing_language_tag or "VFF"
+        suggested = f"MULTI.{existing}"
+
+        console.print(
+            f"\n[yellow]WARNING[/yellow]  [bold]{item.source.name}[/bold]: "
+            f"multiple audio tracks detected — filename tag is [dim]{existing}[/dim]"
+        )
+        choice = (
+            click.prompt(
+                f"  Language tag [{suggested} / {existing} / custom]",
+                default=suggested,
+            )
+            .strip()
+            .upper()
+        )
+
+        if choice == existing.upper():
+            chosen_tag = existing
+        elif choice == suggested.upper():
+            chosen_tag = suggested
+        else:
+            chosen_tag = choice  # custom input
+
+        if chosen_tag == existing:
+            # User chose to keep the single-language tag — no rename needed for this item.
+            plan[i].changed = False
+            continue
+
+        # Rebuild the target stem with the chosen tag.
+        stem_parts = item.target.stem.split(".")
+        new_parts = replace_language_tag(stem_parts, chosen_tag)
+        new_stem = ".".join(new_parts)
+        plan[i].target = item.target.with_name(f"{new_stem}{item.target.suffix}")
+        plan[i].resulting_language_tag = chosen_tag
+
+    return plan
+
+
+def _run_renamer_once(
+    *,
+    service: RenamerService,
+    folder: Path,
+    default_lang: str,
+    apply_changes: bool,
+    force_lang: bool,
+    remove_terms: tuple[str, ...],
+    insert_after_pairs: tuple[tuple[str, str], ...],
+    show_details: bool,
+) -> tuple[int | None, object]:
+    # When applying in interactive mode, build the plan first so we can prompt
+    # the user to resolve ambiguous single-language tags before committing.
+    if apply_changes and sys.stdin.isatty():
+        plan = service.build_plan(
+            folder,
+            default_lang=default_lang,
+            force_lang=force_lang,
+            remove_terms=remove_terms,
+            insert_after_pairs=insert_after_pairs,
+        )
+        plan = _resolve_multi_language_tags_interactive(plan, service=service)
+        report = service.run_plan(plan, apply_changes=apply_changes)
+    else:
+        report = service.run(
+            folder,
+            default_lang=default_lang,
+            apply_changes=apply_changes,
+            force_lang=force_lang,
+            remove_terms=remove_terms,
+            insert_after_pairs=insert_after_pairs,
+        )
+    _print_rename_preview(report, details=show_details, applied=apply_changes)
+    _print_renamer_run_summary(report, folder=folder, apply_changes=apply_changes)
+    error_code = _report_errors_if_any(report)
+    return error_code, report
+
+
+def _derive_parent_name_from_report(report) -> str | None:
+    """Derive a new parent folder name from the first renamed file (strip extension)."""
+    for detail in report.details:
+        if detail.status in ("renamed", "planned", "case-only", "planned-case-only"):
+            target_name = detail.after.get("name", "")
+            if target_name:
+                return Path(target_name).stem
+    return None
+
+
+def _rename_parent_folder(folder: Path, new_name: str, *, apply: bool) -> Path | None:
+    """Rename the release folder. Returns new path on success, None on skip."""
+    if folder.name == new_name:
+        print_info(
+            tr(
+                "renamer.parent.already_correct",
+                default="Parent folder already named correctly: {name}",
+                name=new_name,
+            )
+        )
+        return None
+
+    new_path = folder.parent / new_name
+    if new_path.exists():
+        print_warning(
+            tr(
+                "renamer.parent.target_exists",
+                default="Cannot rename parent: target already exists: {path}",
+                path=new_path,
+            )
+        )
+        return None
+
+    if apply:
+        folder.rename(new_path)
+        print_success(
+            tr(
+                "renamer.parent.renamed",
+                default="Parent folder renamed: {old} → {new}",
+                old=folder.name,
+                new=new_name,
+            )
+        )
+        return new_path
+    else:
+        print_info(
+            tr(
+                "renamer.parent.would_rename",
+                default="Parent folder would be renamed: {old} → {new}",
+                old=folder.name,
+                new=new_name,
+            )
+        )
+        return None
+
+
 def run_renamer_command(
     *,
     path: str | None,
@@ -301,36 +673,20 @@ def run_renamer_command(
     force_lang: bool,
     show_details: bool = False,
     remove_terms: tuple[str, ...] = (),
+    insert_after_pairs: tuple[tuple[str, str], ...] = (),
     select_terms: bool | None = None,
+    rename_parent: bool = False,
 ) -> int:
-    if apply_changes and dry_run:
-        print_error(
-            tr(
-                "common.error.apply_and_dry_run",
-                default="--apply and --dry-run cannot be used together.",
-            )
-        )
-        return 1
-
-    store = SettingsStore()
-    settings = store.load()
-    resolver = PathResolver(settings)
+    """Run renamer command."""
+    flags_error = _validate_renamer_flags(apply_changes=apply_changes, dry_run=dry_run)
+    if flags_error is not None:
+        return flags_error
 
     print_module_banner("Renamer")
-
-    folder = resolver.resolve_start_folder("renamer", path or None)
-    if not folder.exists() or not folder.is_dir():
-        print_error(
-            tr(
-                "cleanmkv.error.folder_not_found",
-                default="Folder not found: {folder}",
-                folder=folder,
-            )
-        )
+    context = _resolve_renamer_context(path, lang)
+    if context is None:
         return 1
-
-    service = RenamerService()
-    default_lang = lang or settings["modules"]["renamer"]["default_language_tag"]
+    folder, service, default_lang = context
 
     if lang and not force_lang:
         print_warning(
@@ -339,122 +695,83 @@ def run_renamer_command(
                 default="Language tag will only be injected if missing. Use --force-lang to replace existing tags.",
             )
         )
-
-    # Resolve whether to open the interactive term picker. Explicit flag wins;
-    # otherwise we offer the picker only when we are *interactive* AND the
-    # caller did not already supply explicit `--remove-term` values nor a
-    # non-interactive mode (`--apply` / `--dry-run`).
-    if select_terms is True:
-        run_picker = True
-    elif select_terms is False:
-        run_picker = False
-    else:
-        run_picker = (
-            bool(sys.stdin.isatty()) and not remove_terms and not apply_changes and not dry_run
-        )
-
-    effective_remove_terms = tuple(remove_terms)
-    if run_picker:
-        picker_result = _run_term_selector(folder)
-        if picker_result is None:
-            print_warning(
-                tr(
-                    "renamer.term_selector.cancelled",
-                    default="Term selection cancelled.",
-                )
-            )
-            return 1
-        # Picker output is *additive* to any explicit `--remove-term` values.
-        # Deduplicate while keeping the order: CLI terms first, then picker.
-        seen: set[str] = set()
-        merged: list[str] = []
-        for term in (*remove_terms, *picker_result):
-            key = term.upper()
-            if key in seen:
-                continue
-            seen.add(key)
-            merged.append(term)
-        effective_remove_terms = tuple(merged)
-        if effective_remove_terms:
-            print_info(
-                tr(
-                    "renamer.term_selector.removing",
-                    default="Removing terms: {terms}",
-                    terms=", ".join(effective_remove_terms),
-                )
-            )
+    picker_error, effective_remove_terms = _resolve_effective_remove_terms(
+        folder=folder,
+        remove_terms=remove_terms,
+        select_terms=select_terms,
+        apply_changes=apply_changes,
+        dry_run=dry_run,
+    )
+    if picker_error is not None:
+        return picker_error
 
     interactive_confirmation = not apply_changes and not dry_run
-    report = service.run(
-        folder,
+    run_error = _run_renamer_preview_then_confirm(
+        interactive_confirmation=interactive_confirmation,
+        service=service,
+        folder=folder,
         default_lang=default_lang,
         apply_changes=apply_changes,
         force_lang=force_lang,
         remove_terms=effective_remove_terms,
+        insert_after_pairs=insert_after_pairs,
+        show_details=show_details,
     )
+    if run_error is not None:
+        return run_error
 
-    _print_rename_preview(report, details=show_details, applied=apply_changes)
-
-    print_info(tr("common.folder", default="Folder") + f": {folder}")
-    print_info(tr("nfo.info.scanned", default="Scanned: {count}", count=report.scanned))
-    print_info(tr("nfo.info.processed", default="Processed: {count}", count=report.processed))
-    if apply_changes:
-        print_info(tr("common.modified", default="Modified") + f": {report.modified}")
-    else:
-        print_info(tr("common.planned_changes", default="Planned changes") + f": {report.modified}")
-    print_info(tr("common.skipped", default="Skipped") + f": {report.skipped}")
-
-    if report.errors:
-        for error in report.errors:
-            print_error(error.message)
-        return 1
-
-    if interactive_confirmation:
-        should_apply = confirm_choice(
-            title=tr("renamer.confirm.apply_changes", default="Apply this rename plan now?"),
-            default=True,
-            yes_label=tr("common.apply", default="Apply"),
-            no_label=tr("common.cancel", default="Cancel"),
-        )
-        if should_apply is None or not should_apply:
-            print_success(
-                tr(
-                    "renamer.success.preview_no_apply",
-                    default="Renamer preview completed without applying changes.",
-                )
-            )
-            settings["modules"]["renamer"]["last_folder"] = str(folder)
-            store.save(settings)
-            return 0
-
-        report = service.run(
+    # Rename parent folder if requested
+    if rename_parent:
+        preview_report = service.run(
             folder,
             default_lang=default_lang,
-            apply_changes=True,
+            apply_changes=False,
             force_lang=force_lang,
             remove_terms=effective_remove_terms,
+            insert_after_pairs=insert_after_pairs,
         )
-        _print_rename_preview(report, details=show_details, applied=True)
+        parent_name = _derive_parent_name_from_report(preview_report)
+        if parent_name:
+            will_apply = apply_changes or interactive_confirmation
+            _rename_parent_folder(folder, parent_name, apply=will_apply and not dry_run)
 
-        if report.errors:
-            for error in report.errors:
-                print_error(error.message)
-            return 1
-
-        print_success(tr("renamer.success.completed", default="Rename operation completed."))
-    elif apply_changes:
+    if apply_changes or interactive_confirmation:
         print_success(tr("renamer.success.completed", default="Rename operation completed."))
     else:
         print_success(tr("common.dry_run_completed", default="Dry-run completed."))
-
-    settings["modules"]["renamer"]["last_folder"] = str(folder)
-    store.save(settings)
 
     return 0
 
 
 @click.command(
-    "renamer", help=tr("cli.renamer.help", default="Rename media files using Framekit rules.")
+    "renamer",
+    help=tr(
+        "cli.renamer.help",
+        default=(
+            "Normalize release file names using intelligent parsing and formatting rules.\n\n"
+            "The renamer analyzes file names, extracts metadata (resolution, codec, language, etc.), "
+            "and reformats them according to tracker standards and best practices.\n\n"
+            "Quick examples:\n"
+            "  fk renamer <folder>                     # Interactive preview and confirm\n"
+            "  fk ren <folder> --apply                 # Apply without confirmation\n"
+            "  fk renamer <folder> --lang FRENCH       # Inject language tag\n"
+            "  fk ren <folder> --remove-term REPACK    # Remove specific terms\n"
+            "  fk renamer <folder> --select-terms      # Interactive term picker\n\n"
+            "Features:\n"
+            "  • Intelligent term detection and categorization\n"
+            "  • Interactive term selection\n"
+            "  • Language tag injection/replacement\n"
+            "  • Custom term removal\n"
+            "  • Collision detection\n"
+            "  • Case-only rename support\n\n"
+            "Best practices:\n"
+            "  • Always preview changes before applying\n"
+            "  • Use --select-terms for fine-grained control\n"
+            "  • Use --force-lang to replace existing language tags\n"
+            "  • Check for collisions in the preview\n\n"
+            "Related commands: pipeline, batch"
+        ),
+    ),
 )
 @click.argument("path_parts", nargs=-1)
 @click.option(
@@ -477,6 +794,7 @@ def run_renamer_command(
     ),
 )
 @click.option(
+    "-d",
     "--dry-run",
     is_flag=True,
     help=tr(
@@ -485,18 +803,31 @@ def run_renamer_command(
     ),
 )
 @click.option(
+    "-D",
     "--details",
     "show_details",
     is_flag=True,
     help=tr("cli.renamer.option.details", default="Show per-file rename details."),
 )
 @click.option(
+    "-r",
     "--remove-term",
     "remove_terms",
     multiple=True,
     help=tr(
         "cli.renamer.option.remove_term",
         default="Remove a term from source names before normalization.",
+    ),
+)
+@click.option(
+    "--insert-after",
+    "insert_after_pairs",
+    nargs=2,
+    multiple=True,
+    metavar="<existing_token> <term_to_add>",
+    help=tr(
+        "cli.renamer.option.insert_after",
+        default="Insert a term after an existing token in the filename.",
     ),
 )
 @click.option(
@@ -508,6 +839,15 @@ def run_renamer_command(
         default="Open or bypass the interactive 'terms to keep' picker before previewing.",
     ),
 )
+@click.option(
+    "-P",
+    "--rename-parent",
+    is_flag=True,
+    help=tr(
+        "cli.renamer.option.rename_parent",
+        default="Also rename the parent release folder to match the normalized name.",
+    ),
+)
 def renamer_command(
     path_parts: tuple[str, ...],
     lang: str | None,
@@ -516,15 +856,23 @@ def renamer_command(
     force_lang: bool,
     show_details: bool,
     remove_terms: tuple[str, ...],
+    insert_after_pairs: tuple[tuple[str, str], ...],
     select_terms: bool | None,
+    rename_parent: bool,
 ) -> int:
+    """Handle renamer command."""
     return run_renamer_command(
-        path=_join_path_parts(path_parts) or None,
+        path=join_path_parts(path_parts) or None,
         lang=lang,
         apply_changes=apply_changes,
         dry_run=dry_run,
         force_lang=force_lang,
         show_details=show_details,
         remove_terms=remove_terms,
+        insert_after_pairs=insert_after_pairs,
         select_terms=select_terms,
+        rename_parent=rename_parent,
     )
+
+
+select_many = _select_many  # backwards-compatible patch target for tests

@@ -1,0 +1,21 @@
+# VE Only CleanMKV Preset (Version Española)
+# ===========================================
+# Keep only Spanish audio and Spanish subtitles (forced and SDH if available)
+# First available Spanish subtitle will be default (forced preferred, then full/SDH)
+
+ve_only:
+  name: "VE Only - ES audio + ES subs"
+  keep_audio_filters:
+    - "spanish"
+  default_audio_filter: "spanish"
+  keep_subtitle_filters:
+    - "spanish"
+  keep_subtitle_variants:
+    - "forced"
+    - "full"
+    - "sdh"
+  default_subtitle_filter: "spanish"
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+

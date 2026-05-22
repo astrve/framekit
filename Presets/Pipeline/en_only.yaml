@@ -1,0 +1,38 @@
+# EN Only Pipeline Preset
+# ========================
+# English audio only + English subs (forced and SDH if available)
+# Prez: detailed / NFO: detailed / HTML: Magazine Dark
+
+en_only:
+  name: "EN Only - EN audio + EN subs"
+  description: "Keep only English audio and English subtitles (forced/SDH), first English subtitle as default"
+  modules:
+    - "renamer"
+    - "cleanmkv"
+    - "nfo"
+    - "torrent"
+    - "prez"
+  renamer:
+    auto_detect: true
+  cleanmkv:
+    external_preset: "en_only"
+    apply_changes: true
+    output_dir_name: "Release/{release}"
+  nfo:
+    template: "detailed"
+    locale: "en"
+    mode: "global"
+    auto_metadata: true
+  torrent:
+    private: true
+  prez:
+    format: "both"
+    bbcode_template: "detailed"
+    html_template: "magazine_dark"
+    banner_design: "textual"
+    detail_level: "detailed"
+    mediainfo_mode: "spoiler"
+    show_tmdb: "true"
+    show_mediainfo: "true"
+
+

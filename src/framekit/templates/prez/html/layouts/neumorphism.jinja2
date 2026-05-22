@@ -1,0 +1,442 @@
+{# Neumorphism Layout - Soft shadows with 3D relief effect #}
+{% extends "_base.jinja2" %}
+{% import "_macros.jinja2" as macros %}
+
+{% block layout_styles %}
+<style>
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 60px 30px;
+    background: var(--primary);
+  }
+  
+  /* Neumorphic header */
+  header {
+    text-align: center;
+    margin-bottom: 50px;
+    padding: 45px 40px;
+    background: var(--primary);
+    border-radius: 30px;
+    box-shadow: 
+      12px 12px 24px color-mix(in srgb, var(--line) 60%, transparent),
+      -12px -12px 24px color-mix(in srgb, var(--card) 60%, transparent);
+  }
+  
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    justify-content: center;
+    margin-bottom: 30px;
+  }
+  
+  .badge {
+    background: var(--primary);
+    color: var(--accent);
+    padding: 10px 22px;
+    font-weight: 800;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border-radius: 20px;
+    box-shadow: 
+      6px 6px 12px color-mix(in srgb, var(--line) 50%, transparent),
+      -6px -6px 12px color-mix(in srgb, var(--card) 50%, transparent);
+    transition: all 0.3s ease;
+  }
+  
+  .badge:hover {
+    box-shadow: 
+      inset 4px 4px 8px color-mix(in srgb, var(--line) 50%, transparent),
+      inset -4px -4px 8px color-mix(in srgb, var(--card) 50%, transparent);
+  }
+  
+  h1 {
+    font-size: clamp(2.8rem, 6vw, 5rem);
+    line-height: 1.1;
+    margin: 0 0 20px;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+    color: var(--text);
+    text-shadow: 
+      2px 2px 4px color-mix(in srgb, var(--line) 40%, transparent),
+      -2px -2px 4px color-mix(in srgb, var(--card) 40%, transparent);
+  }
+  
+  h2 {
+    color: var(--accent);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin: 0 0 14px;
+    font-weight: 700;
+  }
+  
+  h3 {
+    color: var(--muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 10px 0;
+  }
+  
+  /* Neumorphic poster frame */
+  .poster-container {
+    text-align: center;
+    margin: 45px 0;
+  }
+  
+  .poster-frame {
+    display: inline-block;
+    padding: 20px;
+    background: var(--primary);
+    border-radius: 30px;
+    box-shadow: 
+      15px 15px 30px color-mix(in srgb, var(--line) 60%, transparent),
+      -15px -15px 30px color-mix(in srgb, var(--card) 60%, transparent);
+  }
+  
+  .poster-inner {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 
+      inset 6px 6px 12px color-mix(in srgb, var(--line) 40%, transparent),
+      inset -6px -6px 12px color-mix(in srgb, var(--card) 40%, transparent);
+  }
+  
+  .poster {
+    max-width: 350px;
+    width: 100%;
+    display: block;
+  }
+  
+  /* Neumorphic sections */
+  section {
+    background: var(--primary);
+    border-radius: 25px;
+    padding: 35px;
+    margin-bottom: 30px;
+    box-shadow: 
+      10px 10px 20px color-mix(in srgb, var(--line) 50%, transparent),
+      -10px -10px 20px color-mix(in srgb, var(--card) 50%, transparent);
+  }
+  
+  section h2 {
+    margin-bottom: 25px;
+    padding-bottom: 14px;
+    border-bottom: none;
+    text-align: center;
+    position: relative;
+  }
+  
+  section h2::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 3px;
+    background: var(--primary);
+    border-radius: 2px;
+    box-shadow: 
+      inset 2px 2px 4px color-mix(in srgb, var(--line) 50%, transparent),
+      inset -2px -2px 4px color-mix(in srgb, var(--card) 50%, transparent);
+  }
+  
+  /* Info grid with neumorphic cards - Optimized for 1200px */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 28px;
+  }
+  
+  .info-card {
+    background: var(--primary);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 
+      8px 8px 16px color-mix(in srgb, var(--line) 50%, transparent),
+      -8px -8px 16px color-mix(in srgb, var(--card) 50%, transparent);
+    transition: all 0.3s ease;
+  }
+  
+  .info-card:hover {
+    box-shadow: 
+      inset 4px 4px 8px color-mix(in srgb, var(--line) 40%, transparent),
+      inset -4px -4px 8px color-mix(in srgb, var(--card) 40%, transparent);
+  }
+  
+  .info-card.wide {
+    grid-column: span 2;
+  }
+  
+  .info-card span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 800;
+    margin-bottom: 10px;
+  }
+  
+  .info-card strong {
+    display: block;
+    font-size: 1.05rem;
+    color: var(--text);
+    font-weight: 600;
+  }
+  
+  /* Neumorphic tables */
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+    margin-top: 18px;
+    table-layout: fixed;
+  }
+  
+  th, td {
+    padding: 14px 12px;
+    text-align: left;
+    background: var(--primary);
+    border: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  th {
+    color: var(--accent);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    font-weight: 800;
+    border-radius: 12px;
+    box-shadow:
+      6px 6px 12px color-mix(in srgb, var(--line) 50%, transparent),
+      -6px -6px 12px color-mix(in srgb, var(--card) 50%, transparent);
+  }
+  
+  /* Fixed column widths for audio/subtitle tables */
+  th:nth-child(1), td:nth-child(1) { width: 30%; } /* Language */
+  th:nth-child(2), td:nth-child(2) { width: 25%; } /* Codec/Type */
+  th:nth-child(3), td:nth-child(3) { width: 20%; } /* Channels/Format */
+  th:nth-child(4), td:nth-child(4) { width: 25%; } /* Bitrate/Additional */
+  
+  th:first-child {
+    border-radius: 12px 0 0 12px;
+  }
+  
+  th:last-child {
+    border-radius: 0 12px 12px 0;
+  }
+  
+  tr {
+    border-radius: 12px;
+  }
+  
+  td {
+    box-shadow: 
+      4px 4px 8px color-mix(in srgb, var(--line) 40%, transparent),
+      -4px -4px 8px color-mix(in srgb, var(--card) 40%, transparent);
+  }
+  
+  td:first-child {
+    border-radius: 12px 0 0 12px;
+  }
+  
+  td:last-child {
+    border-radius: 0 12px 12px 0;
+  }
+  
+  /* Synopsis with neumorphic style */
+  .synopsis p {
+    font-size: 1.1rem;
+    line-height: 1.75;
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto;
+    color: var(--text);
+  }
+  
+  /* Technical summary with pressed effect */
+  .tech-summary {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 14px 28px;
+    background: var(--primary);
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 20px;
+    box-shadow: 
+      inset 6px 6px 12px color-mix(in srgb, var(--line) 50%, transparent),
+      inset -6px -6px 12px color-mix(in srgb, var(--card) 50%, transparent);
+  }
+  
+  /* MediaInfo neumorphic */
+  .mediainfo {
+    background: var(--primary);
+    border-radius: 25px;
+    padding: 28px;
+    margin-top: 30px;
+    box-shadow: 
+      10px 10px 20px color-mix(in srgb, var(--line) 50%, transparent),
+      -10px -10px 20px color-mix(in srgb, var(--card) 50%, transparent);
+  }
+  
+  summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    text-align: center;
+    padding: 16px;
+    background: var(--primary);
+    border-radius: 16px;
+    box-shadow: 
+      6px 6px 12px color-mix(in srgb, var(--line) 50%, transparent),
+      -6px -6px 12px color-mix(in srgb, var(--card) 50%, transparent);
+    transition: all 0.3s ease;
+  }
+  
+  summary:hover {
+    box-shadow: 
+      inset 4px 4px 8px color-mix(in srgb, var(--line) 40%, transparent),
+      inset -4px -4px 8px color-mix(in srgb, var(--card) 40%, transparent);
+  }
+  
+  pre {
+    margin-top: 20px;
+    padding: 22px;
+    background: var(--primary);
+    border-radius: 16px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    box-shadow: 
+      inset 6px 6px 12px color-mix(in srgb, var(--line) 40%, transparent),
+      inset -6px -6px 12px color-mix(in srgb, var(--card) 40%, transparent);
+  }
+  
+  /* Responsive */
+  @media (max-width: 900px) {
+    .info-card.wide {
+      grid-column: span 1;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    main {
+      padding: 40px 20px;
+    }
+    
+    header {
+      padding: 35px 25px;
+      border-radius: 20px;
+      box-shadow: 
+        8px 8px 16px color-mix(in srgb, var(--line) 60%, transparent),
+        -8px -8px 16px color-mix(in srgb, var(--card) 60%, transparent);
+    }
+    
+    section {
+      padding: 28px 22px;
+      border-radius: 20px;
+      box-shadow: 
+        8px 8px 16px color-mix(in srgb, var(--line) 50%, transparent),
+        -8px -8px 16px color-mix(in srgb, var(--card) 50%, transparent);
+    }
+    
+    .poster-frame {
+      padding: 16px;
+      border-radius: 20px;
+      box-shadow: 
+        10px 10px 20px color-mix(in srgb, var(--line) 60%, transparent),
+        -10px -10px 20px color-mix(in srgb, var(--card) 60%, transparent);
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+    }
+    
+    .synopsis p {
+      text-align: left;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main>
+  <header>
+    <div class="badges">
+      {% for badge in data.badges %}<span class="badge">{{ badge }}</span>{% endfor %}
+    </div>
+    <h1>{{ data.title }}</h1>
+    {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+    {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+    {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+    {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+    <span class="tech-summary">{{ data.technical_summary }}</span>
+  </header>
+  
+  {% if data.poster_url != '-' %}
+  <div class="poster-container">
+    <div class="poster-frame">
+      <div class="poster-inner">
+        <img class="poster" src="{{ data.poster_url }}" alt="poster">
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  
+  {% if data.overview != '-' %}
+  <section class="synopsis">
+    <h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2>
+    <p>{{ data.overview }}</p>
+  </section>
+  {% endif %}
+  
+  {% if data.info_fields %}
+  <section class="info-section">
+    <h2>{{ tr('prez.section.infos', default='Informations') }}</h2>
+    {{ macros.render_info_grid(data.info_fields) }}
+  </section>
+  {% endif %}
+  
+  {% if data.release_fields %}
+  <section class="release-section">
+    <h2>{{ tr('prez.section.release', default='Release') }}</h2>
+    {{ macros.render_info_grid(data.release_fields) }}
+  </section>
+  {% endif %}
+  
+  {% if data.has_metadata_section %}
+  <section class="metadata-section">
+    <h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>
+    {{ macros.render_metadata(data.metadata_fields, data.cast, data.crew) }}
+  </section>
+  {% endif %}
+  
+  {% if data.video_fields %}
+  <section class="video-section">
+    <h2>{{ tr('prez.section.video', default='Video') }}</h2>
+    {{ macros.render_info_grid(data.video_fields) }}
+  </section>
+  {% endif %}
+  
+  <section class="audio-section">
+    <h2>{{ tr('prez.section.audio', default='Audio') }}</h2>
+    {{ macros.render_audio_tracks(data.audio_track_groups) }}
+  </section>
+  
+  <section class="subtitle-section">
+    <h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>
+    {{ macros.render_subtitle_tracks(data.subtitle_track_groups) }}
+  </section>
+  
+  {{ macros.render_mediainfo(data.has_mediainfo, data.mediainfo_text) }}
+</main>
+{% endblock %}

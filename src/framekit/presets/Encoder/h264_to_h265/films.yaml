@@ -1,0 +1,40 @@
+name: "Movies - h264 to h265"
+description: "Optimized preset for movies (CRF 19, slow, main10)"
+aliases:
+  - f265
+  - film265
+  - movie265
+  - f264-265
+  - film264-265
+source_codec: h264
+target_codec: h265
+encoder: libx265
+
+video:
+  crf: 19
+  preset: slow
+  tune: null
+  profile: main10
+  level: "5.1"
+  pix_fmt: yuv420p10le
+
+audio:
+  copy: true
+
+subtitles:
+  copy: true
+
+metadata:
+  preserve: true
+
+chapters:
+  preserve: true
+
+advanced:
+  two_pass: false
+  x265_params:
+    - "aq-mode=3"
+    - "aq-strength=0.8"
+    - "deblock=-1:-1"
+    - "psy-rd=2.0"
+    - "psy-rdoq=1.0"

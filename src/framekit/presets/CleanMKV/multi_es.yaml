@@ -1,0 +1,15 @@
+# MULTI.ES CleanMKV Preset
+# ========================
+# Keep all tracks, Spanish audio as default, first Spanish subtitle as default (forced preferred)
+
+multi_es:
+  name: "MULTI.ES - All tracks, ES audio default, ES sub default"
+  keep_audio_filters: []
+  default_audio_filter: "spanish"
+  keep_subtitle_filters: []
+  keep_subtitle_variants: []
+  default_subtitle_filter: "spanish"
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+

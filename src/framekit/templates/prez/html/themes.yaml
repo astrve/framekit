@@ -1,0 +1,799 @@
+# Prez Template System - Theme Definitions
+# 10 Designs × 14 Color Variants = 140 Templates
+
+designs:
+  cinematic:
+    name: Cinematic
+    description: Horizontal layout like movie credits with wide poster display
+    layout: layouts/cinematic.jinja2
+    colors:
+      dark:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#d4af37'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: '#333333'
+        card: '#151515'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight:
+        primary: '#0a0f1a'
+        secondary: '#141a2e'
+        accent: '#c0c8d8'
+        text: '#e8ecf4'
+        muted: '#8090b0'
+        line: '#2a3550'
+        card: '#0f1420'
+      cherry:
+        primary: '#1a0a0f'
+        secondary: '#2e1419'
+        accent: '#ff4466'
+        text: '#ffe8ec'
+        muted: '#ff8899'
+        line: '#4a1e28'
+        card: '#200f14'
+      lavender:
+        primary: '#15101a'
+        secondary: '#251a2e'
+        accent: '#b794f6'
+        text: '#f0e8ff'
+        muted: '#d4b8ff'
+        line: '#3a2850'
+        card: '#1a1420'
+      mint:
+        primary: '#0a1a14'
+        secondary: '#142e23'
+        accent: '#5de4a8'
+        text: '#e8fff4'
+        muted: '#8fffc8'
+        line: '#1e5038'
+        card: '#0f2018'
+      amber:
+        primary: '#1a140a'
+        secondary: '#2e2314'
+        accent: '#ffb347'
+        text: '#fff4e8'
+        muted: '#ffd699'
+        line: '#503a1e'
+        card: '#201810'
+      slate:
+        primary: '#14161a'
+        secondary: '#1e2228'
+        accent: '#94a3b8'
+        text: '#e8ecf0'
+        muted: '#b0bcc8'
+        line: '#2e3540'
+        card: '#181a1e'
+      coral:
+        primary: '#1a1214'
+        secondary: '#2e1e23'
+        accent: '#ff8a80'
+        text: '#fff0ec'
+        muted: '#ffb8b0'
+        line: '#4a3038'
+        card: '#201618'
+      teal:
+        primary: '#0a1a1a'
+        secondary: '#142e2e'
+        accent: '#5fd4d4'
+        text: '#e8ffff'
+        muted: '#8fe8e8'
+        line: '#1e5050'
+        card: '#0f2020'
+  magazine:
+    name: Magazine
+    description: Multi-column editorial layout with article-style sections
+    layout: layouts/magazine.jinja2
+    colors:
+      dark:
+        primary: '#14120f'
+        secondary: '#201c18'
+        accent: '#fbbf24'
+        text: '#fffaf0'
+        muted: '#d8c4a8'
+        line: '#3a3530'
+        card: '#1a1814'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight:
+        primary: '#0a0f1a'
+        secondary: '#141a2e'
+        accent: '#c0c8d8'
+        text: '#e8ecf4'
+        muted: '#8090b0'
+        line: '#2a3550'
+        card: '#0f1420'
+      cherry:
+        primary: '#1a0a0f'
+        secondary: '#2e1419'
+        accent: '#ff4466'
+        text: '#ffe8ec'
+        muted: '#ff8899'
+        line: '#4a1e28'
+        card: '#200f14'
+      lavender:
+        primary: '#15101a'
+        secondary: '#251a2e'
+        accent: '#b794f6'
+        text: '#f0e8ff'
+        muted: '#d4b8ff'
+        line: '#3a2850'
+        card: '#1a1420'
+      mint:
+        primary: '#0a1a14'
+        secondary: '#142e23'
+        accent: '#5de4a8'
+        text: '#e8fff4'
+        muted: '#8fffc8'
+        line: '#1e5038'
+        card: '#0f2018'
+      amber:
+        primary: '#1a140a'
+        secondary: '#2e2314'
+        accent: '#ffb347'
+        text: '#fff4e8'
+        muted: '#ffd699'
+        line: '#503a1e'
+        card: '#201810'
+      slate:
+        primary: '#14161a'
+        secondary: '#1e2228'
+        accent: '#94a3b8'
+        text: '#e8ecf0'
+        muted: '#b0bcc8'
+        line: '#2e3540'
+        card: '#181a1e'
+      coral:
+        primary: '#1a1214'
+        secondary: '#2e1e23'
+        accent: '#ff8a80'
+        text: '#fff0ec'
+        muted: '#ffb8b0'
+        line: '#4a3038'
+        card: '#201618'
+      teal:
+        primary: '#0a1a1a'
+        secondary: '#142e2e'
+        accent: '#5fd4d4'
+        text: '#e8ffff'
+        muted: '#8fe8e8'
+        line: '#1e5050'
+        card: '#0f2020'
+  minimal:
+    name: Minimal
+    description: Clean, spacious design with generous whitespace
+    layout: layouts/minimal.jinja2
+    colors:
+      dark:
+        primary: '#0b0f14'
+        secondary: '#111820'
+        accent: '#e2e8f0'
+        text: '#f1f5f9'
+        muted: '#94a3b8'
+        line: '#1e293b'
+        card: '#0f1419'
+      red:
+        primary: '#1f0a0a'
+        secondary: '#2a0f0f'
+        accent: '#fca5a5'
+        text: '#fee2e2'
+        muted: '#fecaca'
+        line: '#4a1e1e'
+        card: '#220c0c'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight: &id001
+        primary: '#0a0f1a'
+        secondary: '#141a2e'
+        accent: '#c0c8d8'
+        text: '#e8ecf4'
+        muted: '#8090b0'
+        line: '#2a3550'
+        card: '#0f1420'
+      cherry: &id002
+        primary: '#1a0a0f'
+        secondary: '#2e1419'
+        accent: '#ff4466'
+        text: '#ffe8ec'
+        muted: '#ff8899'
+        line: '#4a1e28'
+        card: '#200f14'
+      lavender: &id003
+        primary: '#15101a'
+        secondary: '#251a2e'
+        accent: '#b794f6'
+        text: '#f0e8ff'
+        muted: '#d4b8ff'
+        line: '#3a2850'
+        card: '#1a1420'
+      mint: &id004
+        primary: '#0a1a14'
+        secondary: '#142e23'
+        accent: '#5de4a8'
+        text: '#e8fff4'
+        muted: '#8fffc8'
+        line: '#1e5038'
+        card: '#0f2018'
+      amber: &id005
+        primary: '#1a140a'
+        secondary: '#2e2314'
+        accent: '#ffb347'
+        text: '#fff4e8'
+        muted: '#ffd699'
+        line: '#503a1e'
+        card: '#201810'
+      slate: &id006
+        primary: '#14161a'
+        secondary: '#1e2228'
+        accent: '#94a3b8'
+        text: '#e8ecf0'
+        muted: '#b0bcc8'
+        line: '#2e3540'
+        card: '#181a1e'
+      coral: &id007
+        primary: '#1a1214'
+        secondary: '#2e1e23'
+        accent: '#ff8a80'
+        text: '#fff0ec'
+        muted: '#ffb8b0'
+        line: '#4a3038'
+        card: '#201618'
+      teal: &id008
+        primary: '#0a1a1a'
+        secondary: '#142e2e'
+        accent: '#5fd4d4'
+        text: '#e8ffff'
+        muted: '#8fe8e8'
+        line: '#1e5050'
+        card: '#0f2020'
+  card:
+    name: Card
+    description: Grid-based card layout with hover effects
+    layout: layouts/card.jinja2
+    colors:
+      dark:
+        primary: '#0f1419'
+        secondary: '#1a2027'
+        accent: '#3b82f6'
+        text: '#f8fafc'
+        muted: '#94a3b8'
+        line: '#2d3748'
+        card: '#151b23'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight: *id001
+      cherry: *id002
+      lavender: *id003
+      mint: *id004
+      amber: *id005
+      slate: *id006
+      coral: *id007
+      teal: *id008
+  timeline:
+    name: Timeline
+    description: Chronological vertical layout with timeline markers
+    layout: layouts/timeline.jinja2
+    colors:
+      dark:
+        primary: '#0d0b13'
+        secondary: '#171421'
+        accent: '#c084fc'
+        text: '#faf5ff'
+        muted: '#c4b5fd'
+        line: '#7c3aed'
+        card: '#1a1228'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight: *id001
+      cherry: *id002
+      lavender: *id003
+      mint: *id004
+      amber: *id005
+      slate: *id006
+      coral: *id007
+      teal: *id008
+  glassmorphism:
+    name: Glassmorphism
+    description: Frosted glass effects with backdrop blur
+    layout: layouts/glassmorphism.jinja2
+    colors:
+      dark:
+        primary: '#0a0a0a'
+        secondary: rgba(26, 26, 26, 0.7)
+        accent: '#60a5fa'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: rgba(255, 255, 255, 0.1)
+        card: rgba(30, 30, 30, 0.6)
+      forest:
+        primary: '#0a1f0a'
+        secondary: rgba(26, 58, 26, 0.7)
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: rgba(74, 222, 128, 0.2)
+        card: rgba(15, 42, 15, 0.6)
+      sunset:
+        primary: '#1f0f0a'
+        secondary: rgba(58, 30, 26, 0.7)
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: rgba(251, 146, 60, 0.2)
+        card: rgba(42, 20, 16, 0.6)
+      ocean:
+        primary: '#0a1628'
+        secondary: rgba(19, 42, 74, 0.7)
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: rgba(96, 165, 250, 0.2)
+        card: rgba(15, 31, 58, 0.6)
+      sepia:
+        primary: '#1a1510'
+        secondary: rgba(42, 35, 24, 0.7)
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: rgba(218, 165, 32, 0.2)
+        card: rgba(34, 26, 18, 0.6)
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: rgba(26, 26, 26, 0.7)
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: rgba(255, 255, 255, 0.1)
+        card: rgba(21, 21, 21, 0.6)
+      midnight: *id001
+      cherry: *id002
+      lavender: *id003
+      mint: *id004
+      amber: *id005
+      slate: *id006
+      coral: *id007
+      teal: *id008
+  brutalist:
+    name: Brutalist
+    description: Raw, unpolished aesthetic with bold typography
+    layout: layouts/brutalist.jinja2
+    colors:
+      dark:
+        primary: '#000000'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#808080'
+        line: '#333333'
+        card: '#0d0d0d'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight: *id001
+      cherry: *id002
+      lavender: *id003
+      mint: *id004
+      amber: *id005
+      slate: *id006
+      coral: *id007
+      teal: *id008
+  neon_cyberpunk:
+    name: Neon Cyberpunk
+    description: Glowing neon accents with dark background
+    layout: layouts/neon_cyberpunk.jinja2
+    colors:
+      dark:
+        primary: '#0a0a14'
+        secondary: '#14141e'
+        accent: '#00ffff'
+        text: '#e0e0ff'
+        muted: '#8080ff'
+        line: '#ff00ff'
+        card: '#0f0f1a'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight: *id001
+      cherry: *id002
+      lavender: *id003
+      mint: *id004
+      amber: *id005
+      slate: *id006
+      coral: *id007
+      teal: *id008
+  vintage_retro:
+    name: Vintage Retro
+    description: 80s/90s aesthetic with pastel gradients
+    layout: layouts/vintage_retro.jinja2
+    colors:
+      dark:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight: *id001
+      cherry: *id002
+      lavender: *id003
+      mint: *id004
+      amber: *id005
+      slate: *id006
+      coral: *id007
+      teal: *id008
+  neumorphism:
+    name: Neumorphism
+    description: Soft shadows with 3D relief effect
+    layout: layouts/neumorphism.jinja2
+    colors:
+      dark:
+        primary: '#2a2a2a'
+        secondary: '#323232'
+        accent: '#60a5fa'
+        text: '#e0e0e0'
+        muted: '#a0a0a0'
+        line: '#3a3a3a'
+        card: '#2e2e2e'
+      forest:
+        primary: '#0a1f0a'
+        secondary: '#1a3a1a'
+        accent: '#4ade80'
+        text: '#ecfdf5'
+        muted: '#86efac'
+        line: '#1e4a1e'
+        card: '#0f2a0f'
+      sunset:
+        primary: '#1f0f0a'
+        secondary: '#3a1e1a'
+        accent: '#fb923c'
+        text: '#fff7ed'
+        muted: '#fdba74'
+        line: '#4a2e1e'
+        card: '#2a1410'
+      ocean:
+        primary: '#0a1628'
+        secondary: '#132a4a'
+        accent: '#60a5fa'
+        text: '#e0f2fe'
+        muted: '#93c5fd'
+        line: '#1e3a5f'
+        card: '#0f1f3a'
+      sepia:
+        primary: '#1a1510'
+        secondary: '#2a2318'
+        accent: '#daa520'
+        text: '#f5e6d3'
+        muted: '#d4c4a8'
+        line: '#8b7355'
+        card: '#221a12'
+      rainbow:
+        primary: '#0a0a0a'
+        secondary: '#1a1a1a'
+        accent: '#ffffff'
+        text: '#ffffff'
+        muted: '#b0b0b0'
+        line: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff,
+          #4b0082, #9400d3)'
+        card: '#151515'
+      midnight: *id001
+      cherry: *id002
+      lavender: *id003
+      mint: *id004
+      amber: *id005
+      slate: *id006
+      coral: *id007
+      teal: *id008

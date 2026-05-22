@@ -1,0 +1,19 @@
+site_name: Framekit
+site_url: https://astrve.github.io/framekit/
+repo_url: https://github.com/astrve/framekit
+repo_name: astrve/framekit
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+nav:
+  - Home: Home.md
+  - Release 2.0.0: Release-2.0.0.md
+  - Roadmap: Roadmap.md
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+strict: true

@@ -14,10 +14,11 @@ def test_torrent_resolver_single_file(tmp_path: Path) -> None:
     mkv.touch()
     sidecar = tmp_path / "Movie.nfo"
     sidecar.touch()
-    payload = resolve_torrent_payload(mkv, content_mode="auto")
+    payload, warning = resolve_torrent_payload(mkv, content_mode="auto")
     assert payload.files == (mkv,)
     # The sidecar file should not be part of the payload
     assert sidecar not in payload.files
+    assert warning is None
 
 
 def test_torrent_resolver_release_subfolder(tmp_path: Path) -> None:
@@ -32,11 +33,12 @@ def test_torrent_resolver_release_subfolder(tmp_path: Path) -> None:
     mkv.touch()
     sidecar = release_dir / "MyMovie.nfo"
     sidecar.touch()
-    payload = resolve_torrent_payload(tmp_path, content_mode="auto")
+    payload, warning = resolve_torrent_payload(tmp_path, content_mode="auto")
     assert payload.path == release_dir
     assert payload.files == (mkv,)
     # Ensure sidecar is ignored
     assert sidecar not in payload.files
+    assert warning is None
 
 
 def test_torrent_resolver_excludes_sidecars(tmp_path: Path) -> None:
@@ -55,7 +57,7 @@ def test_torrent_resolver_excludes_sidecars(tmp_path: Path) -> None:
     screenshots.mkdir()
     (screenshots / "1.png").touch()
 
-    payload = resolve_torrent_payload(tmp_path, content_mode="auto")
+    payload, warning = resolve_torrent_payload(tmp_path, content_mode="auto")
     assert payload.files == (mkv,)
     # None of the sidecar files or images should be included
     for sidecar in [
@@ -66,12 +68,13 @@ def test_torrent_resolver_excludes_sidecars(tmp_path: Path) -> None:
         screenshots / "1.png",
     ]:
         assert sidecar not in payload.files
+    assert warning is None
 
 
 def test_torrent_resolver_ambiguous_release_subfolders(tmp_path: Path) -> None:
     """
     When multiple Release/<release> subfolders each contain media files, auto/media modes
-    should raise a ValueError due to ambiguity.
+    should raise a ValueError due to ambiguity when allow_ambiguous=False.
     """
     base = tmp_path / "Release"
     (base / "MovieA").mkdir(parents=True)
@@ -79,16 +82,23 @@ def test_torrent_resolver_ambiguous_release_subfolders(tmp_path: Path) -> None:
     (base / "MovieA" / "MovieA.mkv").touch()
     (base / "MovieB" / "MovieB.mkv").touch()
 
+    # Without allow_ambiguous, should raise
     with pytest.raises(ValueError):
-        resolve_torrent_payload(tmp_path, content_mode="auto")
+        resolve_torrent_payload(tmp_path, content_mode="auto", allow_ambiguous=False)
     with pytest.raises(ValueError):
-        resolve_torrent_payload(tmp_path, content_mode="media")
+        resolve_torrent_payload(tmp_path, content_mode="media", allow_ambiguous=False)
+
+    # With allow_ambiguous=True, should succeed with warning
+    payload, warning = resolve_torrent_payload(tmp_path, content_mode="auto", allow_ambiguous=True)
+    assert payload is not None
+    assert warning is not None
+    assert "multiple media groups" in warning.lower()
 
 
 def test_torrent_resolver_ambiguous_root_and_release(tmp_path: Path) -> None:
     """
     When both the root folder and a Release subfolder contain media files, auto/media modes
-    should raise a ValueError to signal ambiguity.
+    should raise a ValueError to signal ambiguity when allow_ambiguous=False.
     """
     # Root-level media
     mkv_root = tmp_path / "Root.mkv"
@@ -98,10 +108,17 @@ def test_torrent_resolver_ambiguous_root_and_release(tmp_path: Path) -> None:
     release_sub.mkdir(parents=True)
     (release_sub / "Inner.mkv").touch()
 
+    # Without allow_ambiguous, should raise
     with pytest.raises(ValueError):
-        resolve_torrent_payload(tmp_path, content_mode="auto")
+        resolve_torrent_payload(tmp_path, content_mode="auto", allow_ambiguous=False)
     with pytest.raises(ValueError):
-        resolve_torrent_payload(tmp_path, content_mode="media")
+        resolve_torrent_payload(tmp_path, content_mode="media", allow_ambiguous=False)
+
+    # With allow_ambiguous=True, should succeed with warning
+    payload, warning = resolve_torrent_payload(tmp_path, content_mode="auto", allow_ambiguous=True)
+    assert payload is not None
+    assert warning is not None
+    assert "multiple media groups" in warning.lower()
 
 
 def test_torrent_resolver_folder_mode_includes_all_files(tmp_path: Path) -> None:
@@ -116,6 +133,7 @@ def test_torrent_resolver_folder_mode_includes_all_files(tmp_path: Path) -> None
     txt = tmp_path / "Film.txt"
     txt.touch()
 
-    payload = resolve_torrent_payload(tmp_path, content_mode="folder")
+    payload, warning = resolve_torrent_payload(tmp_path, content_mode="folder")
     # The payload should include the MKV and both sidecar files
     assert set(payload.files) == {mkv, nfo, txt}
+    assert warning is None

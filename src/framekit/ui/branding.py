@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from rich.console import Group
 from rich.text import Text
+from rich.theme import Theme
 
 from framekit import __version__
-from framekit.ui.console import console
 
+# Logo colors (existing)
 LOGO_PRIMARY = "#bf945c"
 LOGO_ACCENT = "#e2b97d"
 LOGO_META = "#cfd5ff"
@@ -14,6 +17,177 @@ LOGO_MODULE = "white"
 
 PROJECT_REPO_LABEL = "github.com/astrve/framekit"
 COPYRIGHT_YEARS = "2026"
+
+
+# Framekit Visual Identity - Color Palette (Based on FRAMEKIT_VISUAL_IDENTITY_SPEC.md)
+class Colors:
+    """Framekit color palette - Modern Minimalist Premium."""
+
+    # Primary Brand Colors
+    FRAMEKIT_SLATE_DARK = "#2C3E50"  # Main brand color, headers
+    FRAMEKIT_SLATE_MEDIUM = "#34495E"  # Secondary elements
+    FRAMEKIT_SLATE_LIGHT = "#7F8C8D"  # Muted text, borders
+    FRAMEKIT_ACCENT_PRIMARY = "#5DADE2"  # Links, interactive elements
+    FRAMEKIT_ACCENT_SECONDARY = "#85C1E9"  # Hover states, subtle highlights
+
+    # Status Colors (Semantic)
+    SUCCESS_GREEN = "#27AE60"  # Success messages, [OK] indicator
+    SUCCESS_GREEN_LIGHT = "#52BE80"  # Success backgrounds
+    SUCCESS_GREEN_DARK = "#1E8449"  # Success borders
+
+    WARNING_AMBER = "#F39C12"  # Warning messages, [WARN] indicator
+    WARNING_AMBER_LIGHT = "#F8C471"  # Warning backgrounds
+    WARNING_AMBER_DARK = "#D68910"  # Warning borders
+
+    ERROR_RED = "#E74C3C"  # Error messages, [ERR] indicator
+    ERROR_RED_LIGHT = "#EC7063"  # Error backgrounds
+    ERROR_RED_DARK = "#C0392B"  # Error borders
+
+    INFO_BLUE = "#3498DB"  # Info messages, [INFO] indicator
+    INFO_BLUE_LIGHT = "#5DADE2"  # Info backgrounds
+    INFO_BLUE_DARK = "#2874A6"  # Info borders
+
+    # Neutral Palette
+    WHITE = "#FFFFFF"  # Bright text on dark backgrounds
+    LIGHT_GRAY = "#BDC3C7"  # Secondary text
+    MEDIUM_GRAY = "#95A5A6"  # Muted text, separators
+    DARK_GRAY = "#7F8C8D"  # Subtle elements
+    CHARCOAL = "#2C3E50"  # Dark text on light backgrounds
+    BLACK = "#1C1C1C"  # Terminal background reference
+
+    # Backward compatibility aliases
+    PRIMARY = FRAMEKIT_ACCENT_PRIMARY
+    SUCCESS = SUCCESS_GREEN
+    WARNING = WARNING_AMBER
+    ERROR = ERROR_RED
+    INFO = INFO_BLUE
+    ACCENT = FRAMEKIT_ACCENT_PRIMARY
+    MUTED = MEDIUM_GRAY
+    HIGHLIGHT = FRAMEKIT_ACCENT_SECONDARY
+
+    # Status colors
+    PENDING = MEDIUM_GRAY
+    IN_PROGRESS = FRAMEKIT_ACCENT_PRIMARY
+    COMPLETE = SUCCESS_GREEN
+    FAILED = ERROR_RED
+    SKIPPED = MEDIUM_GRAY
+
+    # Module-specific colors (using new palette)
+    RENAMER = FRAMEKIT_ACCENT_PRIMARY
+    CLEANMKV = INFO_BLUE
+    NFO = FRAMEKIT_SLATE_MEDIUM
+    PREZ = WARNING_AMBER
+    TORRENT = SUCCESS_GREEN
+    CHECKSUM = INFO_BLUE_LIGHT
+    METADATA = FRAMEKIT_ACCENT_SECONDARY
+    PIPELINE = FRAMEKIT_ACCENT_PRIMARY
+
+
+# Framekit Theme for Rich Console
+framekit_theme = Theme(
+    {
+        # Brand Colors
+        "framekit.primary": Colors.FRAMEKIT_SLATE_DARK,
+        "framekit.accent": Colors.FRAMEKIT_ACCENT_PRIMARY,
+        "framekit.muted": Colors.FRAMEKIT_SLATE_LIGHT,
+        # Status Colors
+        "status.success": f"{Colors.SUCCESS_GREEN} bold",
+        "status.warning": f"{Colors.WARNING_AMBER} bold",
+        "status.error": f"{Colors.ERROR_RED} bold",
+        "status.info": Colors.INFO_BLUE,
+        "status.skip": Colors.MEDIUM_GRAY,
+        "status.processing": Colors.FRAMEKIT_ACCENT_PRIMARY,
+        "status.done": f"{Colors.SUCCESS_GREEN} bold",
+        # Text Styles
+        "header.main": f"{Colors.FRAMEKIT_SLATE_DARK} bold",
+        "header.section": f"{Colors.FRAMEKIT_SLATE_MEDIUM} bold",
+        "header.subsection": f"{Colors.FRAMEKIT_ACCENT_PRIMARY} bold",
+        "text.body": "white",
+        "text.secondary": Colors.LIGHT_GRAY,
+        "text.code": Colors.FRAMEKIT_ACCENT_SECONDARY,
+        # UI Elements
+        "separator": Colors.FRAMEKIT_SLATE_LIGHT,
+        "progress.bar": Colors.FRAMEKIT_ACCENT_PRIMARY,
+        "progress.complete": Colors.SUCCESS_GREEN,
+    }
+)
+
+
+# Text-Based Status Indicators (replacing icons)
+class StatusIndicators:
+    """Text-based status indicators for modern minimalist design."""
+
+    OK = "[OK]"
+    WARN = "[WARN]"
+    ERR = "[ERR]"
+    INFO = "[INFO]"
+    SKIP = "[SKIP]"
+    PROC = "[PROC]"
+    DONE = "[DONE]"
+
+
+# Legacy Icons class (deprecated, kept for backward compatibility)
+class Icons:
+    """Deprecated: Use StatusIndicators instead."""
+
+    # Status icons (deprecated)
+    SUCCESS = "✓"
+    ERROR = "✗"
+    WARNING = "⚠"
+    INFO = "ℹ"
+    PENDING = "○"
+    IN_PROGRESS = "◐"
+
+
+# Style helpers
+def get_module_color(module: str) -> str:
+    """Get the color for a specific module."""
+    return getattr(Colors, module.upper(), Colors.PRIMARY)
+
+
+def format_status(
+    status: Literal[
+        "success",
+        "error",
+        "warning",
+        "info",
+        "pending",
+        "in_progress",
+        "skip",
+        "processing",
+        "done",
+    ],
+) -> str:
+    """Format a status with text-based indicator and color.
+
+    Returns formatted status indicator like [OK], [WARN], [ERR], etc.
+    """
+    indicator_map = {
+        "success": StatusIndicators.OK,
+        "error": StatusIndicators.ERR,
+        "warning": StatusIndicators.WARN,
+        "info": StatusIndicators.INFO,
+        "pending": StatusIndicators.SKIP,
+        "in_progress": StatusIndicators.PROC,
+        "skip": StatusIndicators.SKIP,
+        "processing": StatusIndicators.PROC,
+        "done": StatusIndicators.DONE,
+    }
+    style_map = {
+        "success": "status.success",
+        "error": "status.error",
+        "warning": "status.warning",
+        "info": "status.info",
+        "pending": "status.skip",
+        "in_progress": "status.processing",
+        "skip": "status.skip",
+        "processing": "status.processing",
+        "done": "status.done",
+    }
+    indicator = indicator_map.get(status, StatusIndicators.INFO)
+    style = style_map.get(status, "status.info")
+    return f"[{style}]{indicator}[/{style}]"
+
 
 FRAMEKIT_LOGO_LINES = [
     "███████╗██████╗  █████╗ ███╗   ███╗███████╗██╗  ██╗██╗████████╗",
@@ -34,6 +208,7 @@ def _left_padding(text: str, width: int) -> str:
 
 
 def build_logo_text() -> Text:
+    """Build logo text."""
     text = Text()
 
     for index, line in enumerate(FRAMEKIT_LOGO_LINES):
@@ -47,6 +222,7 @@ def build_logo_text() -> Text:
 
 
 def build_meta_text() -> Text:
+    """Build meta text."""
     total_width = _art_width(FRAMEKIT_LOGO_LINES)
     raw_line = f"v {__version__} – © {COPYRIGHT_YEARS} – {PROJECT_REPO_LABEL}"
 
@@ -63,6 +239,7 @@ def build_meta_text() -> Text:
 
 
 def build_module_text(module_name: str) -> Text:
+    """Build module text."""
     total_width = _art_width(FRAMEKIT_LOGO_LINES)
     label = module_name.strip()
 
@@ -73,18 +250,7 @@ def build_module_text(module_name: str) -> Text:
 
 
 def build_banner(module_name: str | None = None) -> Group:
-    """
-    Build the Framekit CLI banner.
-
-    The banner intentionally keeps the visual identity compact:
-
-    - ASCII logo;
-    - visible plain-text version / copyright / repository line;
-    - optional module name below the metadata line.
-
-    The repository is displayed as plain text instead of relying on terminal
-    hyperlink support, so it remains visible in every terminal.
-    """
+    """Build banner."""
     logo = build_logo_text()
     meta = build_meta_text()
 
@@ -95,4 +261,7 @@ def build_banner(module_name: str | None = None) -> Group:
 
 
 def print_module_banner(module_name: str | None = None) -> None:
+    """Print the Framekit banner with optional module name."""
+    from framekit.ui.console import console
+
     console.print(build_banner(module_name=module_name))

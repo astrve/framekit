@@ -1,0 +1,332 @@
+# HTML Template Theme Configurations
+# Each theme defines CSS custom properties for colors and styling
+
+themes:
+  # Timeline Family Themes
+  timeline:
+    bg: "#0d0b13"
+    card: "#171421"
+    line: "#7c3aed"
+    text: "#faf5ff"
+    muted: "#c4b5fd"
+    accent: "#c084fc"
+    accent2: "#facc15"
+    hero: "linear-gradient(125deg,rgba(35,24,61,.95),rgba(11,13,24,.94))"
+  
+  timeline_noir:
+    bg: "#09070d"
+    card: "#15111c"
+    line: "#8b5cf6"
+    text: "#fbf7ff"
+    muted: "#c4b5fd"
+    accent: "#a78bfa"
+    accent2: "#f472b6"
+    hero: "linear-gradient(125deg,rgba(32,24,52,.96),rgba(7,7,12,.95))"
+  
+  timeline_amber:
+    bg: "#140c06"
+    card: "#21170d"
+    line: "#d97706"
+    text: "#fff7ed"
+    muted: "#fed7aa"
+    accent: "#f59e0b"
+    accent2: "#fde68a"
+    hero: "linear-gradient(125deg,rgba(61,35,12,.96),rgba(14,10,7,.94))"
+  
+  timeline_ocean:
+    bg: "#041017"
+    card: "#0b1d29"
+    line: "#0284c7"
+    text: "#ecfeff"
+    muted: "#a5f3fc"
+    accent: "#38bdf8"
+    accent2: "#5eead4"
+    hero: "linear-gradient(125deg,rgba(9,45,64,.96),rgba(4,13,20,.94))"
+
+  # Poster Family Themes
+  poster:
+    bg: "#111827"
+    card: "#0b1220"
+    line: "#465a7a"
+    text: "#f8fafc"
+    muted: "#b7c3d5"
+    accent: "#f8fafc"
+    accent2: "#38bdf8"
+    hero: "linear-gradient(160deg,rgba(15,23,42,.88),rgba(0,0,0,.65))"
+  
+  poster_focus:
+    bg: "#070a12"
+    card: "#101827"
+    line: "#334155"
+    text: "#f8fafc"
+    muted: "#b8c2d6"
+    accent: "#e2e8f0"
+    accent2: "#38bdf8"
+    hero: "linear-gradient(160deg,rgba(12,18,30,.82),rgba(0,0,0,.72))"
+
+  # Minimal Family Themes
+  minimal:
+    bg: "#0b0f14"
+    card: "#111820"
+    line: "#2a3441"
+    text: "#f1f5f9"
+    muted: "#94a3b8"
+    accent: "#e2e8f0"
+    accent2: "#94a3b8"
+    hero: "linear-gradient(140deg,rgba(17,24,32,.98),rgba(8,12,18,.96))"
+  
+  mono:
+    bg: "#101010"
+    card: "#171717"
+    line: "#4b5563"
+    text: "#f5f5f5"
+    muted: "#b3b3b3"
+    accent: "#ffffff"
+    accent2: "#c9c9c9"
+    hero: "linear-gradient(140deg,rgba(25,25,25,.98),rgba(5,5,5,.92))"
+  
+  terminal:
+    bg: "#030705"
+    card: "#07110d"
+    line: "#16a34a"
+    text: "#dcfce7"
+    muted: "#86efac"
+    accent: "#22c55e"
+    accent2: "#bef264"
+    hero: "linear-gradient(140deg,rgba(5,18,12,.98),rgba(0,0,0,.94))"
+
+  # Editorial Family Themes
+  editorial:
+    bg: "#100f0d"
+    card: "#1f1b17"
+    line: "#a16207"
+    text: "#fff7ed"
+    muted: "#d6c3ad"
+    accent: "#f59e0b"
+    accent2: "#fb7185"
+    hero: "linear-gradient(130deg,rgba(55,38,20,.95),rgba(14,18,30,.92))"
+  
+  magazine:
+    bg: "#14120f"
+    card: "#201c18"
+    line: "#d97706"
+    text: "#fffaf0"
+    muted: "#d8c4a8"
+    accent: "#fbbf24"
+    accent2: "#38bdf8"
+    hero: "linear-gradient(120deg,rgba(36,28,21,.98),rgba(20,18,15,.92))"
+  
+  archive:
+    bg: "#101010"
+    card: "#191919"
+    line: "#78716c"
+    text: "#f5f5f4"
+    muted: "#c7c0b8"
+    accent: "#d6d3d1"
+    accent2: "#f59e0b"
+    hero: "linear-gradient(140deg,rgba(32,32,32,.98),rgba(16,16,16,.94))"
+  
+  cinema:
+    bg: "#120909"
+    card: "#211111"
+    line: "#a85d28"
+    text: "#fff6ed"
+    muted: "#d1b9a0"
+    accent: "#fbbf24"
+    accent2: "#fb7185"
+    hero: "linear-gradient(140deg,rgba(50,18,18,.95),rgba(16,13,25,.94))"
+  
+  lobby:
+    bg: "#0e1412"
+    card: "#17211d"
+    line: "#64748b"
+    text: "#f8fafc"
+    muted: "#a8b8b0"
+    accent: "#eab308"
+    accent2: "#22c55e"
+    hero: "linear-gradient(140deg,rgba(25,33,29,.96),rgba(8,14,20,.92))"
+
+  # Modern Family Themes
+  neon:
+    bg: "#090817"
+    card: "#121027"
+    line: "#00e5ff"
+    text: "#f3e8ff"
+    muted: "#b7a9cf"
+    accent: "#22d3ee"
+    accent2: "#f472b6"
+    hero: "linear-gradient(140deg,rgba(12,13,38,.98),rgba(24,3,34,.88))"
+  
+  aurora:
+    bg: "#0f172a"
+    card: "#111c33"
+    line: "#00856f"
+    text: "#e8f2f1"
+    muted: "#a7b7c7"
+    accent: "#6ee7b7"
+    accent2: "#8b5cf6"
+    hero: "linear-gradient(140deg,rgba(17,28,51,.98),rgba(5,25,23,.92))"
+  
+  emerald:
+    bg: "#071711"
+    card: "#0b231b"
+    line: "#00a37a"
+    text: "#edfdf7"
+    muted: "#a8cabb"
+    accent: "#80ffc8"
+    accent2: "#d6b35b"
+    hero: "linear-gradient(140deg,rgba(4,60,45,.95),rgba(9,24,34,.92))"
+  
+  midnight:
+    bg: "#080d1d"
+    card: "#11162a"
+    line: "#2954a3"
+    text: "#f2f5ff"
+    muted: "#aab4d8"
+    accent: "#93c5fd"
+    accent2: "#c084fc"
+    hero: "linear-gradient(140deg,rgba(16,26,55,.96),rgba(8,13,29,.92))"
+
+  # Layout Family Themes
+  vertical:
+    bg: "#0b1020"
+    card: "#121a31"
+    line: "#334155"
+    text: "#eff6ff"
+    muted: "#b6c5dc"
+    accent: "#60a5fa"
+    accent2: "#f97316"
+    hero: "linear-gradient(180deg,rgba(18,26,49,.98),rgba(9,12,24,.94))"
+  
+  split:
+    bg: "#0c1222"
+    card: "#111827"
+    line: "#475569"
+    text: "#f8fafc"
+    muted: "#cbd5e1"
+    accent: "#93c5fd"
+    accent2: "#f472b6"
+    hero: "linear-gradient(90deg,rgba(15,23,42,.98),rgba(49,46,129,.78))"
+
+  # Thematic Templates
+  noir_detective:
+    bg: "#0d0d0d"
+    card: "#1a1a1a"
+    line: "#8b7355"
+    text: "#e0e0e0"
+    muted: "#b8a896"
+    accent: "#d4af37"
+    accent2: "#8b7355"
+    hero: "linear-gradient(140deg,rgba(26,26,26,.98),rgba(13,13,13,.94))"
+  
+  scifi_tech:
+    bg: "#0a0a0a"
+    card: "#121212"
+    line: "#0080ff"
+    text: "#00ff00"
+    muted: "#00cccc"
+    accent: "#00ffff"
+    accent2: "#ff00ff"
+    hero: "linear-gradient(140deg,rgba(0,20,40,.98),rgba(10,0,20,.94))"
+  
+  vintage_film:
+    bg: "#1a1510"
+    card: "#2a2318"
+    line: "#8b7355"
+    text: "#f5e6d3"
+    muted: "#d4c4a8"
+    accent: "#daa520"
+    accent2: "#cd853f"
+    hero: "linear-gradient(140deg,rgba(42,35,24,.98),rgba(26,21,16,.94))"
+  
+  nature_green:
+    bg: "#0d1a0d"
+    card: "#1a2e1a"
+    line: "#4a7c59"
+    text: "#e8f5e9"
+    muted: "#a5d6a7"
+    accent: "#66bb6a"
+    accent2: "#8bc34a"
+    hero: "linear-gradient(140deg,rgba(26,46,26,.98),rgba(13,26,13,.94))"
+
+  # Seasonal Templates
+  spring_bloom:
+    bg: "#1a1520"
+    card: "#2a2030"
+    line: "#e91e63"
+    text: "#fce4ec"
+    muted: "#f8bbd0"
+    accent: "#f48fb1"
+    accent2: "#aed581"
+    hero: "linear-gradient(130deg,rgba(42,32,48,.98),rgba(26,21,32,.94))"
+  
+  summer_bright:
+    bg: "#1a1508"
+    card: "#2a2310"
+    line: "#ff9800"
+    text: "#fff8e1"
+    muted: "#ffe082"
+    accent: "#ffc107"
+    accent2: "#03a9f4"
+    hero: "linear-gradient(130deg,rgba(42,35,16,.98),rgba(26,21,8,.94))"
+  
+  autumn_harvest:
+    bg: "#1a0f08"
+    card: "#2a1810"
+    line: "#d84315"
+    text: "#fff3e0"
+    muted: "#ffccbc"
+    accent: "#ff6f00"
+    accent2: "#8d6e63"
+    hero: "linear-gradient(130deg,rgba(42,24,16,.98),rgba(26,15,8,.94))"
+  
+  winter_frost:
+    bg: "#0a1420"
+    card: "#122030"
+    line: "#1976d2"
+    text: "#e3f2fd"
+    muted: "#90caf9"
+    accent: "#42a5f5"
+    accent2: "#b0bec5"
+    hero: "linear-gradient(130deg,rgba(18,32,48,.98),rgba(10,20,32,.94))"
+
+  # Minimal/Maximal Templates
+  ultra_minimal:
+    bg: "#ffffff"
+    card: "#fafafa"
+    line: "#e0e0e0"
+    text: "#212121"
+    muted: "#757575"
+    accent: "#000000"
+    accent2: "#424242"
+    hero: "linear-gradient(140deg,rgba(250,250,250,.98),rgba(255,255,255,.94))"
+  
+  micro:
+    bg: "#0f0f0f"
+    card: "#1a1a1a"
+    line: "#333333"
+    text: "#e0e0e0"
+    muted: "#999999"
+    accent: "#ffffff"
+    accent2: "#666666"
+    hero: "linear-gradient(140deg,rgba(26,26,26,.98),rgba(15,15,15,.94))"
+  
+  maximal_rich:
+    bg: "#0a0e14"
+    card: "#141a24"
+    line: "#2d3748"
+    text: "#f7fafc"
+    muted: "#a0aec0"
+    accent: "#4299e1"
+    accent2: "#ed8936"
+    hero: "linear-gradient(140deg,rgba(20,26,36,.98),rgba(10,14,20,.94))"
+  
+  showcase:
+    bg: "#000000"
+    card: "#0d0d0d"
+    line: "#1a1a1a"
+    text: "#ffffff"
+    muted: "#cccccc"
+    accent: "#ffffff"
+    accent2: "#666666"
+    hero: "linear-gradient(140deg,rgba(13,13,13,.98),rgba(0,0,0,.94))"

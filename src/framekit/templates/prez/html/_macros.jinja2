@@ -1,0 +1,128 @@
+{# Reusable macros for Prez templates #}
+
+{% macro render_badges(badges) %}
+<div class="badges">
+  {% for badge in badges %}
+  <span class="badge">{{ badge }}</span>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro render_poster(poster_url, alt="poster") %}
+{% if poster_url != '-' %}
+  <img class="poster" src="{{ poster_url }}" alt="{{ alt }}">
+{% else %}
+  <div class="placeholder">{{ tr('prez.no_poster', default='No poster available') }}</div>
+{% endif %}
+{% endmacro %}
+
+{% macro render_info_grid(fields) %}
+<div class="info-grid">
+  {% for field in fields %}
+  <div class="info-card{% if field.wide %} wide{% endif %}">
+    <span>{{ field.label }}</span>
+    <strong>{{ field_url_html(field)|safe }}</strong>
+  </div>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro render_section(title, content, css_class="") %}
+<section class="{{ css_class }}">
+  <h2>{{ title }}</h2>
+  {{ content|safe }}
+</section>
+{% endmacro %}
+
+{% macro render_video_info(video_fields) %}
+{% if video_fields %}
+<div class="info-grid">
+  {% for field in video_fields %}
+  <div class="info-card{% if field.wide %} wide{% endif %}">
+    <span>{{ field.label }}</span>
+    <strong>{{ field_url_html(field)|safe }}</strong>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro render_audio_tracks(audio_track_groups) %}
+{{ audio_table_grouped_html(audio_track_groups)|safe }}
+{% endmacro %}
+
+{% macro render_subtitle_tracks(subtitle_track_groups) %}
+{{ subtitle_table_grouped_html(subtitle_track_groups)|safe }}
+{% endmacro %}
+
+{% macro render_metadata(metadata_fields, cast='-', crew='-') %}
+{% if metadata_fields %}
+<div class="info-grid">
+  {% for field in metadata_fields %}
+  <div class="info-card{% if field.wide %} wide{% endif %}">
+    <span>{{ field.label }}</span>
+    <strong>{{ field_url_html(field)|safe }}</strong>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if cast != '-' %}
+<p><strong>{{ tr('prez.label.cast', default='Cast') }}:</strong> {{ cast }}</p>
+{% endif %}
+{% if crew != '-' %}
+<p><strong>{{ tr('prez.label.crew', default='Crew') }}:</strong> {{ crew }}</p>
+{% endif %}
+{% endmacro %}
+
+{% macro render_mediainfo(has_mediainfo, mediainfo_text) %}
+{% if has_mediainfo %}
+<details class="mediainfo">
+  <summary>{{ tr('prez.section.mediainfo', default='MediaInfo') }}</summary>
+  <pre>{{ mediainfo_text }}</pre>
+</details>
+{% endif %}
+{% endmacro %}
+
+{% macro render_header(data) %}
+<header>
+  {{ render_badges(data.badges) }}
+  <h1>{{ data.title }}</h1>
+  {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+  {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+  {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+  {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+  <strong>{{ data.technical_summary }}</strong>
+</header>
+{% endmacro %}
+
+{% macro render_field_list(fields, columns=3) %}
+<div class="field-list" style="--columns: {{ columns }}">
+  {% for field in fields %}
+  <div class="field{% if field.wide %} wide{% endif %}">
+    <span>{{ field.label }}</span>
+    <strong>{{ field_url_html(field)|safe }}</strong>
+  </div>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro render_table(headers, rows) %}
+<table>
+  <thead>
+    <tr>
+      {% for header in headers %}
+      <th>{{ header }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      {% for cell in row %}
+      <td>{{ cell|safe }}</td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}

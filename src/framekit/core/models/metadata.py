@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 
 @dataclass(slots=True)
 class MetadataLookupRequest:
+    """Metadata lookup request."""
+
     media_kind: str
     title: str | None
     year: str | None
@@ -15,6 +17,8 @@ class MetadataLookupRequest:
 
 @dataclass(slots=True)
 class MetadataCandidate:
+    """Metadata candidate."""
+
     provider_name: str
     provider_id: str
     kind: str
@@ -34,6 +38,8 @@ class MetadataCandidate:
 
 @dataclass(slots=True)
 class MovieMetadata:
+    """Movie metadata."""
+
     provider_name: str
     provider_id: str
     imdb_id: str | None
@@ -56,6 +62,8 @@ class MovieMetadata:
 
 @dataclass(slots=True)
 class EpisodeMetadata:
+    """Episode metadata."""
+
     provider_name: str
     provider_id: str
     imdb_id: str | None
@@ -87,6 +95,8 @@ class EpisodeMetadata:
 
 @dataclass(slots=True)
 class SeasonMetadata:
+    """Season metadata."""
+
     provider_name: str
     provider_id: str
     imdb_id: str | None

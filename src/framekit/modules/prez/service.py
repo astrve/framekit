@@ -2,13 +2,13 @@ from __future__ import annotations
 
 # ruff: noqa: I001
 
-import subprocess
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from html import escape
+from importlib import resources as importlib_resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 # babel is optional; format_date is only used to format literal dates. If babel is
 # unavailable, a fallback is provided.
@@ -25,22 +25,28 @@ except ImportError:
     import re as _re
 
     def sanitize_filename(filename: str, replacement_text: str = "_") -> str:
-        """
-        Sanitize a filename by replacing characters illegal on most filesystems.
+        """Sanitize a filename by replacing characters illegal on most filesystems.
+
         This fallback keeps alphanumeric characters, dots, dashes and underscores,
         and replaces any other sequence with the given replacement_text.
         """
         return _re.sub(r"[^A-Za-z0-9._-]+", replacement_text, filename)
 
 
+try:
+    from pymediainfo import MediaInfo  # type: ignore[import]
+except ImportError:
+    MediaInfo = None  # type: ignore[assignment]
+
 from framekit.core.i18n import temporary_locale, tr
 from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData, TrackNfoData
-from framekit.core.reporting import OperationReport
 from framekit.core.tools import ToolRegistry
+from framekit.core.reporting import OperationReport
 from framekit.modules.nfo.builder import build_release_nfo
 from framekit.modules.nfo.formatting import format_bytes_human, format_duration_ms_human
 from framekit.modules.nfo.scanner import scan_nfo_folder
-from framekit.modules.prez.models import PrezData, PrezField, PrezTrack
+from framekit.modules.prez.models import PrezData, PrezField, PrezTrack, PrezTrackGroup
+from framekit.modules.prez.theme_loader import get_html_theme_css
 
 SCREENSHOT_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 SCREENSHOT_DIR_NAMES = {"screens", "screen", "screenshots", "screenshot", "captures"}
@@ -65,27 +71,158 @@ MEDIAINFO_FILENAMES = {
     "mediainfo.log",
 }
 PREZ_LOCALES = frozenset({"en", "fr", "es"})
+# New Template System: 10 designs × 14 colors = 140 templates
 HTML_TEMPLATE_NAMES = (
-    "aurora",
-    "emerald",
-    "midnight",
-    "cinema",
-    "poster",
-    "minimal",
-    "neon",
-    "mono",
-    "editorial",
-    "lobby",
-    "vertical",
-    "terminal",
-    "magazine",
-    "split",
-    "dossier",
-    "poster_focus",
-    "timeline",
-    "timeline_noir",
-    "timeline_amber",
+    # Cinematic (14 variants)
+    "cinematic_dark",
+    "cinematic_forest",
+    "cinematic_sunset",
+    "cinematic_ocean",
+    "cinematic_sepia",
+    "cinematic_rainbow",
+    "cinematic_midnight",
+    "cinematic_cherry",
+    "cinematic_lavender",
+    "cinematic_mint",
+    "cinematic_amber",
+    "cinematic_slate",
+    "cinematic_coral",
+    "cinematic_teal",
+    # Magazine (14 variants)
+    "magazine_dark",
+    "magazine_forest",
+    "magazine_sunset",
+    "magazine_ocean",
+    "magazine_sepia",
+    "magazine_rainbow",
+    "magazine_midnight",
+    "magazine_cherry",
+    "magazine_lavender",
+    "magazine_mint",
+    "magazine_amber",
+    "magazine_slate",
+    "magazine_coral",
+    "magazine_teal",
+    # Minimal (14 variants)
+    "minimal_dark",
+    "minimal_forest",
+    "minimal_sunset",
+    "minimal_ocean",
+    "minimal_sepia",
+    "minimal_rainbow",
+    "minimal_midnight",
+    "minimal_cherry",
+    "minimal_lavender",
+    "minimal_mint",
+    "minimal_amber",
+    "minimal_slate",
+    "minimal_coral",
+    "minimal_teal",
+    # Card (14 variants)
+    "card_dark",
+    "card_forest",
+    "card_sunset",
+    "card_ocean",
+    "card_sepia",
+    "card_rainbow",
+    "card_midnight",
+    "card_cherry",
+    "card_lavender",
+    "card_mint",
+    "card_amber",
+    "card_slate",
+    "card_coral",
+    "card_teal",
+    # Timeline (14 variants)
+    "timeline_dark",
+    "timeline_forest",
+    "timeline_sunset",
     "timeline_ocean",
+    "timeline_sepia",
+    "timeline_rainbow",
+    "timeline_midnight",
+    "timeline_cherry",
+    "timeline_lavender",
+    "timeline_mint",
+    "timeline_amber",
+    "timeline_slate",
+    "timeline_coral",
+    "timeline_teal",
+    # Glassmorphism (14 variants)
+    "glassmorphism_dark",
+    "glassmorphism_forest",
+    "glassmorphism_sunset",
+    "glassmorphism_ocean",
+    "glassmorphism_sepia",
+    "glassmorphism_rainbow",
+    "glassmorphism_midnight",
+    "glassmorphism_cherry",
+    "glassmorphism_lavender",
+    "glassmorphism_mint",
+    "glassmorphism_amber",
+    "glassmorphism_slate",
+    "glassmorphism_coral",
+    "glassmorphism_teal",
+    # Brutalist (14 variants)
+    "brutalist_dark",
+    "brutalist_forest",
+    "brutalist_sunset",
+    "brutalist_ocean",
+    "brutalist_sepia",
+    "brutalist_rainbow",
+    "brutalist_midnight",
+    "brutalist_cherry",
+    "brutalist_lavender",
+    "brutalist_mint",
+    "brutalist_amber",
+    "brutalist_slate",
+    "brutalist_coral",
+    "brutalist_teal",
+    # Neon Cyberpunk (14 variants)
+    "neon_cyberpunk_dark",
+    "neon_cyberpunk_forest",
+    "neon_cyberpunk_sunset",
+    "neon_cyberpunk_ocean",
+    "neon_cyberpunk_sepia",
+    "neon_cyberpunk_rainbow",
+    "neon_cyberpunk_midnight",
+    "neon_cyberpunk_cherry",
+    "neon_cyberpunk_lavender",
+    "neon_cyberpunk_mint",
+    "neon_cyberpunk_amber",
+    "neon_cyberpunk_slate",
+    "neon_cyberpunk_coral",
+    "neon_cyberpunk_teal",
+    # Vintage Retro (14 variants)
+    "vintage_retro_dark",
+    "vintage_retro_forest",
+    "vintage_retro_sunset",
+    "vintage_retro_ocean",
+    "vintage_retro_sepia",
+    "vintage_retro_rainbow",
+    "vintage_retro_midnight",
+    "vintage_retro_cherry",
+    "vintage_retro_lavender",
+    "vintage_retro_mint",
+    "vintage_retro_amber",
+    "vintage_retro_slate",
+    "vintage_retro_coral",
+    "vintage_retro_teal",
+    # Neumorphism (14 variants)
+    "neumorphism_dark",
+    "neumorphism_forest",
+    "neumorphism_sunset",
+    "neumorphism_ocean",
+    "neumorphism_sepia",
+    "neumorphism_rainbow",
+    "neumorphism_midnight",
+    "neumorphism_cherry",
+    "neumorphism_lavender",
+    "neumorphism_mint",
+    "neumorphism_amber",
+    "neumorphism_slate",
+    "neumorphism_coral",
+    "neumorphism_teal",
 )
 BBCODE_TEMPLATE_NAMES = (
     "classic",
@@ -97,20 +234,39 @@ BBCODE_TEMPLATE_NAMES = (
     "spoiler",
     "boxed",
 )
+# Aliases for backward compatibility and convenience
 HTML_STYLE_ALIASES = {
-    "default": "aurora",
-    "premium": "poster_focus",
-    "tracker": "aurora",
-    "poster-focus": "poster_focus",
-    "timeline-noir": "timeline_noir",
-    "timeline-amber": "timeline_amber",
-    "timeline-ocean": "timeline_ocean",
+    "default": "minimal_dark",
+    "premium": "cinematic_dark",
+    "tracker": "minimal_dark",
+    # Old template names mapped to new equivalents
+    "aurora": "minimal_blue",
+    "emerald": "minimal_green",
+    "midnight": "minimal_dark",
+    "cinema": "cinematic_dark",
+    "poster": "card_dark",
+    "minimal": "minimal_dark",
+    "neon": "neon_cyberpunk_dark",
+    "mono": "minimal_light",
+    "editorial": "magazine_dark",
+    "lobby": "magazine_dark",
+    "vertical": "timeline_dark",
+    "terminal": "minimal_dark",
+    "magazine": "magazine_dark",
+    "split": "card_dark",
+    "archive": "magazine_dark",
+    "poster_focus": "card_dark",
+    "timeline": "timeline_dark",
+    "timeline_noir": "timeline_noir",
+    "timeline_amber": "timeline_amber",
+    "timeline_ocean": "timeline_ocean",
 }
 BBCODE_STYLE_ALIASES = {"default": "classic", "premium": "cinematic"}
+# Updated presets with new template names
 PREZ_PRESETS: dict[str, dict[str, str]] = {
     "default": {
         "format": "both",
-        "html_template": "aurora",
+        "html_template": "minimal_dark",
         "bbcode_template": "classic",
         "mediainfo_mode": "none",
         "detail_level": "standard",
@@ -119,7 +275,7 @@ PREZ_PRESETS: dict[str, dict[str, str]] = {
     },
     "tracker": {
         "format": "bbcode",
-        "html_template": "dossier",
+        "html_template": "magazine_dark",
         "bbcode_template": "tracker",
         "mediainfo_mode": "spoiler",
         "detail_level": "tracker",
@@ -128,7 +284,7 @@ PREZ_PRESETS: dict[str, dict[str, str]] = {
     },
     "compact": {
         "format": "bbcode",
-        "html_template": "minimal",
+        "html_template": "minimal_light",
         "bbcode_template": "compact",
         "mediainfo_mode": "none",
         "detail_level": "compact",
@@ -137,7 +293,7 @@ PREZ_PRESETS: dict[str, dict[str, str]] = {
     },
     "detailed": {
         "format": "both",
-        "html_template": "editorial",
+        "html_template": "magazine_dark",
         "bbcode_template": "detailed",
         "mediainfo_mode": "spoiler",
         "detail_level": "detailed",
@@ -146,7 +302,7 @@ PREZ_PRESETS: dict[str, dict[str, str]] = {
     },
     "technical": {
         "format": "both",
-        "html_template": "terminal",
+        "html_template": "minimal_dark",
         "bbcode_template": "technical",
         "mediainfo_mode": "spoiler",
         "detail_level": "technical",
@@ -155,7 +311,7 @@ PREZ_PRESETS: dict[str, dict[str, str]] = {
     },
     "premium": {
         "format": "both",
-        "html_template": "poster_focus",
+        "html_template": "cinematic_dark",
         "bbcode_template": "cinematic",
         "mediainfo_mode": "spoiler",
         "detail_level": "premium",
@@ -164,34 +320,7 @@ PREZ_PRESETS: dict[str, dict[str, str]] = {
     },
     "timeline": {
         "format": "both",
-        "html_template": "timeline",
-        "bbcode_template": "detailed",
-        "mediainfo_mode": "spoiler",
-        "detail_level": "timeline",
-        "show_tmdb": "true",
-        "show_mediainfo": "true",
-    },
-    "timeline_noir": {
-        "format": "both",
-        "html_template": "timeline_noir",
-        "bbcode_template": "detailed",
-        "mediainfo_mode": "spoiler",
-        "detail_level": "timeline",
-        "show_tmdb": "true",
-        "show_mediainfo": "true",
-    },
-    "timeline_amber": {
-        "format": "both",
-        "html_template": "timeline_amber",
-        "bbcode_template": "detailed",
-        "mediainfo_mode": "spoiler",
-        "detail_level": "timeline",
-        "show_tmdb": "true",
-        "show_mediainfo": "true",
-    },
-    "timeline_ocean": {
-        "format": "both",
-        "html_template": "timeline_ocean",
+        "html_template": "timeline_dark",
         "bbcode_template": "detailed",
         "mediainfo_mode": "spoiler",
         "detail_level": "timeline",
@@ -271,6 +400,8 @@ _FLAG_BY_LANGUAGE = {
 
 @dataclass(frozen=True, slots=True)
 class PrezBuildOptions:
+    """Prez build options."""
+
     formats: tuple[str, ...] = ("html", "bbcode")
     output_dir: Path | None = None
     metadata_context: dict | None = None
@@ -284,47 +415,190 @@ class PrezBuildOptions:
     preset: str = "default"
     release: ReleaseNfoData | None = None
     poster_url: str | None = None
+    banner_audio: str = ""
+    banner_information: str = ""
+    banner_metadata: str = ""
+    banner_release: str = ""
+    banner_subtitles: str = ""
+    banner_synopsis: str = ""
+    banner_technical: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class PrezBuildResult:
+    """Result of prez build."""
+
     release: ReleaseNfoData
     outputs: tuple[Path, ...]
 
 
 def available_html_templates() -> tuple[str, ...]:
-    return HTML_TEMPLATE_NAMES
+    """Return packaged HTML templates discovered from resource files."""
+    return _discover_template_names("html", fallback=HTML_TEMPLATE_NAMES)
 
 
 def available_bbcode_templates() -> tuple[str, ...]:
-    return BBCODE_TEMPLATE_NAMES
+    """Return packaged BBCode templates discovered from resource files."""
+    return _discover_template_names("bbcode", fallback=BBCODE_TEMPLATE_NAMES)
 
 
 def available_prez_presets() -> tuple[str, ...]:
+    """Handle available prez presets."""
     return tuple(PREZ_PRESETS)
 
 
+# New template descriptions (10 designs × 14 colors = 140 templates)
 HTML_TEMPLATE_DESCRIPTIONS = {
-    "aurora": "Balanced card layout with blue-green accents.",
-    "emerald": "Premium green card layout for polished general releases.",
-    "midnight": "Dark cinematic cards with blue highlights.",
-    "cinema": "Warm theatrical cards for movie-style releases.",
-    "poster": "Poster-led cards with compact metadata.",
-    "minimal": "Sober compact cards with low visual noise.",
-    "neon": "High-contrast neon presentation.",
-    "mono": "Monochrome technical card layout.",
-    "editorial": "Editorial long-form layout with a magazine feel.",
-    "lobby": "Streaming-lobby organization with strong release focus.",
-    "vertical": "Vertical reading flow for detailed presentations.",
-    "terminal": "Technical console-style organization.",
-    "magazine": "Magazine-style editorial spread.",
-    "split": "Split hero layout for poster and metadata balance.",
-    "dossier": "Structured dossier for complete release details.",
-    "poster_focus": "Premium poster-first layout.",
-    "timeline": "Timeline layout with balanced poster block.",
-    "timeline_noir": "Timeline layout with noir violet accents.",
-    "timeline_amber": "Timeline layout with warm amber accents.",
-    "timeline_ocean": "Timeline layout with blue ocean accents.",
+    # Cinematic (14 colors)
+    "cinematic_dark": "Movie-style horizontal layout - Dark",
+    "cinematic_forest": "Movie-style horizontal layout - Forest 🌲",
+    "cinematic_sunset": "Movie-style horizontal layout - Sunset 🌅",
+    "cinematic_ocean": "Movie-style horizontal layout - Ocean 🌊",
+    "cinematic_sepia": "Movie-style horizontal layout - Sepia 🟤",
+    "cinematic_rainbow": "Movie-style horizontal layout - Rainbow 🌈",
+    "cinematic_midnight": "Movie-style horizontal layout - Midnight 🌙",
+    "cinematic_cherry": "Movie-style horizontal layout - Cherry 🍒",
+    "cinematic_lavender": "Movie-style horizontal layout - Lavender 💜",
+    "cinematic_mint": "Movie-style horizontal layout - Mint 🌿",
+    "cinematic_amber": "Movie-style horizontal layout - Amber 🟠",
+    "cinematic_slate": "Movie-style horizontal layout - Slate 🪨",
+    "cinematic_coral": "Movie-style horizontal layout - Coral 🪸",
+    "cinematic_teal": "Movie-style horizontal layout - Teal 🦚",
+    # Magazine (14 colors)
+    "magazine_dark": "Editorial multi-column layout - Dark",
+    "magazine_forest": "Editorial multi-column layout - Forest 🌲",
+    "magazine_sunset": "Editorial multi-column layout - Sunset 🌅",
+    "magazine_ocean": "Editorial multi-column layout - Ocean 🌊",
+    "magazine_sepia": "Editorial multi-column layout - Sepia 🟤",
+    "magazine_rainbow": "Editorial multi-column layout - Rainbow 🌈",
+    "magazine_midnight": "Editorial multi-column layout - Midnight 🌙",
+    "magazine_cherry": "Editorial multi-column layout - Cherry 🍒",
+    "magazine_lavender": "Editorial multi-column layout - Lavender 💜",
+    "magazine_mint": "Editorial multi-column layout - Mint 🌿",
+    "magazine_amber": "Editorial multi-column layout - Amber 🟠",
+    "magazine_slate": "Editorial multi-column layout - Slate 🪨",
+    "magazine_coral": "Editorial multi-column layout - Coral 🪸",
+    "magazine_teal": "Editorial multi-column layout - Teal 🦚",
+    # Minimal (14 colors)
+    "minimal_dark": "Clean and spacious design - Dark",
+    "minimal_forest": "Clean and spacious design - Forest 🌲",
+    "minimal_sunset": "Clean and spacious design - Sunset 🌅",
+    "minimal_ocean": "Clean and spacious design - Ocean 🌊",
+    "minimal_sepia": "Clean and spacious design - Sepia 🟤",
+    "minimal_rainbow": "Clean and spacious design - Rainbow 🌈",
+    "minimal_midnight": "Clean and spacious design - Midnight 🌙",
+    "minimal_cherry": "Clean and spacious design - Cherry 🍒",
+    "minimal_lavender": "Clean and spacious design - Lavender 💜",
+    "minimal_mint": "Clean and spacious design - Mint 🌿",
+    "minimal_amber": "Clean and spacious design - Amber 🟠",
+    "minimal_slate": "Clean and spacious design - Slate 🪨",
+    "minimal_coral": "Clean and spacious design - Coral 🪸",
+    "minimal_teal": "Clean and spacious design - Teal 🦚",
+    # Card (14 colors)
+    "card_dark": "Grid-based card layout - Dark",
+    "card_forest": "Grid-based card layout - Forest 🌲",
+    "card_sunset": "Grid-based card layout - Sunset 🌅",
+    "card_ocean": "Grid-based card layout - Ocean 🌊",
+    "card_sepia": "Grid-based card layout - Sepia 🟤",
+    "card_rainbow": "Grid-based card layout - Rainbow 🌈",
+    "card_midnight": "Grid-based card layout - Midnight 🌙",
+    "card_cherry": "Grid-based card layout - Cherry 🍒",
+    "card_lavender": "Grid-based card layout - Lavender 💜",
+    "card_mint": "Grid-based card layout - Mint 🌿",
+    "card_amber": "Grid-based card layout - Amber 🟠",
+    "card_slate": "Grid-based card layout - Slate 🪨",
+    "card_coral": "Grid-based card layout - Coral 🪸",
+    "card_teal": "Grid-based card layout - Teal 🦚",
+    # Timeline (14 colors)
+    "timeline_dark": "Chronological vertical layout - Dark",
+    "timeline_forest": "Chronological vertical layout - Forest 🌲",
+    "timeline_sunset": "Chronological vertical layout - Sunset 🌅",
+    "timeline_ocean": "Chronological vertical layout - Ocean 🌊",
+    "timeline_sepia": "Chronological vertical layout - Sepia 🟤",
+    "timeline_rainbow": "Chronological vertical layout - Rainbow 🌈",
+    "timeline_midnight": "Chronological vertical layout - Midnight 🌙",
+    "timeline_cherry": "Chronological vertical layout - Cherry 🍒",
+    "timeline_lavender": "Chronological vertical layout - Lavender 💜",
+    "timeline_mint": "Chronological vertical layout - Mint 🌿",
+    "timeline_amber": "Chronological vertical layout - Amber 🟠",
+    "timeline_slate": "Chronological vertical layout - Slate 🪨",
+    "timeline_coral": "Chronological vertical layout - Coral 🪸",
+    "timeline_teal": "Chronological vertical layout - Teal 🦚",
+    # Glassmorphism (14 colors)
+    "glassmorphism_dark": "Frosted glass effects - Dark",
+    "glassmorphism_forest": "Frosted glass effects - Forest 🌲",
+    "glassmorphism_sunset": "Frosted glass effects - Sunset 🌅",
+    "glassmorphism_ocean": "Frosted glass effects - Ocean 🌊",
+    "glassmorphism_sepia": "Frosted glass effects - Sepia 🟤",
+    "glassmorphism_rainbow": "Frosted glass effects - Rainbow 🌈",
+    "glassmorphism_midnight": "Frosted glass effects - Midnight 🌙",
+    "glassmorphism_cherry": "Frosted glass effects - Cherry 🍒",
+    "glassmorphism_lavender": "Frosted glass effects - Lavender 💜",
+    "glassmorphism_mint": "Frosted glass effects - Mint 🌿",
+    "glassmorphism_amber": "Frosted glass effects - Amber 🟠",
+    "glassmorphism_slate": "Frosted glass effects - Slate 🪨",
+    "glassmorphism_coral": "Frosted glass effects - Coral 🪸",
+    "glassmorphism_teal": "Frosted glass effects - Teal 🦚",
+    # Brutalist (14 colors)
+    "brutalist_dark": "Raw asymmetric design - Dark",
+    "brutalist_forest": "Raw asymmetric design - Forest 🌲",
+    "brutalist_sunset": "Raw asymmetric design - Sunset 🌅",
+    "brutalist_ocean": "Raw asymmetric design - Ocean 🌊",
+    "brutalist_sepia": "Raw asymmetric design - Sepia 🟤",
+    "brutalist_rainbow": "Raw asymmetric design - Rainbow 🌈",
+    "brutalist_midnight": "Raw asymmetric design - Midnight 🌙",
+    "brutalist_cherry": "Raw asymmetric design - Cherry 🍒",
+    "brutalist_lavender": "Raw asymmetric design - Lavender 💜",
+    "brutalist_mint": "Raw asymmetric design - Mint 🌿",
+    "brutalist_amber": "Raw asymmetric design - Amber 🟠",
+    "brutalist_slate": "Raw asymmetric design - Slate 🪨",
+    "brutalist_coral": "Raw asymmetric design - Coral 🪸",
+    "brutalist_teal": "Raw asymmetric design - Teal 🦚",
+    # Neon Cyberpunk (14 colors)
+    "neon_cyberpunk_dark": "Glowing futuristic style - Dark",
+    "neon_cyberpunk_forest": "Glowing futuristic style - Forest 🌲",
+    "neon_cyberpunk_sunset": "Glowing futuristic style - Sunset 🌅",
+    "neon_cyberpunk_ocean": "Glowing futuristic style - Ocean 🌊",
+    "neon_cyberpunk_sepia": "Glowing futuristic style - Sepia 🟤",
+    "neon_cyberpunk_rainbow": "Glowing futuristic style - Rainbow 🌈",
+    "neon_cyberpunk_midnight": "Glowing futuristic style - Midnight 🌙",
+    "neon_cyberpunk_cherry": "Glowing futuristic style - Cherry 🍒",
+    "neon_cyberpunk_lavender": "Glowing futuristic style - Lavender 💜",
+    "neon_cyberpunk_mint": "Glowing futuristic style - Mint 🌿",
+    "neon_cyberpunk_amber": "Glowing futuristic style - Amber 🟠",
+    "neon_cyberpunk_slate": "Glowing futuristic style - Slate 🪨",
+    "neon_cyberpunk_coral": "Glowing futuristic style - Coral 🪸",
+    "neon_cyberpunk_teal": "Glowing futuristic style - Teal 🦚",
+    # Vintage Retro (14 colors)
+    "vintage_retro_dark": "80s/90s pastel aesthetic - Dark",
+    "vintage_retro_forest": "80s/90s pastel aesthetic - Forest 🌲",
+    "vintage_retro_sunset": "80s/90s pastel aesthetic - Sunset 🌅",
+    "vintage_retro_ocean": "80s/90s pastel aesthetic - Ocean 🌊",
+    "vintage_retro_sepia": "80s/90s pastel aesthetic - Sepia 🟤",
+    "vintage_retro_rainbow": "80s/90s pastel aesthetic - Rainbow 🌈",
+    "vintage_retro_midnight": "80s/90s pastel aesthetic - Midnight 🌙",
+    "vintage_retro_cherry": "80s/90s pastel aesthetic - Cherry 🍒",
+    "vintage_retro_lavender": "80s/90s pastel aesthetic - Lavender 💜",
+    "vintage_retro_mint": "80s/90s pastel aesthetic - Mint 🌿",
+    "vintage_retro_amber": "80s/90s pastel aesthetic - Amber 🟠",
+    "vintage_retro_slate": "80s/90s pastel aesthetic - Slate 🪨",
+    "vintage_retro_coral": "80s/90s pastel aesthetic - Coral 🪸",
+    "vintage_retro_teal": "80s/90s pastel aesthetic - Teal 🦚",
+    # Neumorphism (14 colors)
+    "neumorphism_dark": "Soft 3D relief design - Dark",
+    "neumorphism_forest": "Soft 3D relief design - Forest 🌲",
+    "neumorphism_sunset": "Soft 3D relief design - Sunset 🌅",
+    "neumorphism_ocean": "Soft 3D relief design - Ocean 🌊",
+    "neumorphism_sepia": "Soft 3D relief design - Sepia 🟤",
+    "neumorphism_rainbow": "Soft 3D relief design - Rainbow 🌈",
+    "neumorphism_midnight": "Soft 3D relief design - Midnight 🌙",
+    "neumorphism_cherry": "Soft 3D relief design - Cherry 🍒",
+    "neumorphism_lavender": "Soft 3D relief design - Lavender 💜",
+    "neumorphism_mint": "Soft 3D relief design - Mint 🌿",
+    "neumorphism_amber": "Soft 3D relief design - Amber 🟠",
+    "neumorphism_slate": "Soft 3D relief design - Slate 🪨",
+    "neumorphism_coral": "Soft 3D relief design - Coral 🪸",
+    "neumorphism_teal": "Soft 3D relief design - Teal 🦚",
 }
 
 BBCODE_TEMPLATE_DESCRIPTIONS = {
@@ -338,27 +612,158 @@ BBCODE_TEMPLATE_DESCRIPTIONS = {
     "boxed": "Boxed BBCode organization for visual separation.",
 }
 
+# New template categories (10 designs × 14 colors = 140 templates)
 HTML_TEMPLATE_CATEGORIES = {
-    "aurora": "Boxes",
-    "emerald": "Boxes",
-    "midnight": "Boxes",
-    "cinema": "Boxes",
-    "poster": "Boxes",
-    "minimal": "Boxes",
-    "neon": "Boxes",
-    "mono": "Boxes",
-    "editorial": "Vertical",
-    "lobby": "Vertical",
-    "vertical": "Vertical",
-    "terminal": "Vertical",
-    "magazine": "Vertical",
-    "split": "Vertical",
-    "dossier": "Vertical",
-    "poster_focus": "Vertical",
-    "timeline": "Timeline",
-    "timeline_noir": "Timeline",
-    "timeline_amber": "Timeline",
+    # Cinematic (14 colors)
+    "cinematic_dark": "Cinematic",
+    "cinematic_forest": "Cinematic",
+    "cinematic_sunset": "Cinematic",
+    "cinematic_ocean": "Cinematic",
+    "cinematic_sepia": "Cinematic",
+    "cinematic_rainbow": "Cinematic",
+    "cinematic_midnight": "Cinematic",
+    "cinematic_cherry": "Cinematic",
+    "cinematic_lavender": "Cinematic",
+    "cinematic_mint": "Cinematic",
+    "cinematic_amber": "Cinematic",
+    "cinematic_slate": "Cinematic",
+    "cinematic_coral": "Cinematic",
+    "cinematic_teal": "Cinematic",
+    # Magazine (14 colors)
+    "magazine_dark": "Magazine",
+    "magazine_forest": "Magazine",
+    "magazine_sunset": "Magazine",
+    "magazine_ocean": "Magazine",
+    "magazine_sepia": "Magazine",
+    "magazine_rainbow": "Magazine",
+    "magazine_midnight": "Magazine",
+    "magazine_cherry": "Magazine",
+    "magazine_lavender": "Magazine",
+    "magazine_mint": "Magazine",
+    "magazine_amber": "Magazine",
+    "magazine_slate": "Magazine",
+    "magazine_coral": "Magazine",
+    "magazine_teal": "Magazine",
+    # Minimal (14 colors)
+    "minimal_dark": "Minimal",
+    "minimal_forest": "Minimal",
+    "minimal_sunset": "Minimal",
+    "minimal_ocean": "Minimal",
+    "minimal_sepia": "Minimal",
+    "minimal_rainbow": "Minimal",
+    "minimal_midnight": "Minimal",
+    "minimal_cherry": "Minimal",
+    "minimal_lavender": "Minimal",
+    "minimal_mint": "Minimal",
+    "minimal_amber": "Minimal",
+    "minimal_slate": "Minimal",
+    "minimal_coral": "Minimal",
+    "minimal_teal": "Minimal",
+    # Card (14 colors)
+    "card_dark": "Card",
+    "card_forest": "Card",
+    "card_sunset": "Card",
+    "card_ocean": "Card",
+    "card_sepia": "Card",
+    "card_rainbow": "Card",
+    "card_midnight": "Card",
+    "card_cherry": "Card",
+    "card_lavender": "Card",
+    "card_mint": "Card",
+    "card_amber": "Card",
+    "card_slate": "Card",
+    "card_coral": "Card",
+    "card_teal": "Card",
+    # Timeline (14 colors)
+    "timeline_dark": "Timeline",
+    "timeline_forest": "Timeline",
+    "timeline_sunset": "Timeline",
     "timeline_ocean": "Timeline",
+    "timeline_sepia": "Timeline",
+    "timeline_rainbow": "Timeline",
+    "timeline_midnight": "Timeline",
+    "timeline_cherry": "Timeline",
+    "timeline_lavender": "Timeline",
+    "timeline_mint": "Timeline",
+    "timeline_amber": "Timeline",
+    "timeline_slate": "Timeline",
+    "timeline_coral": "Timeline",
+    "timeline_teal": "Timeline",
+    # Glassmorphism (14 colors)
+    "glassmorphism_dark": "Glassmorphism",
+    "glassmorphism_forest": "Glassmorphism",
+    "glassmorphism_sunset": "Glassmorphism",
+    "glassmorphism_ocean": "Glassmorphism",
+    "glassmorphism_sepia": "Glassmorphism",
+    "glassmorphism_rainbow": "Glassmorphism",
+    "glassmorphism_midnight": "Glassmorphism",
+    "glassmorphism_cherry": "Glassmorphism",
+    "glassmorphism_lavender": "Glassmorphism",
+    "glassmorphism_mint": "Glassmorphism",
+    "glassmorphism_amber": "Glassmorphism",
+    "glassmorphism_slate": "Glassmorphism",
+    "glassmorphism_coral": "Glassmorphism",
+    "glassmorphism_teal": "Glassmorphism",
+    # Brutalist (14 colors)
+    "brutalist_dark": "Brutalist",
+    "brutalist_forest": "Brutalist",
+    "brutalist_sunset": "Brutalist",
+    "brutalist_ocean": "Brutalist",
+    "brutalist_sepia": "Brutalist",
+    "brutalist_rainbow": "Brutalist",
+    "brutalist_midnight": "Brutalist",
+    "brutalist_cherry": "Brutalist",
+    "brutalist_lavender": "Brutalist",
+    "brutalist_mint": "Brutalist",
+    "brutalist_amber": "Brutalist",
+    "brutalist_slate": "Brutalist",
+    "brutalist_coral": "Brutalist",
+    "brutalist_teal": "Brutalist",
+    # Neon Cyberpunk (14 colors)
+    "neon_cyberpunk_dark": "Neon Cyberpunk",
+    "neon_cyberpunk_forest": "Neon Cyberpunk",
+    "neon_cyberpunk_sunset": "Neon Cyberpunk",
+    "neon_cyberpunk_ocean": "Neon Cyberpunk",
+    "neon_cyberpunk_sepia": "Neon Cyberpunk",
+    "neon_cyberpunk_rainbow": "Neon Cyberpunk",
+    "neon_cyberpunk_midnight": "Neon Cyberpunk",
+    "neon_cyberpunk_cherry": "Neon Cyberpunk",
+    "neon_cyberpunk_lavender": "Neon Cyberpunk",
+    "neon_cyberpunk_mint": "Neon Cyberpunk",
+    "neon_cyberpunk_amber": "Neon Cyberpunk",
+    "neon_cyberpunk_slate": "Neon Cyberpunk",
+    "neon_cyberpunk_coral": "Neon Cyberpunk",
+    "neon_cyberpunk_teal": "Neon Cyberpunk",
+    # Vintage Retro (14 colors)
+    "vintage_retro_dark": "Vintage Retro",
+    "vintage_retro_forest": "Vintage Retro",
+    "vintage_retro_sunset": "Vintage Retro",
+    "vintage_retro_ocean": "Vintage Retro",
+    "vintage_retro_sepia": "Vintage Retro",
+    "vintage_retro_rainbow": "Vintage Retro",
+    "vintage_retro_midnight": "Vintage Retro",
+    "vintage_retro_cherry": "Vintage Retro",
+    "vintage_retro_lavender": "Vintage Retro",
+    "vintage_retro_mint": "Vintage Retro",
+    "vintage_retro_amber": "Vintage Retro",
+    "vintage_retro_slate": "Vintage Retro",
+    "vintage_retro_coral": "Vintage Retro",
+    "vintage_retro_teal": "Vintage Retro",
+    # Neumorphism (14 colors)
+    "neumorphism_dark": "Neumorphism",
+    "neumorphism_forest": "Neumorphism",
+    "neumorphism_sunset": "Neumorphism",
+    "neumorphism_ocean": "Neumorphism",
+    "neumorphism_sepia": "Neumorphism",
+    "neumorphism_rainbow": "Neumorphism",
+    "neumorphism_midnight": "Neumorphism",
+    "neumorphism_cherry": "Neumorphism",
+    "neumorphism_lavender": "Neumorphism",
+    "neumorphism_mint": "Neumorphism",
+    "neumorphism_amber": "Neumorphism",
+    "neumorphism_slate": "Neumorphism",
+    "neumorphism_coral": "Neumorphism",
+    "neumorphism_teal": "Neumorphism",
 }
 
 BBCODE_TEMPLATE_CATEGORIES = {
@@ -372,20 +777,88 @@ BBCODE_TEMPLATE_CATEGORIES = {
     "boxed": "Styled",
 }
 
+HTML_TEMPLATE_FAMILY_LABELS = {
+    "cinematic": "Cinematic",
+    "magazine": "Magazine",
+    "minimal": "Minimal",
+    "card": "Card",
+    "timeline": "Timeline",
+    "glassmorphism": "Glassmorphism",
+    "brutalist": "Brutalist",
+    "neon_cyberpunk": "Neon Cyberpunk",
+    "vintage_retro": "Vintage Retro",
+    "neumorphism": "Neumorphism",
+}
+
+
+def _template_name_from_filename(filename: str) -> str | None:
+    if not filename.endswith(".jinja2"):
+        return None
+    stem = filename.removesuffix(".jinja2")
+    base, separator, locale = stem.rpartition(".")
+    if separator and locale in PREZ_LOCALES:
+        return base
+    return stem
+
+
+def _discover_template_names(kind: str, *, fallback: tuple[str, ...]) -> tuple[str, ...]:
+    if kind == "html":
+        resource_dir = "templates/prez/html/generated"
+    elif kind == "bbcode":
+        resource_dir = "templates/prez/bbcode"
+    else:
+        return fallback
+
+    try:
+        root = importlib_resources.files("framekit").joinpath(resource_dir)
+        discovered = {
+            template_name
+            for item in root.iterdir()
+            if item.is_file()
+            for template_name in [_template_name_from_filename(item.name)]
+            if template_name
+        }
+    except (FileNotFoundError, ModuleNotFoundError, OSError):
+        return fallback
+
+    return tuple(sorted(discovered)) or fallback
+
+
+def _html_family_label(template_name: str) -> str | None:
+    for family, label in sorted(
+        HTML_TEMPLATE_FAMILY_LABELS.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
+        if template_name.startswith(f"{family}_"):
+            return label
+    return None
+
 
 def describe_html_template(name: str) -> str:
+    """Handle describe html template."""
     normalized = _normalize_template_name(name, kind="html")
-    return HTML_TEMPLATE_DESCRIPTIONS.get(normalized, normalized)
+    description = HTML_TEMPLATE_DESCRIPTIONS.get(normalized)
+    if description:
+        return description
+    family_label = _html_family_label(normalized)
+    if family_label is None:
+        return normalized
+    color = normalized.rsplit("_", 1)[-1].replace("_", " ").title()
+    return f"{family_label} template - {color}"
 
 
 def describe_bbcode_template(name: str) -> str:
+    """Handle describe bbcode template."""
     normalized = _normalize_template_name(name, kind="bbcode")
     return BBCODE_TEMPLATE_DESCRIPTIONS.get(normalized, normalized)
 
 
 def template_category(name: str, *, kind: str) -> str:
+    """Handle template category."""
     if kind == "html":
-        return HTML_TEMPLATE_CATEGORIES.get(_normalize_template_name(name, kind=kind), "Other")
+        normalized = _normalize_template_name(name, kind=kind)
+        return HTML_TEMPLATE_CATEGORIES.get(normalized) or _html_family_label(normalized) or "Other"
     return BBCODE_TEMPLATE_CATEGORIES.get(_normalize_template_name(name, kind=kind), "Other")
 
 
@@ -398,9 +871,9 @@ def _normalize_template_name(name: str | None, *, kind: str) -> str:
     raw = (name or "").strip().lower().replace("-", "_")
     if kind == "html":
         raw = HTML_STYLE_ALIASES.get(raw, raw)
-        return raw if raw in HTML_TEMPLATE_NAMES else "aurora"
+        return raw if raw in available_html_templates() else "minimal_dark"
     raw = BBCODE_STYLE_ALIASES.get(raw, raw)
-    return raw if raw in BBCODE_TEMPLATE_NAMES else "classic"
+    return raw if raw in available_bbcode_templates() else "classic"
 
 
 def _preset_values(name: str | None) -> dict[str, str]:
@@ -504,7 +977,7 @@ def _title_from_metadata(value: Any | None) -> str | None:
     return None
 
 
-def _metadata_title(context: dict | None, release: ReleaseNfoData | None = None) -> str | None:
+def _metadata_title(context: dict | None, release: ReleaseNfoData | None = None) -> str | None:  # pyright: ignore[reportUnusedFunction]  # Public helper retained for downstream importers
     if not context:
         return None
     if release is not None:
@@ -636,51 +1109,77 @@ def _tmdb_fields(metadata: Any | None, release: ReleaseNfoData) -> tuple[PrezFie
 
 def _heading_titles(metadata: Any | None, release: ReleaseNfoData) -> tuple[str, str]:
     if release.media_kind == "movie":
-        title = _metadata_attr(metadata, "title") or release.title_display or release.release_title
-        return _dash(title), "-"
+        return _movie_heading_titles(metadata, release)
 
-    series_title = (
+    series_title = _series_heading_title(metadata, release)
+    if release.media_kind != "single_episode":
+        return _dash(series_title), "-"
+    return _dash(series_title), _dash(_single_episode_heading_title(metadata, release))
+
+
+def _movie_heading_titles(metadata: Any | None, release: ReleaseNfoData) -> tuple[str, str]:
+    title = _metadata_attr(metadata, "title") or release.title_display or release.release_title
+    return _dash(title), "-"
+
+
+def _series_heading_title(metadata: Any | None, release: ReleaseNfoData) -> str:
+    return (
         _metadata_attr(metadata, "series_title")
         or release.series_title
         or release.title_display
         or release.release_title
     )
-    episode_title = "-"
-    if release.media_kind == "single_episode":
-        first = _first_episode(release)
-        episode_title = (
-            _metadata_attr(metadata, "episode_title")
-            or (first.episode_title if first else None)
-            or "-"
-        )
-    return _dash(series_title), _dash(episode_title)
+
+
+def _single_episode_heading_title(metadata: Any | None, release: ReleaseNfoData) -> str:
+    first = _first_episode(release)
+    return (
+        _metadata_attr(metadata, "episode_title") or (first.episode_title if first else None) or "-"
+    )
 
 
 def _season_episode(release: ReleaseNfoData) -> str:
     if release.media_kind == "movie":
         return "-"
 
-    codes = [episode.episode_code.upper() for episode in release.episodes if episode.episode_code]
+    codes = _episode_codes(release)
     if not codes:
         return release.season or "-"
-
     if release.media_kind == "single_episode" or len(codes) == 1:
         return codes[0]
+    return _season_episode_series_text(codes)
 
-    seasons = {code[:3] for code in codes if code.startswith("S") and "E" in code}
+
+def _episode_codes(release: ReleaseNfoData) -> list[str]:
+    return [episode.episode_code.upper() for episode in release.episodes if episode.episode_code]
+
+
+def _season_episode_series_text(codes: Sequence[str]) -> str:
+    seasons = _season_prefixes(codes)
     if len(seasons) == 1:
-        season = next(iter(seasons))
-        episode_numbers: list[int] = []
-        for code in codes:
-            try:
-                episode_numbers.append(int(code.split("E", 1)[1]))
-            except (IndexError, ValueError):
-                continue
-        if episode_numbers:
-            return f"{season}E{min(episode_numbers):02d}-{season}E{max(episode_numbers):02d}"
-        return season
-
+        return _single_season_episode_range(codes, next(iter(seasons)))
     return ", ".join(codes)
+
+
+def _season_prefixes(codes: Sequence[str]) -> set[str]:
+    return {code[:3] for code in codes if code.startswith("S") and "E" in code}
+
+
+def _single_season_episode_range(codes: Sequence[str], season: str) -> str:
+    episode_numbers = _episode_numbers(codes)
+    if episode_numbers:
+        return f"{season}E{min(episode_numbers):02d}-{season}E{max(episode_numbers):02d}"
+    return season
+
+
+def _episode_numbers(codes: Sequence[str]) -> list[int]:
+    numbers: list[int] = []
+    for code in codes:
+        try:
+            numbers.append(int(code.split("E", 1)[1]))
+        except (IndexError, ValueError):
+            continue
+    return numbers
 
 
 def _season_code(release: ReleaseNfoData) -> str:
@@ -789,7 +1288,7 @@ def _format_literal_date(value: str | None, locale: str | None) -> str | None:
     if format_date is not None:
         try:
             return format_date(parsed, format="long", locale=babel_locale)
-        except Exception:
+        except Exception:  # nosec B110
             # If babel fails to format, fall back to strftime below
             pass
     return parsed.strftime("%d %B %Y")
@@ -825,28 +1324,44 @@ def _episode_code_from_metadata(value: Any | None) -> str | None:
 def _format_average_runtime(release: ReleaseNfoData, metadata: Any | None = None) -> str:
     if release.media_kind != "season_pack":
         return "-"
+    local_runtime = _average_local_episode_runtime(release)
+    if local_runtime is not None:
+        return _format_runtime_minutes(local_runtime)
+    metadata_runtime = _average_metadata_episode_runtime(release, metadata)
+    if metadata_runtime is not None:
+        return _format_runtime_minutes(metadata_runtime)
+    return _format_runtime_minutes(_runtime_minutes_from_metadata(metadata))
 
+
+def _average_local_episode_runtime(release: ReleaseNfoData) -> int | None:
     local_minutes = [
         round(episode.duration_ms / 60_000)
         for episode in release.episodes
         if episode.duration_ms and episode.duration_ms > 0
     ]
-    if local_minutes:
-        return _format_runtime_minutes(round(sum(local_minutes) / len(local_minutes)))
+    return _average_minutes(local_minutes)
 
+
+def _average_metadata_episode_runtime(release: ReleaseNfoData, metadata: Any | None) -> int | None:
     release_codes = {episode.episode_code for episode in release.episodes if episode.episode_code}
-    metadata_minutes: list[int] = []
+    metadata_minutes = _matching_metadata_runtime_minutes(metadata, release_codes)
+    return _average_minutes(metadata_minutes)
+
+
+def _matching_metadata_runtime_minutes(metadata: Any | None, release_codes: set[str]) -> list[int]:
+    minutes: list[int] = []
     for episode in getattr(metadata, "episode_summaries", []) or []:
         code = _episode_code_from_metadata(episode)
         runtime = getattr(episode, "runtime_minutes", None)
         if runtime and (not release_codes or code in release_codes):
-            metadata_minutes.append(runtime)
+            minutes.append(runtime)
+    return minutes
 
-    if metadata_minutes:
-        return _format_runtime_minutes(round(sum(metadata_minutes) / len(metadata_minutes)))
 
-    runtime = _runtime_minutes_from_metadata(metadata)
-    return _format_runtime_minutes(runtime)
+def _average_minutes(values: Sequence[int]) -> int | None:
+    if not values:
+        return None
+    return round(sum(values) / len(values))
 
 
 def _unique_tracks(episodes: list[EpisodeNfoData], kind: str) -> tuple[TrackNfoData, ...]:
@@ -901,6 +1416,17 @@ def _episode_suffix(codes: Sequence[str]) -> str:
 
 def _unique_subtitle_tracks(release: ReleaseNfoData) -> tuple[tuple[TrackNfoData, str | None], ...]:
     episode_count = len(release.episodes)
+    by_key = _collect_subtitle_track_occurrences(release)
+    results: list[tuple[TrackNfoData, str | None]] = []
+    for track, indexes, codes in by_key.values():
+        suffix = _episode_suffix(codes) if episode_count and len(indexes) < episode_count else ""
+        results.append((track, suffix or None))
+    return tuple(results)
+
+
+def _collect_subtitle_track_occurrences(
+    release: ReleaseNfoData,
+) -> dict[tuple[Any, ...], tuple[TrackNfoData, set[int], list[str]]]:
     by_key: dict[tuple[Any, ...], tuple[TrackNfoData, set[int], list[str]]] = {}
     for index, episode in enumerate(release.episodes):
         code = (episode.episode_code or "").upper()
@@ -912,12 +1438,7 @@ def _unique_subtitle_tracks(release: ReleaseNfoData) -> tuple[tuple[TrackNfoData
             indexes.add(index)
             if code and code not in codes:
                 codes.append(code)
-
-    results: list[tuple[TrackNfoData, str | None]] = []
-    for track, indexes, codes in by_key.values():
-        suffix = _episode_suffix(codes) if episode_count and len(indexes) < episode_count else ""
-        results.append((track, suffix or None))
-    return tuple(results)
+    return by_key
 
 
 def _first_episode(release: ReleaseNfoData) -> EpisodeNfoData | None:
@@ -952,38 +1473,73 @@ def _format_technical_summary(release: ReleaseNfoData) -> str:
         )
     elif release.media_kind == "single_episode":
         parts.append(_season_episode(release))
-    for value in (
-        release.resolution,
-        release.source,
-        release.video_tag,
-        _format_audio_summary(release),
-        release.language_tag,
-        release.hdr_display,
-    ):
-        if value:
-            parts.append(str(value))
+    parts.extend(
+        str(value)
+        for value in (
+            release.resolution,
+            release.source,
+            release.video_tag,
+            _format_audio_summary(release),
+            release.language_tag,
+            release.hdr_display,
+        )
+        if value
+    )
     parts.append(format_bytes_human(release.total_size_bytes))
     return " · ".join(part for part in parts if part and part != "-")
 
 
 def _country_from_language(value: str | None) -> str | None:
+    normalized = _normalized_language_value(value)
+    if normalized is None:
+        return None
+    bracket_region = _region_in_parentheses(normalized)
+    if bracket_region is not None:
+        return bracket_region
+    mapped_region = _FLAG_BY_LANGUAGE.get(normalized)
+    if mapped_region is not None:
+        return mapped_region
+    locale_region = _region_from_locale_value(normalized)
+    if locale_region is not None:
+        return locale_region
+    return _region_from_short_code(normalized)
+
+
+def _normalized_language_value(value: str | None) -> str | None:
     if not value:
         return None
     normalized = value.strip().lower().replace("_", "-")
-    if not normalized:
+    return normalized or None
+
+
+def _canonical_region(value: str) -> str:
+    return "gb" if value == "uk" else value
+
+
+def _region_in_parentheses(normalized: str) -> str | None:
+    if "(" not in normalized or ")" not in normalized:
         return None
-    if "(" in normalized and ")" in normalized:
-        region = normalized.split("(", 1)[1].split(")", 1)[0].strip().lower()
-        if len(region) == 2:
-            return "gb" if region == "uk" else region
-    if normalized in _FLAG_BY_LANGUAGE:
-        return _FLAG_BY_LANGUAGE[normalized]
-    if "-" in normalized and len(normalized.split("-", 1)[1]) == 2:
-        region = normalized.split("-", 1)[1]
-        return "gb" if region == "uk" else region
-    if len(normalized) == 2:
-        return "gb" if normalized == "en" else normalized
-    return None
+    region = normalized.split("(", 1)[1].split(")", 1)[0].strip().lower()
+    if len(region) != 2:
+        return None
+    return _canonical_region(region)
+
+
+def _region_from_locale_value(normalized: str) -> str | None:
+    if "-" not in normalized:
+        return None
+    region = normalized.split("-", 1)[1]
+    if len(region) != 2:
+        return None
+    return _canonical_region(region)
+
+
+def _region_from_short_code(normalized: str) -> str | None:
+    if len(normalized) != 2:
+        return None
+    if normalized == "en":
+        return "gb"
+    return normalized
 
 
 def _flag_url(language_code: str | None, language_display: str | None) -> str | None:
@@ -1047,6 +1603,35 @@ def _to_prez_subtitle_track(track: TrackNfoData, episode_suffix: str | None = No
     )
 
 
+def _group_tracks_by_language(tracks: Sequence[PrezTrack]) -> tuple[PrezTrackGroup, ...]:
+    """Group tracks by language, maintaining order of first appearance."""
+    if not tracks:
+        return ()
+
+    # Use dict to maintain insertion order (Python 3.7+)
+    groups: dict[str, list[PrezTrack]] = {}
+    language_metadata: dict[str, tuple[str | None, str | None]] = {}
+
+    for track in tracks:
+        lang_key = track.language_code or track.language or "unknown"
+
+        if lang_key not in groups:
+            groups[lang_key] = []
+            language_metadata[lang_key] = (track.language_code, track.flag_url)
+
+        groups[lang_key].append(track)
+
+    return tuple(
+        PrezTrackGroup(
+            language=tracks_in_group[0].language,
+            language_code=language_metadata[lang_key][0],
+            flag_url=language_metadata[lang_key][1],
+            tracks=tuple(tracks_in_group),
+        )
+        for lang_key, tracks_in_group in groups.items()
+    )
+
+
 def _field(
     key: str,
     label_key: str,
@@ -1066,16 +1651,27 @@ def _fields(items: Iterable[PrezField | None]) -> tuple[PrezField, ...]:
     return tuple(item for item in items if item is not None)
 
 
-def _build_prez_data(
+def _extract_base_metadata(
     release: ReleaseNfoData,
-    *,
+    metadata: Any,
+    first: EpisodeNfoData | None,
     metadata_context: dict | None,
-    mediainfo_text: str | None = None,
-    poster_url: str | None = None,
-    locale: str | None = None,
-) -> PrezData:
-    metadata = _metadata_object(metadata_context, release)
-    first = _first_episode(release)
+    poster_url: str | None,
+    locale: str | None,
+) -> dict[str, Any]:
+    """Extract and compute base metadata values.
+
+    Args:
+        release: Release NFO data
+        metadata: Metadata object from provider
+        first: First episode data (if available)
+        metadata_context: Additional metadata context
+        poster_url: Fallback poster URL
+        locale: Locale for date formatting
+
+    Returns:
+        Dictionary containing computed metadata values
+    """
     heading_title, heading_subtitle = _heading_titles(metadata, release)
     title = heading_title
     original_title = (
@@ -1104,60 +1700,100 @@ def _build_prez_data(
     technical_summary = _format_technical_summary(release)
     genres = _join_list(getattr(metadata, "genres", None))
     release_date = _metadata_release_date(metadata, release, locale)
-    selected_poster_url = _metadata_attr(metadata, "poster_url", "still_url") or poster_url
 
+    # Prioritize selected cover URL from metadata context, then metadata poster, then fallback
+    selected_poster_url = (
+        (metadata_context or {}).get("metadata_cover_url")
+        or _metadata_attr(metadata, "poster_url", "still_url")
+        or poster_url
+    )
+
+    return {
+        "title": title,
+        "original_title": original_title,
+        "year": year,
+        "runtime": runtime,
+        "heading_title": heading_title,
+        "heading_subtitle": heading_subtitle,
+        "season_is_complete": season_is_complete,
+        "season_episode_range": season_episode_range,
+        "season_episode": season_episode,
+        "season_label": season_label,
+        "display_title": display_title,
+        "video_bitrate": video_bitrate,
+        "average_runtime": average_runtime,
+        "tmdb_url": tmdb_url,
+        "tmdb_id": tmdb_id,
+        "rating": rating,
+        "file_size": file_size,
+        "technical_summary": technical_summary,
+        "genres": genres,
+        "release_date": release_date,
+        "selected_poster_url": selected_poster_url,
+    }
+
+
+def _build_info_fields(
+    release: ReleaseNfoData,
+    metadata: Any,
+    base_meta: dict[str, Any],
+) -> tuple[PrezField, ...]:
+    """Build information fields for presentation.
+
+    Args:
+        release: Release NFO data
+        metadata: Metadata object from provider
+        base_meta: Base metadata dictionary from _extract_base_metadata
+
+    Returns:
+        Tuple of PrezField objects for information section
+    """
     runtime_field = (
         _field(
             "average_runtime",
             "prez.label.average_runtime",
             "Average runtime per episode",
-            average_runtime,
+            base_meta["average_runtime"],
         )
         if release.media_kind == "season_pack"
-        else _field("runtime", "prez.label.runtime", "Runtime", runtime)
+        else _field("runtime", "prez.label.runtime", "Runtime", base_meta["runtime"])
     )
 
-    info_fields = _fields(
+    return _fields(
         (
-            _field("title", "prez.label.title", "Title", title, wide=True),
+            _field("title", "prez.label.title", "Title", base_meta["title"], wide=True),
             _field(
                 "episode_title",
                 "prez.label.episode_title",
                 "Episode title",
-                heading_subtitle,
+                base_meta["heading_subtitle"],
                 wide=True,
             ),
             _field(
                 "original_title",
                 "prez.label.original_title",
                 "Original title",
-                original_title,
+                base_meta["original_title"],
                 wide=True,
             ),
             _field(
-                "season_episode", "prez.label.season_episode", "Season / Episode", season_episode
+                "season_episode",
+                "prez.label.season_episode",
+                "Season / Episode",
+                base_meta["season_episode"],
             ),
             _field(
                 "genres",
                 "prez.label.genres",
                 "Genres",
-                genres,
+                base_meta["genres"],
                 wide=True,
-            ),
-            _field(
-                "episode_completeness",
-                "prez.label.episode_completeness",
-                "Episode completeness",
-                release.episode_completeness
-                if release.media_kind in {"single_episode", "season_pack", "special_pack"}
-                else None,
-                wide=bool(release.missing_episode_codes),
             ),
             _field(
                 "release_date",
                 "prez.label.release_date",
                 "Release date",
-                release_date,
+                base_meta["release_date"],
             ),
             _field(
                 "countries",
@@ -1174,13 +1810,33 @@ def _build_prez_data(
             runtime_field,
         )
     )
-    metadata_fields = _fields((_field("rating", "prez.label.rating", "Rating", rating),))
+
+
+def _build_metadata_and_release_fields(
+    release: ReleaseNfoData,
+    metadata: Any,
+    base_meta: dict[str, Any],
+) -> tuple[tuple[PrezField, ...], tuple[PrezField, ...]]:
+    """Build metadata and release fields for presentation.
+
+    Args:
+        release: Release NFO data
+        metadata: Metadata object from provider
+        base_meta: Base metadata dictionary from _extract_base_metadata
+
+    Returns:
+        Tuple of (metadata_fields, release_fields)
+    """
+    metadata_fields = _fields(
+        (_field("rating", "prez.label.rating", "Rating", base_meta["rating"]),)
+    )
     metadata_fields = metadata_fields + _tmdb_fields(metadata, release)
+
     release_fields = _fields(
         (
             _field("team", "prez.label.team", "Team", release.team),
             _field("release", "prez.label.release", "Release", release.release_title, wide=True),
-            _field("file_size", "prez.label.file_size", "Size", file_size),
+            _field("file_size", "prez.label.file_size", "Size", base_meta["file_size"]),
             _field(
                 "files_count",
                 "prez.label.files_count",
@@ -1189,94 +1845,166 @@ def _build_prez_data(
             ),
         )
     )
-    video_fields = _fields(
+
+    return metadata_fields, release_fields
+
+
+def _build_video_fields(
+    release: ReleaseNfoData,
+    first: EpisodeNfoData | None,
+    base_meta: dict[str, Any],
+) -> tuple[PrezField, ...]:
+    """Build video technical fields for presentation.
+
+    Args:
+        release: Release NFO data
+        first: First episode data (if available)
+        base_meta: Base metadata dictionary from _extract_base_metadata
+
+    Returns:
+        Tuple of PrezField objects for video section
+    """
+    label_key, label_default = _video_bitrate_labels(release)
+    return _fields(
         (
             _field("source", "prez.label.source", "Source", release.source),
             _field(
                 "resolution",
                 "prez.label.resolution",
                 "Resolution",
-                release.resolution or (first.resolution if first else None),
+                _release_resolution(release, first),
             ),
             _field(
                 "video_codec",
                 "prez.label.video_codec",
                 "Video codec",
-                release.video_tag or (first.video_codec if first else None),
+                _release_video_codec(release, first),
             ),
             _field(
                 "video_bitrate",
-                "prez.label.average_video_bitrate"
-                if release.media_kind == "season_pack"
-                else "prez.label.video_bitrate",
-                "Average video bitrate" if release.media_kind == "season_pack" else "Video bitrate",
-                video_bitrate,
+                label_key,
+                label_default,
+                base_meta["video_bitrate"],
             ),
             _field(
                 "aspect_ratio",
                 "prez.label.aspect_ratio",
                 "Aspect ratio",
-                first.aspect_ratio_display or first.aspect_ratio if first else None,
+                _release_aspect_ratio(first),
             ),
             _field(
                 "hdr",
                 "prez.label.hdr",
                 "HDR",
-                release.hdr_display or (first.hdr_display if first else None),
+                _release_hdr(release, first),
             ),
         )
     )
 
-    badges: tuple[str, ...] = tuple(
-        item
-        for item in (
-            season_episode,
-            release.resolution,
-            release.source,
-            release.video_tag,
-            release.audio_tag,
-            release.language_tag,
-            file_size,
-        )
-        if isinstance(item, str) and _has_value(item)
-    )
 
+def _video_bitrate_labels(release: ReleaseNfoData) -> tuple[str, str]:
+    if release.media_kind == "season_pack":
+        return "prez.label.average_video_bitrate", "Average video bitrate"
+    return "prez.label.video_bitrate", "Video bitrate"
+
+
+def _release_resolution(release: ReleaseNfoData, first: EpisodeNfoData | None) -> str | None:
+    if release.resolution:
+        return release.resolution
+    return first.resolution if first else None
+
+
+def _release_video_codec(release: ReleaseNfoData, first: EpisodeNfoData | None) -> str | None:
+    if release.video_tag:
+        return release.video_tag
+    return first.video_codec if first else None
+
+
+def _release_aspect_ratio(first: EpisodeNfoData | None) -> str | None:
+    if first is None:
+        return None
+    return first.aspect_ratio_display or first.aspect_ratio
+
+
+def _release_hdr(release: ReleaseNfoData, first: EpisodeNfoData | None) -> str | None:
+    if release.hdr_display:
+        return release.hdr_display
+    return first.hdr_display if first else None
+
+
+def _build_prez_data(
+    release: ReleaseNfoData,
+    *,
+    metadata_context: dict | None,
+    mediainfo_text: str | None = None,
+    poster_url: str | None = None,
+    locale: str | None = None,
+    banner_audio: str = "",
+    banner_information: str = "",
+    banner_metadata: str = "",
+    banner_release: str = "",
+    banner_subtitles: str = "",
+    banner_synopsis: str = "",
+    banner_technical: str = "",
+) -> PrezData:
+    """Build presentation data from release and metadata.
+
+    Args:
+        release: Release NFO data
+        metadata_context: Additional metadata context
+        mediainfo_text: MediaInfo text content
+        poster_url: Fallback poster URL
+        locale: Locale for date formatting
+        banner_audio: Banner image URL for the audio section.
+        banner_information: Banner image URL for the information section.
+        banner_metadata: Banner image URL for the metadata section.
+        banner_release: Banner image URL for the release section.
+        banner_subtitles: Banner image URL for the subtitles section.
+        banner_synopsis: Banner image URL for the synopsis section.
+        banner_technical: Banner image URL for the technical section.
+
+    Returns:
+        Complete PrezData object ready for template rendering
+    """
+    metadata = _metadata_object(metadata_context, release)
+    first = _first_episode(release)
+    base_meta = _extract_base_metadata(
+        release, metadata, first, metadata_context, poster_url, locale
+    )
+    info_fields = _build_info_fields(release, metadata, base_meta)
+    metadata_fields, release_fields = _build_metadata_and_release_fields(
+        release, metadata, base_meta
+    )
+    video_fields = _build_video_fields(release, first, base_meta)
+    track_sections = _build_track_sections(release)
     return PrezData(
         release=release,
-        title=display_title,
-        original_title=_dash(original_title),
-        year=_dash(year),
-        heading_title=_dash(heading_title),
-        heading_subtitle=_dash(heading_subtitle),
-        season_label=season_label,
-        season_episode=season_episode,
-        season_episode_range=season_episode_range,
-        subtitle_line=" · ".join(
-            item
-            for item in (
-                "-" if release.media_kind == "season_pack" else _dash(year),
-                average_runtime if release.media_kind == "season_pack" else runtime,
-                genres,
-            )
-            if item != "-"
-        ),
-        poster_url=_dash(selected_poster_url),
+        title=base_meta["display_title"],
+        original_title=_dash(base_meta["original_title"]),
+        year=_dash(base_meta["year"]),
+        heading_title=_dash(base_meta["heading_title"]),
+        heading_subtitle=_dash(base_meta["heading_subtitle"]),
+        season_label=base_meta["season_label"],
+        season_episode=base_meta["season_episode"],
+        season_episode_range=base_meta["season_episode_range"],
+        subtitle_line=_build_subtitle_line(release, base_meta),
+        poster_url=_dash(base_meta["selected_poster_url"]),
         overview=_dash(getattr(metadata, "overview", None)),
-        technical_summary=technical_summary,
+        technical_summary=base_meta["technical_summary"],
         release_name=_dash(release.release_title),
         team=_dash(release.team),
-        file_size=file_size,
-        files_count=str(len(release.episodes) or 1),
+        file_size=base_meta["file_size"],
+        files_count=str(len(release.episodes) * 2 or 2),
         source=_dash(release.source),
-        resolution=_dash(release.resolution or (first.resolution if first else None)),
-        video_codec=_dash(release.video_tag or (first.video_codec if first else None)),
-        video_bitrate=video_bitrate,
-        aspect_ratio=_dash(first.aspect_ratio_display or first.aspect_ratio if first else None),
-        hdr=_dash(release.hdr_display or (first.hdr_display if first else None)),
-        tmdb_id=tmdb_id,
-        tmdb_url=_dash(tmdb_url),
+        resolution=_dash(_release_resolution(release, first)),
+        video_codec=_dash(_release_video_codec(release, first)),
+        video_bitrate=base_meta["video_bitrate"],
+        aspect_ratio=_dash(_release_aspect_ratio(first)),
+        hdr=_dash(_release_hdr(release, first)),
+        tmdb_id=base_meta["tmdb_id"],
+        tmdb_url=_dash(base_meta["tmdb_url"]),
         imdb_id="-",
-        rating=rating,
+        rating=base_meta["rating"],
         cast=_join_list(getattr(metadata, "cast", None)),
         crew=_join_list(getattr(metadata, "crew", None)),
         mediainfo_text=mediainfo_text.strip() if mediainfo_text else None,
@@ -1284,33 +2012,100 @@ def _build_prez_data(
         metadata_fields=metadata_fields,
         release_fields=release_fields,
         video_fields=video_fields,
-        audio_tracks=tuple(
-            _to_prez_audio_track(track) for track in _unique_tracks(release.episodes, "audio")
-        ),
-        subtitle_tracks=tuple(
-            _to_prez_subtitle_track(track, suffix)
-            for track, suffix in _unique_subtitle_tracks(release)
-        ),
-        badges=badges,
+        audio_tracks=track_sections.audio_tracks,
+        subtitle_tracks=track_sections.subtitle_tracks,
+        audio_track_groups=track_sections.audio_track_groups,
+        subtitle_track_groups=track_sections.subtitle_track_groups,
+        badges=_build_badges(release, base_meta),
+        banner_audio=banner_audio,
+        banner_information=banner_information,
+        banner_metadata=banner_metadata,
+        banner_release=banner_release,
+        banner_subtitles=banner_subtitles,
+        banner_synopsis=banner_synopsis,
+        banner_technical=banner_technical,
     )
 
 
-def _discover_screenshots(folder: Path) -> tuple[str, ...]:
+@dataclass(frozen=True, slots=True)
+class _TrackSections:
+    audio_tracks: tuple[PrezTrack, ...]
+    subtitle_tracks: tuple[PrezTrack, ...]
+    audio_track_groups: tuple[PrezTrackGroup, ...]
+    subtitle_track_groups: tuple[PrezTrackGroup, ...]
+
+
+def _build_subtitle_line(release: ReleaseNfoData, base_meta: dict[str, Any]) -> str:
+    year_value = "-" if release.media_kind == "season_pack" else _dash(base_meta["year"])
+    runtime_value = (
+        base_meta["average_runtime"]
+        if release.media_kind == "season_pack"
+        else base_meta["runtime"]
+    )
+    return " · ".join(
+        item for item in (year_value, runtime_value, base_meta["genres"]) if item != "-"
+    )
+
+
+def _build_badges(release: ReleaseNfoData, base_meta: dict[str, Any]) -> tuple[str, ...]:
+    values = (
+        base_meta["season_episode"],
+        release.resolution,
+        release.source,
+        release.video_tag,
+        release.audio_tag,
+        release.language_tag,
+        base_meta["file_size"],
+    )
+    return tuple(item for item in values if isinstance(item, str) and _has_value(item))
+
+
+def _build_track_sections(release: ReleaseNfoData) -> _TrackSections:
+    audio_tracks = tuple(
+        _to_prez_audio_track(track) for track in _unique_tracks(release.episodes, "audio")
+    )
+    subtitle_tracks = tuple(
+        _to_prez_subtitle_track(track, suffix) for track, suffix in _unique_subtitle_tracks(release)
+    )
+    return _TrackSections(
+        audio_tracks=audio_tracks,
+        subtitle_tracks=subtitle_tracks,
+        audio_track_groups=_group_tracks_by_language(audio_tracks),
+        subtitle_track_groups=_group_tracks_by_language(subtitle_tracks),
+    )
+
+
+def _discover_screenshots(folder: Path) -> tuple[str, ...]:  # pyright: ignore[reportUnusedFunction]  # Public helper retained for downstream importers
+    if not folder.exists():
+        return ()
     candidates: list[Path] = []
-    for child in folder.iterdir() if folder.exists() else []:
-        if child.is_dir() and child.name.lower() in SCREENSHOT_DIR_NAMES:
-            candidates.extend(
-                sorted(
-                    path
-                    for path in child.iterdir()
-                    if path.is_file() and path.suffix.lower() in SCREENSHOT_SUFFIXES
-                )
-            )
-        elif child.is_file() and child.suffix.lower() in SCREENSHOT_SUFFIXES:
-            lowered = child.stem.lower()
-            if lowered.startswith(("screen", "screenshot", "capture", "thumb")):
-                candidates.append(child)
+    for child in folder.iterdir():
+        if _is_screenshot_directory(child):
+            candidates.extend(_screenshot_files_in_directory(child))
+            continue
+        if _is_named_screenshot_file(child):
+            candidates.append(child)
     return tuple(str(path) for path in candidates[:12])
+
+
+def _is_screenshot_directory(path: Path) -> bool:
+    return path.is_dir() and path.name.lower() in SCREENSHOT_DIR_NAMES
+
+
+def _screenshot_files_in_directory(folder: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in folder.iterdir()
+        if path.is_file() and path.suffix.lower() in SCREENSHOT_SUFFIXES
+    )
+
+
+def _is_named_screenshot_file(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    if path.suffix.lower() not in SCREENSHOT_SUFFIXES:
+        return False
+    return path.stem.lower().startswith(("screen", "screenshot", "capture", "thumb"))
 
 
 def _discover_local_poster(folder: Path) -> str | None:
@@ -1336,55 +2131,126 @@ def _read_mediainfo_text(folder: Path) -> str | None:
 def _generate_mediainfo_text(
     release: ReleaseNfoData, registry: ToolRegistry | None = None
 ) -> str | None:
-    registry = registry or ToolRegistry()
-    binary = registry.resolve_tool_path("mediainfo")
-    if not binary:
+    """Generate MediaInfo text output using pymediainfo library.
+
+    Args:
+        release: Release NFO data containing episode information
+        registry: Tool registry (unused, kept for backward compatibility)
+
+    Returns:
+        Formatted MediaInfo text for all episodes, or None if pymediainfo is unavailable
+    """
+    if MediaInfo is None:
         return None
 
     sections: list[str] = []
     for episode in release.episodes:
         try:
-            result = subprocess.run(
-                [binary, str(episode.file_path)],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=60,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
+            text_output = _episode_mediainfo_text(episode)
+            if text_output:
+                sections.append(f"===== {episode.file_name} =====\n{text_output}")
+        except Exception:  # nosec B112
+            # Silently skip files that can't be parsed
             continue
-        output = (result.stdout or result.stderr or "").strip()
-        if output:
-            sections.append(f"===== {episode.file_name} =====\n{output}")
+
     return "\n\n".join(sections).strip() or None
 
 
+def _episode_mediainfo_text(episode: EpisodeNfoData) -> str | None:
+    if MediaInfo is None:
+        return None
+    media_info_obj = MediaInfo.parse(str(episode.file_path))
+    if not media_info_obj or isinstance(media_info_obj, str):
+        return None
+    return _render_mediainfo_payload(media_info_obj.to_data())
+
+
+def _render_mediainfo_payload(payload: Any) -> str | None:
+    if not payload:
+        return None
+    if isinstance(payload, dict):  # pyright: ignore[reportUnnecessaryIsInstance]  # Library may return non-dict at runtime
+        text_output = _render_mediainfo_dict(payload)
+    else:
+        text_output = str(payload).strip()
+    return text_output or None
+
+
+def _render_mediainfo_dict(payload: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for track in payload.get("tracks", []):
+        track_type = track.get("track_type", "Unknown")
+        lines.append(f"{track_type}")
+        for key, value in track.items():
+            if key == "track_type" or not value:
+                continue
+            lines.append(f"{key.replace('_', ' ').title():<40}: {value}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+def _template_autoescape(kind: str) -> Callable[[str | None], bool]:
+    """Return autoescape policy for prez templates.
+
+    HTML templates use Jinja autoescaping even though the shipped template files
+    end with ``.jinja2``. BBCode templates remain unescaped plain text.
+    """
+    if kind == "html":
+        html_autoescape = select_autoescape(enabled_extensions=("html", "xml"))
+        return lambda template_name: html_autoescape(template_name or "template.html")
+    return lambda _template_name: False
+
+
 def _template_environment(kind: str) -> Environment:
-    env = Environment(
-        loader=PackageLoader("framekit", f"templates/prez/{kind}"),
-        autoescape=select_autoescape(enabled_extensions=("html", "xml"))
-        if kind == "html"
-        else False,
+    # Use PackageLoader with multiple search paths to support base templates and generated templates
+    from jinja2 import ChoiceLoader
+
+    # For HTML, check generated folder first; for BBCode, use direct path
+    if kind == "html":
+        loader = ChoiceLoader(
+            [
+                PackageLoader(
+                    "framekit", f"templates/prez/{kind}/generated"
+                ),  # New generated templates
+                PackageLoader("framekit", f"templates/prez/{kind}"),  # Legacy templates
+                PackageLoader("framekit", "templates/prez/base"),
+            ]
+        )
+    else:
+        loader = ChoiceLoader(
+            [
+                PackageLoader("framekit", f"templates/prez/{kind}"),  # BBCode templates
+                PackageLoader("framekit", "templates/prez/base"),
+            ]
+        )
+
+    env = Environment(  # nosec B701  # nosemgrep: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
+        loader=loader,
+        autoescape=_template_autoescape(kind),
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    env.globals.update(
-        tr=tr,
-        dash=_dash,
-        bb=_bbcode_escape,
-        html_escape=escape,
-        field_url_bbcode=_field_url_bbcode,
-        field_url_html=_field_url_html,
-        audio_table_bbcode=_render_audio_tracks_bbcode,
-        subtitle_table_bbcode=_render_subtitle_tracks_bbcode,
-        audio_table_html=_render_audio_tracks_html,
-        subtitle_table_html=_render_subtitle_tracks_html,
-        mediainfo_spoiler=_render_mediainfo_spoiler,
-        style_css=_html_style_css,
-        body_class=_html_body_class,
-    )
+    # jinja2's Environment.globals is typed too strictly (a Mapping of utility
+    # singletons), but at runtime it accepts arbitrary callables. Cast to a
+    # broader dict for type-clean assignment.
+    globals_dict: dict[str, Any] = cast(dict[str, Any], env.globals)
+    globals_dict["tr"] = tr
+    globals_dict["dash"] = _dash
+    globals_dict["bb"] = _bbcode_escape
+    globals_dict["html_escape"] = escape
+    globals_dict["field_url_bbcode"] = _field_url_bbcode
+    globals_dict["field_url_html"] = _field_url_html
+    globals_dict["bbcode_banner"] = _render_bbcode_banner
+    globals_dict["audio_table_bbcode"] = _render_audio_tracks_bbcode
+    globals_dict["subtitle_table_bbcode"] = _render_subtitle_tracks_bbcode
+    globals_dict["audio_table_html"] = _render_audio_tracks_html
+    globals_dict["subtitle_table_html"] = _render_subtitle_tracks_html
+    globals_dict["audio_table_grouped_bbcode"] = _render_audio_tracks_grouped_bbcode
+    globals_dict["subtitle_table_grouped_bbcode"] = _render_subtitle_tracks_grouped_bbcode
+    globals_dict["audio_table_grouped_html"] = _render_audio_tracks_grouped_html
+    globals_dict["subtitle_table_grouped_html"] = _render_subtitle_tracks_grouped_html
+    globals_dict["mediainfo_spoiler"] = _render_mediainfo_spoiler
+    globals_dict["style_css"] = _html_style_css
+    globals_dict["body_class"] = _html_body_class
     return env
 
 
@@ -1396,7 +2262,7 @@ def _load_template(kind: str, name: str, locale: str):
     for candidate in candidates:
         try:
             return env.get_template(candidate)
-        except Exception:
+        except Exception:  # nosec B112
             continue
     raise ValueError(f"Unknown {kind} prez template: {name}")
 
@@ -1425,10 +2291,23 @@ def _track_language_html(track: PrezTrack) -> str:
     return prefix + escape(track.language)
 
 
+def _render_bbcode_banner(banner_url: str | None) -> str:
+    """Render a BBCode banner image if URL is provided."""
+    if not banner_url or not banner_url.strip():
+        return ""
+    return f"[center][img]{_bbcode_escape(banner_url)}[/img][/center]\n"
+
+
 def _render_audio_tracks_bbcode(tracks: Sequence[PrezTrack]) -> str:
+    """Render audio tracks as a single BBCode table with all tracks grouped together.
+
+    This is the NEW global table format with Track # and Language columns.
+    """
     header = (
         "[table]\n"
         "[tr][th]"
+        + tr("prez.audio.track", default="Track")
+        + "[/th][th]"
         + tr("prez.audio.language", default="Language")
         + "[/th][th]"
         + tr("prez.audio.codec", default="Codec")
@@ -1441,27 +2320,39 @@ def _render_audio_tracks_bbcode(tracks: Sequence[PrezTrack]) -> str:
         + "[/th][/tr]"
     )
     if not tracks:
-        return header + "\n[tr][td]-[/td][td]-[/td][td]-[/td][td]-[/td][td]-[/td][/tr]\n[/table]"
+        return (
+            header
+            + "\n[tr][td]-[/td][td]-[/td][td]-[/td][td]-[/td][td]-[/td][td]-[/td][/tr]\n[/table]"
+        )
+
+    # Group all tracks in a single table with track numbers
     rows = [
         "[tr]"
+        f"[td]{i + 1}[/td]"
         f"[td]{_track_language_bbcode(track)}[/td]"
         f"[td]{_bbcode_escape(track.codec)}[/td]"
         f"[td]{_bbcode_escape(track.channels)}[/td]"
         f"[td]{_bbcode_escape(track.bitrate)}[/td]"
         f"[td]{_bbcode_escape(track.is_default)}[/td]"
         "[/tr]"
-        for track in tracks
+        for i, track in enumerate(tracks)
     ]
     return header + "\n" + "\n".join(rows) + "\n[/table]"
 
 
 def _render_subtitle_tracks_bbcode(tracks: Sequence[PrezTrack]) -> str:
+    """Render subtitle tracks as a single BBCode table.
+
+    Columns: Track #, Language, Variant, Format, Default, Forced.
+    """
     header = (
         "[table]\n"
         "[tr][th]"
+        + tr("prez.subtitles.track", default="Track")
+        + "[/th][th]"
         + tr("prez.subtitles.language", default="Language")
         + "[/th][th]"
-        + tr("prez.subtitles.type", default="Type")
+        + tr("prez.subtitles.variant", default="Variant")
         + "[/th][th]"
         + tr("prez.subtitles.format", default="Format")
         + "[/th][th]"
@@ -1471,16 +2362,21 @@ def _render_subtitle_tracks_bbcode(tracks: Sequence[PrezTrack]) -> str:
         + "[/th][/tr]"
     )
     if not tracks:
-        return header + "\n[tr][td]-[/td][td]-[/td][td]-[/td][td]-[/td][td]-[/td][/tr]\n[/table]"
+        return (
+            header
+            + "\n[tr][td]-[/td][td]-[/td][td]-[/td][td]-[/td][td]-[/td][td]-[/td][/tr]\n[/table]"
+        )
+
     rows = [
         "[tr]"
+        f"[td]{i + 1}[/td]"
         f"[td]{_track_language_bbcode(track)}[/td]"
         f"[td]{_bbcode_escape(track.variant)}[/td]"
         f"[td]{_bbcode_escape(track.format_name)}[/td]"
         f"[td]{_bbcode_escape(track.is_default)}[/td]"
         f"[td]{_bbcode_escape(track.is_forced)}[/td]"
         "[/tr]"
-        for track in tracks
+        for i, track in enumerate(tracks)
     ]
     return header + "\n" + "\n".join(rows) + "\n[/table]"
 
@@ -1548,7 +2444,210 @@ def _render_subtitle_tracks_html(tracks: Sequence[PrezTrack]) -> str:
     )
 
 
+def _render_audio_tracks_grouped_bbcode(track_groups: Sequence[PrezTrackGroup]) -> str:
+    """Render audio tracks grouped by language in BBCode format."""
+    if not track_groups:
+        header = (
+            "[table]\n"
+            "[tr][th]"
+            + tr("prez.audio.language", default="Language")
+            + "[/th][th]"
+            + tr("prez.audio.codec", default="Codec")
+            + "[/th][th]"
+            + tr("prez.audio.channels", default="Channels")
+            + "[/th][th]"
+            + tr("prez.audio.bitrate", default="Bitrate")
+            + "[/th][th]"
+            + tr("prez.audio.default", default="Default")
+            + "[/th][/tr]"
+        )
+        return header + "\n[tr][td]-[/td][td]-[/td][td]-[/td][td]-[/td][td]-[/td][/tr]\n[/table]"
+
+    result_parts = []
+    for group in track_groups:
+        # Language header row with flag
+        lang_display = (
+            f"[img]{group.flag_url}[/img] {_bbcode_escape(group.language)}"
+            if group.flag_url
+            else _bbcode_escape(group.language)
+        )
+
+        header = (
+            "[table]\n"
+            "[tr][th]"
+            + tr("prez.audio.language", default="Language")
+            + "[/th][th]"
+            + tr("prez.audio.codec", default="Codec")
+            + "[/th][th]"
+            + tr("prez.audio.channels", default="Channels")
+            + "[/th][th]"
+            + tr("prez.audio.bitrate", default="Bitrate")
+            + "[/th][th]"
+            + tr("prez.audio.default", default="Default")
+            + "[/th][/tr]"
+        )
+
+        rows = []
+        for i, track in enumerate(group.tracks):
+            # Only show language in first row of group
+            lang_cell = lang_display if i == 0 else ""
+            rows.append(
+                "[tr]"
+                f"[td]{lang_cell}[/td]"
+                f"[td]{_bbcode_escape(track.codec)}[/td]"
+                f"[td]{_bbcode_escape(track.channels)}[/td]"
+                f"[td]{_bbcode_escape(track.bitrate)}[/td]"
+                f"[td]{_bbcode_escape(track.is_default)}[/td]"
+                "[/tr]"
+            )
+
+        result_parts.append(header + "\n" + "\n".join(rows) + "\n[/table]")
+
+    return "\n\n".join(result_parts)
+
+
+def _render_subtitle_tracks_grouped_bbcode(track_groups: Sequence[PrezTrackGroup]) -> str:
+    """Render subtitle tracks grouped by language in BBCode format."""
+    if not track_groups:
+        header = (
+            "[table]\n"
+            "[tr][th]"
+            + tr("prez.subtitles.language", default="Language")
+            + "[/th][th]"
+            + tr("prez.subtitles.type", default="Type")
+            + "[/th][th]"
+            + tr("prez.subtitles.format", default="Format")
+            + "[/th][th]"
+            + tr("prez.subtitles.default", default="Default")
+            + "[/th][th]"
+            + tr("prez.subtitles.forced", default="Forced")
+            + "[/th][/tr]"
+        )
+        return header + "\n[tr][td]-[/td][td]-[/td][td]-[/td][td]-[/td][td]-[/td][/tr]\n[/table]"
+
+    result_parts = []
+    for group in track_groups:
+        # Language header row with flag
+        lang_display = (
+            f"[img]{group.flag_url}[/img] {_bbcode_escape(group.language)}"
+            if group.flag_url
+            else _bbcode_escape(group.language)
+        )
+
+        header = (
+            "[table]\n"
+            "[tr][th]"
+            + tr("prez.subtitles.language", default="Language")
+            + "[/th][th]"
+            + tr("prez.subtitles.type", default="Type")
+            + "[/th][th]"
+            + tr("prez.subtitles.format", default="Format")
+            + "[/th][th]"
+            + tr("prez.subtitles.default", default="Default")
+            + "[/th][th]"
+            + tr("prez.subtitles.forced", default="Forced")
+            + "[/th][/tr]"
+        )
+
+        rows = []
+        for i, track in enumerate(group.tracks):
+            # Only show language in first row of group
+            lang_cell = lang_display if i == 0 else ""
+            rows.append(
+                "[tr]"
+                f"[td]{lang_cell}[/td]"
+                f"[td]{_bbcode_escape(track.variant)}[/td]"
+                f"[td]{_bbcode_escape(track.format_name)}[/td]"
+                f"[td]{_bbcode_escape(track.is_default)}[/td]"
+                f"[td]{_bbcode_escape(track.is_forced)}[/td]"
+                "[/tr]"
+            )
+
+        result_parts.append(header + "\n" + "\n".join(rows) + "\n[/table]")
+
+    return "\n\n".join(result_parts)
+
+
+def _render_audio_tracks_grouped_html(track_groups: Sequence[PrezTrackGroup]) -> str:
+    """Render audio tracks grouped by language in HTML format.
+
+    Headers appear once at the top of the single unified table.
+    Within the table, the language cell is shown only on the first row
+    of each group; subsequent rows of the same group leave it empty.
+    """
+    headers = [
+        tr("prez.audio.language", default="Language"),
+        tr("prez.audio.codec", default="Codec"),
+        tr("prez.audio.channels", default="Channels"),
+        tr("prez.audio.bitrate", default="Bitrate"),
+        tr("prez.audio.default", default="Default"),
+    ]
+    if not track_groups:
+        return _html_table(headers, [])
+
+    all_rows: list[list[str]] = []
+    for group in track_groups:
+        for i, track in enumerate(group.tracks):
+            lang_cell = _track_language_html(track) if i == 0 else ""
+            all_rows.append(
+                [
+                    lang_cell,
+                    escape(track.codec),
+                    escape(track.channels),
+                    escape(track.bitrate),
+                    escape(track.is_default),
+                ]
+            )
+
+    return _html_table(headers, all_rows)
+
+
+def _render_subtitle_tracks_grouped_html(track_groups: Sequence[PrezTrackGroup]) -> str:
+    """Render subtitle tracks grouped by language in HTML format.
+
+    Headers appear once at the top of the single unified table.
+    Within the table, the language cell is shown only on the first row
+    of each group; subsequent rows of the same group leave it empty.
+    """
+    headers = [
+        tr("prez.subtitles.language", default="Language"),
+        tr("prez.subtitles.type", default="Type"),
+        tr("prez.subtitles.format", default="Format"),
+        tr("prez.subtitles.default", default="Default"),
+        tr("prez.subtitles.forced", default="Forced"),
+    ]
+    if not track_groups:
+        return _html_table(headers, [])
+
+    all_rows: list[list[str]] = []
+    for group in track_groups:
+        for i, track in enumerate(group.tracks):
+            lang_cell = _track_language_html(track) if i == 0 else ""
+            all_rows.append(
+                [
+                    lang_cell,
+                    escape(track.variant),
+                    escape(track.format_name),
+                    escape(track.is_default),
+                    escape(track.is_forced),
+                ]
+            )
+
+    return _html_table(headers, all_rows)
+
+
 def _html_style_css(style: str) -> str:
+    """Get CSS custom properties for a template style/theme.
+
+    Uses the theme loader to fetch theme configurations from YAML files.
+    Falls back to hardcoded values if theme loader is unavailable.
+    """
+    # Try to use the theme loader first
+    css = get_html_theme_css(style)
+    if css:
+        return css
+
+    # Fallback to hardcoded styles if theme loader fails
     styles = {
         "aurora": "--bg:#0f172a;--card:#111c33;--line:#00856f;--text:#e8f2f1;--muted:#a7b7c7;--accent:#6ee7b7;--accent2:#8b5cf6;--hero:linear-gradient(140deg,rgba(17,28,51,.98),rgba(5,25,23,.92));",
         "emerald": "--bg:#071711;--card:#0b231b;--line:#00a37a;--text:#edfdf7;--muted:#a8cabb;--accent:#80ffc8;--accent2:#d6b35b;--hero:linear-gradient(140deg,rgba(4,60,45,.95),rgba(9,24,34,.92));",
@@ -1564,7 +2663,7 @@ def _html_style_css(style: str) -> str:
         "terminal": "--bg:#030705;--card:#07110d;--line:#16a34a;--text:#dcfce7;--muted:#86efac;--accent:#22c55e;--accent2:#bef264;--hero:linear-gradient(140deg,rgba(5,18,12,.98),rgba(0,0,0,.94));",
         "magazine": "--bg:#14120f;--card:#201c18;--line:#d97706;--text:#fffaf0;--muted:#d8c4a8;--accent:#fbbf24;--accent2:#38bdf8;--hero:linear-gradient(120deg,rgba(36,28,21,.98),rgba(20,18,15,.92));",
         "split": "--bg:#0c1222;--card:#111827;--line:#475569;--text:#f8fafc;--muted:#cbd5e1;--accent:#93c5fd;--accent2:#f472b6;--hero:linear-gradient(90deg,rgba(15,23,42,.98),rgba(49,46,129,.78));",
-        "dossier": "--bg:#101010;--card:#191919;--line:#78716c;--text:#f5f5f4;--muted:#c7c0b8;--accent:#d6d3d1;--accent2:#f59e0b;--hero:linear-gradient(140deg,rgba(32,32,32,.98),rgba(16,16,16,.94));",
+        "archive": "--bg:#101010;--card:#191919;--line:#78716c;--text:#f5f5f4;--muted:#c7c0b8;--accent:#d6d3d1;--accent2:#f59e0b;--hero:linear-gradient(140deg,rgba(32,32,32,.98),rgba(16,16,16,.94));",
         "poster_focus": "--bg:#070a12;--card:#101827;--line:#334155;--text:#f8fafc;--muted:#b8c2d6;--accent:#e2e8f0;--accent2:#38bdf8;--hero:linear-gradient(160deg,rgba(12,18,30,.82),rgba(0,0,0,.72));",
         "timeline": "--bg:#0d0b13;--card:#171421;--line:#7c3aed;--text:#faf5ff;--muted:#c4b5fd;--accent:#c084fc;--accent2:#facc15;--hero:linear-gradient(125deg,rgba(35,24,61,.95),rgba(11,13,24,.94));",
         "timeline_noir": "--bg:#09070d;--card:#15111c;--line:#8b5cf6;--text:#fbf7ff;--muted:#c4b5fd;--accent:#a78bfa;--accent2:#f472b6;--hero:linear-gradient(125deg,rgba(32,24,52,.96),rgba(7,7,12,.95));",
@@ -1592,7 +2691,15 @@ def render_bbcode(
     template_name: str = "classic",
     locale: str = "en",
     poster_url: str | None = None,
+    banner_audio: str = "",
+    banner_information: str = "",
+    banner_metadata: str = "",
+    banner_release: str = "",
+    banner_subtitles: str = "",
+    banner_synopsis: str = "",
+    banner_technical: str = "",
 ) -> str:
+    """Render bbcode."""
     del screenshots  # screenshots are intentionally not rendered in public prez outputs.
     normalized_locale = _normalize_locale(locale)
     with temporary_locale(normalized_locale):
@@ -1602,6 +2709,13 @@ def render_bbcode(
             mediainfo_text=mediainfo_text,
             poster_url=poster_url,
             locale=normalized_locale,
+            banner_audio=banner_audio,
+            banner_information=banner_information,
+            banner_metadata=banner_metadata,
+            banner_release=banner_release,
+            banner_subtitles=banner_subtitles,
+            banner_synopsis=banner_synopsis,
+            banner_technical=banner_technical,
         )
         return _render_template("bbcode", template_name, normalized_locale, data)
 
@@ -1615,7 +2729,15 @@ def render_html(
     mediainfo_text: str | None = None,
     template_name: str = "aurora",
     poster_url: str | None = None,
+    banner_audio: str = "",
+    banner_information: str = "",
+    banner_metadata: str = "",
+    banner_release: str = "",
+    banner_subtitles: str = "",
+    banner_synopsis: str = "",
+    banner_technical: str = "",
 ) -> str:
+    """Render html."""
     del screenshots  # screenshots are intentionally not rendered in public prez outputs.
     normalized_locale = _normalize_locale(locale)
     with temporary_locale(normalized_locale):
@@ -1625,11 +2747,196 @@ def render_html(
             mediainfo_text=mediainfo_text,
             poster_url=poster_url,
             locale=normalized_locale,
+            banner_audio=banner_audio,
+            banner_information=banner_information,
+            banner_metadata=banner_metadata,
+            banner_release=banner_release,
+            banner_subtitles=banner_subtitles,
+            banner_synopsis=banner_synopsis,
+            banner_technical=banner_technical,
         )
         return _render_template("html", template_name, normalized_locale, data)
 
 
+def _resolve_release_and_episodes(
+    folder: Path, options: PrezBuildOptions
+) -> tuple[ReleaseNfoData, list[EpisodeNfoData]]:
+    if options.release is not None:
+        return options.release, options.release.episodes
+    episodes = scan_nfo_folder(folder)
+    if not episodes:
+        raise ValueError(
+            tr(
+                "nfo.error.no_mkv",
+                default="No MKV files found in folder: {folder}",
+                folder=folder,
+            )
+        )
+    return build_release_nfo(folder, episodes), episodes
+
+
+def _resolve_mediainfo_mode(options: PrezBuildOptions) -> str:
+    mediainfo_mode = (options.mediainfo_mode or "none").strip().lower()
+    if options.include_mediainfo and mediainfo_mode == "none":
+        mediainfo_mode = "spoiler"
+    if mediainfo_mode not in MEDIAINFO_MODES:
+        return "none"
+    return mediainfo_mode
+
+
+def _resolve_mediainfo_text(
+    folder: Path, release: ReleaseNfoData, options: PrezBuildOptions, mediainfo_mode: str
+) -> str | None:
+    if mediainfo_mode not in {"spoiler", "only"}:
+        return options.mediainfo_text
+    if options.mediainfo_text is not None:
+        return options.mediainfo_text
+    return _read_mediainfo_text(folder) or _generate_mediainfo_text(release)
+
+
+def _resolve_render_plan(
+    options: PrezBuildOptions, mediainfo_mode: str, html_template: str, bbcode_template: str
+) -> list[tuple[str, str, str]]:
+    if mediainfo_mode == "only":
+        return [("mediainfo", ".mediainfo.txt", "")]
+    return _render_plan_from_formats(options.formats, html_template, bbcode_template)
+
+
+def _render_plan_from_formats(
+    formats: Sequence[str], html_template: str, bbcode_template: str
+) -> list[tuple[str, str, str]]:
+    plan: list[tuple[str, str, str]] = []
+    for fmt in formats:
+        plan.append(_render_plan_item(fmt, html_template, bbcode_template))
+    return plan
+
+
+def _render_plan_item(fmt: str, html_template: str, bbcode_template: str) -> tuple[str, str, str]:
+    if fmt == "html":
+        return fmt, ".html", html_template
+    if fmt == "bbcode":
+        return fmt, ".bbcode.txt", bbcode_template
+    raise ValueError(f"Unsupported prez format: {fmt}")
+
+
+def _render_output_content(
+    fmt: str,
+    *,
+    release: ReleaseNfoData,
+    options: PrezBuildOptions,
+    locale: str,
+    mediainfo_text: str | None,
+    template_name: str,
+    poster_url: str | None,
+) -> str:
+    if fmt == "mediainfo":
+        return mediainfo_text or ""
+    if fmt == "html":
+        return render_html(
+            release,
+            metadata_context=options.metadata_context,
+            locale=locale,
+            mediainfo_text=mediainfo_text,
+            template_name=template_name,
+            poster_url=poster_url,
+            banner_audio=options.banner_audio,
+            banner_information=options.banner_information,
+            banner_metadata=options.banner_metadata,
+            banner_release=options.banner_release,
+            banner_subtitles=options.banner_subtitles,
+            banner_synopsis=options.banner_synopsis,
+            banner_technical=options.banner_technical,
+        )
+    return render_bbcode(
+        release,
+        metadata_context=options.metadata_context,
+        mediainfo_text=mediainfo_text,
+        template_name=template_name,
+        locale=locale,
+        poster_url=poster_url,
+        banner_audio=options.banner_audio,
+        banner_information=options.banner_information,
+        banner_metadata=options.banner_metadata,
+        banner_release=options.banner_release,
+        banner_subtitles=options.banner_subtitles,
+        banner_synopsis=options.banner_synopsis,
+        banner_technical=options.banner_technical,
+    )
+
+
+def _render_outputs(
+    *,
+    release: ReleaseNfoData,
+    options: PrezBuildOptions,
+    write: bool,
+    output_dir: Path,
+    base_name: str,
+    render_plan: Sequence[tuple[str, str, str]],
+    locale: str,
+    mediainfo_text: str | None,
+    poster_url: str | None,
+) -> list[Path]:
+    if write:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    outputs: list[Path] = []
+    with temporary_locale(locale):
+        for fmt, suffix, template_name in render_plan:
+            output_stem = f"{base_name}.{template_name}" if template_name else base_name
+            target = output_dir / f"{output_stem}{suffix}"
+            rendered = _render_output_content(
+                fmt,
+                release=release,
+                options=options,
+                locale=locale,
+                mediainfo_text=mediainfo_text,
+                template_name=template_name,
+                poster_url=poster_url,
+            )
+            if write:
+                target.write_text(rendered, encoding="utf-8")
+            outputs.append(target)
+    return outputs
+
+
+def _build_prez_report(
+    *,
+    folder: Path,
+    episodes: Sequence[EpisodeNfoData],
+    outputs: Sequence[Path],
+    write: bool,
+    render_plan: Sequence[tuple[str, str, str]],
+    html_template: str,
+    bbcode_template: str,
+    mediainfo_mode: str,
+) -> OperationReport:
+    report = OperationReport(tool="prez")
+    report.scanned = len(episodes)
+    report.processed = len(episodes)
+    report.modified = len(outputs) if write else 0
+    report.outputs.extend(str(path) for path in outputs if write)
+    report.add_detail(
+        file=None,
+        action="prez",
+        status="written" if write else "planned",
+        message=tr(
+            "prez.message.written",
+            default="Presentation generated." if write else "Presentation generation planned.",
+        ),
+        before={"folder": str(folder)},
+        after={
+            "outputs": [str(path) for path in outputs],
+            "formats": [item[0] for item in render_plan],
+            "html_template": html_template,
+            "bbcode_template": bbcode_template,
+            "mediainfo_mode": mediainfo_mode,
+        },
+    )
+    return report
+
+
 class PrezService:
+    """Service for prez."""
+
     def build(
         self,
         folder: Path,
@@ -1637,99 +2944,35 @@ class PrezService:
         options: PrezBuildOptions,
         write: bool = True,
     ) -> tuple[OperationReport, PrezBuildResult]:
-        if options.release is not None:
-            release = options.release
-            episodes = release.episodes
-        else:
-            episodes = scan_nfo_folder(folder)
-            if not episodes:
-                raise ValueError(
-                    tr(
-                        "nfo.error.no_mkv",
-                        default="No MKV files found in folder: {folder}",
-                        folder=folder,
-                    )
-                )
-            release = build_release_nfo(folder, episodes)
+        """Handle build."""
+        release, episodes = _resolve_release_and_episodes(folder, options)
         output_dir = options.output_dir or folder
         base_name = _safe_output_name(release.release_title)
-        outputs: list[Path] = []
-        mediainfo_mode = (options.mediainfo_mode or "none").strip().lower()
-        if options.include_mediainfo and mediainfo_mode == "none":
-            mediainfo_mode = "spoiler"
-        if mediainfo_mode not in MEDIAINFO_MODES:
-            mediainfo_mode = "none"
-
-        mediainfo_text = options.mediainfo_text
-        if mediainfo_mode in {"spoiler", "only"} and mediainfo_text is None:
-            mediainfo_text = _read_mediainfo_text(folder) or _generate_mediainfo_text(release)
-
+        mediainfo_mode = _resolve_mediainfo_mode(options)
+        mediainfo_text = _resolve_mediainfo_text(folder, release, options, mediainfo_mode)
         poster_url = options.poster_url or _discover_local_poster(folder)
         html_template, bbcode_template = _apply_preset(options)
-        render_plan: list[tuple[str, str, str]] = []
-        if mediainfo_mode == "only":
-            render_plan.append(("mediainfo", ".mediainfo.txt", ""))
-        else:
-            for fmt in options.formats:
-                if fmt == "html":
-                    render_plan.append((fmt, ".html", html_template))
-                elif fmt == "bbcode":
-                    render_plan.append((fmt, ".bbcode.txt", bbcode_template))
-                else:
-                    raise ValueError(f"Unsupported prez format: {fmt}")
-
-        if write:
-            output_dir.mkdir(parents=True, exist_ok=True)
-
+        render_plan = _resolve_render_plan(options, mediainfo_mode, html_template, bbcode_template)
         locale = _normalize_locale(options.locale)
-        with temporary_locale(locale):
-            for fmt, suffix, template_name in render_plan:
-                output_stem = f"{base_name}.{template_name}" if template_name else base_name
-                target = output_dir / f"{output_stem}{suffix}"
-                if fmt == "mediainfo":
-                    rendered = mediainfo_text or ""
-                elif fmt == "html":
-                    rendered = render_html(
-                        release,
-                        metadata_context=options.metadata_context,
-                        locale=locale,
-                        mediainfo_text=mediainfo_text,
-                        template_name=template_name,
-                        poster_url=poster_url,
-                    )
-                else:
-                    rendered = render_bbcode(
-                        release,
-                        metadata_context=options.metadata_context,
-                        mediainfo_text=mediainfo_text,
-                        template_name=template_name,
-                        locale=locale,
-                        poster_url=poster_url,
-                    )
-                if write:
-                    target.write_text(rendered, encoding="utf-8")
-                outputs.append(target)
-
-        report = OperationReport(tool="prez")
-        report.scanned = len(episodes)
-        report.processed = len(episodes)
-        report.modified = len(outputs) if write else 0
-        report.outputs.extend(str(path) for path in outputs if write)
-        report.add_detail(
-            file=None,
-            action="prez",
-            status="written" if write else "planned",
-            message=tr(
-                "prez.message.written",
-                default="Presentation generated." if write else "Presentation generation planned.",
-            ),
-            before={"folder": str(folder)},
-            after={
-                "outputs": [str(path) for path in outputs],
-                "formats": [item[0] for item in render_plan],
-                "html_template": html_template,
-                "bbcode_template": bbcode_template,
-                "mediainfo_mode": mediainfo_mode,
-            },
+        outputs = _render_outputs(
+            release=release,
+            options=options,
+            write=write,
+            output_dir=output_dir,
+            base_name=base_name,
+            render_plan=render_plan,
+            locale=locale,
+            mediainfo_text=mediainfo_text,
+            poster_url=poster_url,
+        )
+        report = _build_prez_report(
+            folder=folder,
+            episodes=episodes,
+            outputs=outputs,
+            write=write,
+            render_plan=render_plan,
+            html_template=html_template,
+            bbcode_template=bbcode_template,
+            mediainfo_mode=mediainfo_mode,
         )
         return report, PrezBuildResult(release=release, outputs=tuple(outputs))

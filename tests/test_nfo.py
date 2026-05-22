@@ -1,3 +1,5 @@
+"""Tests for NFO module - core functionality, templates, and builder."""
+
 from pathlib import Path
 
 from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData, TrackNfoData
@@ -26,6 +28,7 @@ def _track(
     bit_depth: int | None,
     frame_rate: float | None,
 ) -> TrackNfoData:
+    """Helper to create TrackNfoData for testing."""
     return TrackNfoData(
         display_id=display_id,
         kind=kind,
@@ -49,6 +52,7 @@ def _track(
 
 
 def test_list_templates_has_default():
+    """Verify that all default builtin templates are available."""
     data = list_all_templates()
 
     assert "movie_default" in data["builtin"]
@@ -58,10 +62,12 @@ def test_list_templates_has_default():
     assert "series_default" in data["builtin"]
     assert "series_detailed" in data["builtin"]
 
+    # Internal macros should not be exposed
     assert "_macros" not in data["builtin"]
 
 
 def test_build_release_nfo_movie_kind():
+    """Test that movie releases are correctly identified and built."""
     folder = Path("MovieFolder")
     episodes = [
         EpisodeNfoData(
@@ -97,6 +103,7 @@ def test_build_release_nfo_movie_kind():
 
 
 def test_build_release_nfo_single_episode_kind():
+    """Test that single episode releases are correctly identified."""
     folder = Path("EpisodeFolder")
     episodes = [
         EpisodeNfoData(
@@ -131,6 +138,7 @@ def test_build_release_nfo_single_episode_kind():
 
 
 def test_build_release_nfo_basic():
+    """Test building a complete release NFO with multiple episodes and tracks."""
     folder = Path("Testmkv")
     episodes = [
         EpisodeNfoData(
@@ -152,7 +160,7 @@ def test_build_release_nfo_basic():
             subtitle_summary=["French / Forced", "English / SDH"],
             video_tracks=[
                 _track(
-                    "#1",
+                    "",
                     "video",
                     None,
                     None,
@@ -174,7 +182,7 @@ def test_build_release_nfo_basic():
             ],
             audio_tracks=[
                 _track(
-                    "#2",
+                    "#1",
                     "audio",
                     "French",
                     "fr",
@@ -194,7 +202,7 @@ def test_build_release_nfo_basic():
                     None,
                 ),
                 _track(
-                    "#3",
+                    "#2",
                     "audio",
                     "English",
                     "en",
@@ -216,7 +224,7 @@ def test_build_release_nfo_basic():
             ],
             subtitle_tracks=[
                 _track(
-                    "#4",
+                    "#1",
                     "subtitle",
                     "French",
                     "fr",
@@ -236,7 +244,7 @@ def test_build_release_nfo_basic():
                     None,
                 ),
                 _track(
-                    "#5",
+                    "#2",
                     "subtitle",
                     "English",
                     "en",
@@ -277,7 +285,7 @@ def test_build_release_nfo_basic():
             video_tracks=[],
             audio_tracks=[
                 _track(
-                    "#2",
+                    "#1",
                     "audio",
                     "French",
                     "fr",
@@ -297,7 +305,7 @@ def test_build_release_nfo_basic():
                     None,
                 ),
                 _track(
-                    "#3",
+                    "#2",
                     "audio",
                     "English",
                     "en",
@@ -319,7 +327,7 @@ def test_build_release_nfo_basic():
             ],
             subtitle_tracks=[
                 _track(
-                    "#4",
+                    "#1",
                     "subtitle",
                     "French",
                     "fr",
@@ -362,6 +370,7 @@ def test_build_release_nfo_basic():
 
 
 def test_nfo_service_write_rendered(tmp_path: Path):
+    """Test that NfoService can write rendered NFO content to disk."""
     service = NfoService()
 
     release = ReleaseNfoData(
@@ -392,6 +401,7 @@ def test_nfo_service_write_rendered(tmp_path: Path):
 
 
 def _minimal_render_context():
+    """Create a minimal render context for template testing."""
     from types import SimpleNamespace
 
     release = SimpleNamespace(
@@ -425,26 +435,33 @@ def _minimal_render_context():
 
 
 def test_list_templates_collapses_localized_builtin_variants():
+    """Verify that localized template variants are collapsed in the listing."""
     data = list_all_templates()
 
     assert "movie_default" in data["builtin"]
+    # Localized variants should not appear separately
     assert "movie_default.fr" not in data["builtin"]
     assert "movie_default.es" not in data["builtin"]
 
 
 def test_render_template_uses_requested_locale():
+    """Test that templates render with the correct locale."""
     from framekit.modules.nfo.templates import render_template
 
     rendered_fr = render_template("movie_default", _minimal_render_context(), locale="fr")
     rendered_es = render_template("movie_default", _minimal_render_context(), locale="es")
 
+    # French template should have French headers
     assert "GÉNÉRAL" in rendered_fr
     assert "Titre" in rendered_fr
+
+    # Spanish template should have Spanish headers
     assert "GENERAL" in rendered_es
     assert "Título" in rendered_es
 
 
 def test_aspect_ratio_display_handles_two_to_one():
+    """Test that 2:1 aspect ratio is correctly formatted."""
     from framekit.modules.nfo.scanner import _aspect_ratio_display
 
     assert _aspect_ratio_display("2.000") == "2.000 (2:1)"

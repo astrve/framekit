@@ -1,0 +1,392 @@
+# Prez Preset Examples
+# ====================
+# This file contains example presets for the Prez (Presentation) module.
+# Prez presets control how release presentations are generated, including
+# template selection, MediaInfo display options, and detail levels.
+
+# ==============================================================================
+# PRESET STRUCTURE
+# ==============================================================================
+# Each preset contains the following fields:
+#
+# format: (string)
+#   Output format(s) to generate
+#   Valid values: "html", "bbcode", "both", "mediainfo"
+#   - "html": Generate HTML presentation only
+#   - "bbcode": Generate BBCode presentation only
+#   - "both": Generate both HTML and BBCode
+#   - "mediainfo": Generate MediaInfo text only (no presentation)
+#
+# html_template: (string)
+#   HTML template to use for presentation
+#   Available templates: aurora, emerald, midnight, cinema, poster, minimal,
+#   neon, mono, editorial, lobby, vertical, terminal, magazine, split,
+#   magazine_dark, poster_focus, timeline, timeline_noir, timeline_amber, timeline_ocean
+#
+# bbcode_template: (string)
+#   BBCode template to use for presentation
+#   Available templates: classic, compact, detailed, technical, cinematic,
+#   tracker, spoiler, boxed
+#
+# mediainfo_mode: (string)
+#   How to display MediaInfo in the presentation
+#   Valid values: "none", "inline", "spoiler", "file"
+#   - "none": Don't include MediaInfo
+#   - "inline": Include MediaInfo directly in presentation
+#   - "spoiler": Include MediaInfo in a spoiler/collapsible section
+#   - "file": Save MediaInfo to a separate file
+#
+# detail_level: (string)
+#   Level of detail to include in presentation
+#   Valid values: "compact", "standard", "detailed", "technical", "premium",
+#   "tracker", "timeline"
+#   - "compact": Minimal information, quick overview
+#   - "standard": Balanced information for general use
+#   - "detailed": Comprehensive information
+#   - "technical": Technical specifications focus
+#   - "premium": High-quality presentation with all details
+#   - "tracker": Optimized for torrent tracker requirements
+#   - "timeline": Timeline-style presentation
+#
+# show_tmdb: (string, "true" or "false")
+#   Whether to include TMDB (The Movie Database) information
+#
+# show_mediainfo: (string, "true" or "false")
+#   Whether to include MediaInfo technical details
+
+# ==============================================================================
+# EXAMPLE 1: Default Preset
+# ==============================================================================
+# Balanced preset suitable for most use cases.
+# Generates both HTML and BBCode with standard detail level.
+
+default:
+  format: "both"
+  html_template: "aurora"
+  bbcode_template: "classic"
+  mediainfo_mode: "none"
+  detail_level: "standard"
+  show_tmdb: "true"
+  show_mediainfo: "false"
+
+# ==============================================================================
+# EXAMPLE 2: Tracker Preset
+# ==============================================================================
+# Optimized for torrent tracker uploads.
+# Includes MediaInfo in spoiler, BBCode format, tracker-specific details.
+
+tracker:
+  format: "bbcode"
+  html_template: "magazine_dark"
+  bbcode_template: "tracker"
+  mediainfo_mode: "spoiler"
+  detail_level: "tracker"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 3: Compact Preset
+# ==============================================================================
+# Minimal presentation for quick sharing.
+# BBCode only, compact details, no MediaInfo.
+
+compact:
+  format: "bbcode"
+  html_template: "minimal"
+  bbcode_template: "compact"
+  mediainfo_mode: "none"
+  detail_level: "compact"
+  show_tmdb: "true"
+  show_mediainfo: "false"
+
+# ==============================================================================
+# EXAMPLE 4: Detailed Preset
+# ==============================================================================
+# Comprehensive presentation with all information.
+# Both formats, detailed level, MediaInfo in spoiler.
+
+detailed:
+  format: "both"
+  html_template: "editorial"
+  bbcode_template: "detailed"
+  mediainfo_mode: "spoiler"
+  detail_level: "detailed"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 5: Technical Preset
+# ==============================================================================
+# Focus on technical specifications.
+# Both formats, technical details, MediaInfo in spoiler.
+
+technical:
+  format: "both"
+  html_template: "terminal"
+  bbcode_template: "technical"
+  mediainfo_mode: "spoiler"
+  detail_level: "technical"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 6: Premium Preset
+# ==============================================================================
+# High-quality presentation for premium releases.
+# Both formats, premium detail level, poster-focused HTML.
+
+premium:
+  format: "both"
+  html_template: "poster_focus"
+  bbcode_template: "cinematic"
+  mediainfo_mode: "spoiler"
+  detail_level: "premium"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 7: Timeline Preset
+# ==============================================================================
+# Timeline-style presentation showing release progression.
+# Both formats, timeline detail level.
+
+timeline:
+  format: "both"
+  html_template: "timeline"
+  bbcode_template: "detailed"
+  mediainfo_mode: "spoiler"
+  detail_level: "timeline"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 8: Timeline Noir (Dark Theme)
+# ==============================================================================
+# Dark-themed timeline presentation.
+
+timeline_noir:
+  format: "both"
+  html_template: "timeline_noir"
+  bbcode_template: "detailed"
+  mediainfo_mode: "spoiler"
+  detail_level: "timeline"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 9: Timeline Amber (Warm Theme)
+# ==============================================================================
+# Warm-themed timeline presentation.
+
+timeline_amber:
+  format: "both"
+  html_template: "timeline_amber"
+  bbcode_template: "detailed"
+  mediainfo_mode: "spoiler"
+  detail_level: "timeline"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 10: Timeline Ocean (Cool Theme)
+# ==============================================================================
+# Cool-themed timeline presentation.
+
+timeline_ocean:
+  format: "both"
+  html_template: "timeline_ocean"
+  bbcode_template: "detailed"
+  mediainfo_mode: "spoiler"
+  detail_level: "timeline"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 11: HTML Only - Aurora
+# ==============================================================================
+# Modern, clean HTML presentation with aurora theme.
+
+html_aurora:
+  format: "html"
+  html_template: "aurora"
+  bbcode_template: "classic"
+  mediainfo_mode: "none"
+  detail_level: "standard"
+  show_tmdb: "true"
+  show_mediainfo: "false"
+
+# ==============================================================================
+# EXAMPLE 12: HTML Only - Cinema
+# ==============================================================================
+# Cinematic HTML presentation with movie theater aesthetics.
+
+html_cinema:
+  format: "html"
+  html_template: "cinema"
+  bbcode_template: "classic"
+  mediainfo_mode: "spoiler"
+  detail_level: "detailed"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 13: HTML Only - Minimal
+# ==============================================================================
+# Minimalist HTML presentation, clean and simple.
+
+html_minimal:
+  format: "html"
+  html_template: "minimal"
+  bbcode_template: "classic"
+  mediainfo_mode: "none"
+  detail_level: "compact"
+  show_tmdb: "true"
+  show_mediainfo: "false"
+
+# ==============================================================================
+# EXAMPLE 14: BBCode Only - Cinematic
+# ==============================================================================
+# Cinematic BBCode presentation for forums.
+
+bbcode_cinematic:
+  format: "bbcode"
+  html_template: "aurora"
+  bbcode_template: "cinematic"
+  mediainfo_mode: "spoiler"
+  detail_level: "premium"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 15: BBCode Only - Spoiler
+# ==============================================================================
+# BBCode with all content in spoiler tags for clean forum posts.
+
+bbcode_spoiler:
+  format: "bbcode"
+  html_template: "aurora"
+  bbcode_template: "spoiler"
+  mediainfo_mode: "spoiler"
+  detail_level: "detailed"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 16: MediaInfo Only
+# ==============================================================================
+# Generate only MediaInfo text file, no presentation.
+
+mediainfo_only:
+  format: "mediainfo"
+  html_template: "aurora"
+  bbcode_template: "classic"
+  mediainfo_mode: "file"
+  detail_level: "technical"
+  show_tmdb: "false"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 17: No TMDB
+# ==============================================================================
+# Presentation without TMDB information (for non-TMDB content).
+
+no_tmdb:
+  format: "both"
+  html_template: "terminal"
+  bbcode_template: "technical"
+  mediainfo_mode: "inline"
+  detail_level: "technical"
+  show_tmdb: "false"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# EXAMPLE 18: Inline MediaInfo
+# ==============================================================================
+# MediaInfo displayed directly in the presentation (not in spoiler).
+
+inline_mediainfo:
+  format: "both"
+  html_template: "terminal"
+  bbcode_template: "technical"
+  mediainfo_mode: "inline"
+  detail_level: "technical"
+  show_tmdb: "true"
+  show_mediainfo: "true"
+
+# ==============================================================================
+# HTML TEMPLATE DESCRIPTIONS
+# ==============================================================================
+# aurora: Modern, clean design with gradient accents
+# emerald: Green-themed elegant presentation
+# midnight: Dark theme with blue accents
+# cinema: Movie theater aesthetic with dramatic styling
+# poster: Poster-focused layout emphasizing cover art
+# minimal: Clean, minimalist design
+# neon: Vibrant neon-themed presentation
+# mono: Monochrome, typography-focused design
+# editorial: Magazine-style editorial layout
+# lobby: Cinema lobby-inspired design
+# vertical: Vertical scrolling layout
+# terminal: Terminal/console-inspired technical design
+# magazine: Magazine-style multi-column layout
+# split: Split-screen design
+# magazine_dark: Editorial presentation
+# poster_focus: Enhanced poster-focused layout
+# timeline: Timeline-style chronological presentation
+# timeline_noir: Dark-themed timeline
+# timeline_amber: Warm-themed timeline
+# timeline_ocean: Cool-themed timeline
+
+# ==============================================================================
+# BBCODE TEMPLATE DESCRIPTIONS
+# ==============================================================================
+# classic: Traditional BBCode format, widely compatible
+# compact: Minimal BBCode for quick posts
+# detailed: Comprehensive BBCode with all information
+# technical: Technical specifications focus
+# cinematic: Dramatic, movie-focused BBCode
+# tracker: Optimized for torrent tracker requirements
+# spoiler: All content in spoiler tags
+# boxed: Boxed/bordered sections for organization
+
+# ==============================================================================
+# USAGE NOTES
+# ==============================================================================
+#
+# 1. USING PRESETS:
+#    - Command line: framekit prez --preset tracker
+#    - Settings file: Set default preset in framekit.yaml
+#
+# 2. OVERRIDING PRESET VALUES:
+#    - You can override individual preset values with command-line flags
+#    - Example: framekit prez --preset tracker --html-template cinema
+#
+# 3. CUSTOM PRESETS:
+#    - Create custom presets by copying and modifying these examples
+#    - Save as YAML files in Presets/Prez/
+#    - Reference by filename: framekit prez --preset my_custom_preset
+#
+# 4. TEMPLATE SELECTION:
+#    - HTML templates control the visual design of HTML output
+#    - BBCode templates control forum post formatting
+#    - Choose templates that match your target platform
+#
+# 5. MEDIAINFO MODES:
+#    - "none": Best for casual sharing, cleaner presentation
+#    - "inline": Best for technical audiences who want immediate access
+#    - "spoiler": Best for forums, keeps presentation clean
+#    - "file": Best when MediaInfo needs to be separate
+#
+# 6. DETAIL LEVELS:
+#    - "compact": Quick overview, minimal space
+#    - "standard": Balanced for general use
+#    - "detailed": Comprehensive information
+#    - "technical": For technical audiences
+#    - "premium": High-quality, all details
+#    - "tracker": Meets tracker requirements
+#    - "timeline": Chronological presentation
+#
+# 7. COMBINING WITH OTHER MODULES:
+#    - Prez works with NFO and metadata modules
+#    - Use pipeline presets to combine multiple modules
+#    - See Presets/Pipeline/example.yaml for pipeline examples

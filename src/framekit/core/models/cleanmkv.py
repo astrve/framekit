@@ -6,6 +6,8 @@ from pathlib import Path
 
 @dataclass(frozen=True, slots=True)
 class CleanPreset:
+    """Clean preset."""
+
     name: str
     keep_audio_filters: tuple[str, ...]
     default_audio_filter: str | None
@@ -30,6 +32,8 @@ class CleanPreset:
 
 @dataclass(slots=True)
 class TrackInfo:
+    """Track info."""
+
     track_id: int
     kind: str
     codec: str
@@ -55,6 +59,8 @@ class TrackInfo:
 
 @dataclass(slots=True)
 class MkvFileScan:
+    """Mkv file scan."""
+
     path: Path
     audio_tracks: list[TrackInfo] = field(default_factory=list)
     subtitle_tracks: list[TrackInfo] = field(default_factory=list)
@@ -62,6 +68,8 @@ class MkvFileScan:
 
 @dataclass(slots=True)
 class RemuxPlan:
+    """Remux plan."""
+
     source: Path
     target: Path
     keep_audio_track_ids: list[int]
@@ -69,3 +77,5 @@ class RemuxPlan:
     default_audio_track_id: int | None
     default_subtitle_track_id: int | None
     copy_only: bool
+    skipped: bool = False
+    skip_reason: str = ""

@@ -1,0 +1,37 @@
+name: "Documentaires - h264 to h265"
+description: "Optimized preset for documentaries (CRF 22, medium, main)"
+aliases:
+  - d265
+  - doc265
+  - docu265
+  - d264-265
+  - doc264-265
+source_codec: h264
+target_codec: h265
+encoder: libx265
+
+video:
+  crf: 22
+  preset: medium
+  tune: null
+  profile: main
+  level: "5.1"
+  pix_fmt: yuv420p
+
+audio:
+  copy: true
+
+subtitles:
+  copy: true
+
+metadata:
+  preserve: true
+
+chapters:
+  preserve: true
+
+advanced:
+  two_pass: false
+  x265_params:
+    - "aq-mode=3"
+    - "aq-strength=0.8"

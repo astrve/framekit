@@ -10,8 +10,8 @@ except ImportError:
     import re as _re
 
     def sanitize_filename(filename: str, replacement_text: str = "_") -> str:
-        """
-        Sanitize a filename by replacing characters illegal on most filesystems.
+        """Sanitize a filename by replacing characters illegal on most filesystems.
+
         This fallback keeps alphanumeric characters, dots, dashes and underscores,
         and replaces any other sequence with the given replacement_text.
         """
@@ -33,6 +33,7 @@ def _slugify_logo_name(value: str) -> str:
 
 
 def import_logo_file(source_path: str, logo_name: str | None = None) -> NfoLogoRecord:
+    """Handle import logo file."""
     source = Path(source_path)
     if not source.exists() or not source.is_file():
         raise FileNotFoundError(

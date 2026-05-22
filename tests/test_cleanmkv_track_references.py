@@ -1,3 +1,5 @@
+"""Tests for cleanmkv track references."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,6 +17,7 @@ def _audio(
     bitrate: int,
     default: bool = False,
 ) -> TrackInfo:
+    """Create a mock audio TrackInfo for testing."""
     return TrackInfo(
         track_id=track_id,
         kind="audio",
@@ -31,6 +34,7 @@ def _audio(
 
 
 def test_track_reference_label_includes_codec_channels_and_bitrate():
+    """Test that track reference label includes codec, channels, and bitrate."""
     track = _audio(1, codec="E-AC-3", channels="5.1", bitrate=768_000)
 
     label = track_reference_label(track)
@@ -42,6 +46,7 @@ def test_track_reference_label_includes_codec_channels_and_bitrate():
 
 
 def test_selector_style_preset_uses_track_refs_without_language_filters():
+    """Test that selector-style preset uses track refs without language filters."""
     eac3 = _audio(1, codec="E-AC-3", channels="5.1", bitrate=768_000, default=True)
     aac = _audio(2, codec="AAC", channels="2.0", bitrate=128_000)
     scan = MkvFileScan(path=Path("movie.mkv"), audio_tracks=[eac3, aac], subtitle_tracks=[])
@@ -65,6 +70,7 @@ def test_selector_style_preset_uses_track_refs_without_language_filters():
 
 
 def test_track_refs_keep_similar_same_language_tracks_distinct():
+    """Test that track refs keep similar same-language tracks distinct."""
     eac3 = _audio(1, codec="E-AC-3", channels="5.1", bitrate=768_000)
     aac = _audio(2, codec="AAC", channels="2.0", bitrate=128_000)
     scan = MkvFileScan(path=Path("movie.mkv"), audio_tracks=[eac3, aac], subtitle_tracks=[])

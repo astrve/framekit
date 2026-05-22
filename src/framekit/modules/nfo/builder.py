@@ -315,7 +315,36 @@ def _subtitle_summary_by_episode(episodes: list[EpisodeNfoData]) -> list[str]:
     return blocks
 
 
+def _audio_tag_from_episode(episodes: list[EpisodeNfoData]) -> str | None:
+    if not episodes or not episodes[0].audio_tracks:
+        return None
+    first_audio = episodes[0].audio_tracks[0]
+    if first_audio.codec and first_audio.channels:
+        return f"{first_audio.codec}.{first_audio.channels}"
+    return first_audio.codec
+
+
+def _title_fields(
+    media_kind: str, release_title: str, episodes: list[EpisodeNfoData]
+) -> tuple[str | None, str | None, str | None]:
+    if media_kind == "movie":
+        title_display, year = _movie_title_and_year_from_release(release_title)
+        return title_display, None, year
+    series_title = _common_series_title(episodes)
+    return series_title, series_title, _common_year(episodes)
+
+
+def _subtitle_summary_for_kind(
+    media_kind: str, episodes: list[EpisodeNfoData]
+) -> tuple[list[str], list[str]]:
+    summary_lines = _subtitle_summary_lines(episodes)
+    if media_kind in {"movie", "single_episode"}:
+        return summary_lines, []
+    return summary_lines, _subtitle_summary_by_episode(episodes)
+
+
 def build_release_nfo(folder: Path, episodes: list[EpisodeNfoData]) -> ReleaseNfoData:
+    """Build release nfo."""
     media_kind = _detect_media_kind(episodes)
     release_title = _release_title(folder, episodes, media_kind)
 
@@ -323,29 +352,11 @@ def build_release_nfo(folder: Path, episodes: list[EpisodeNfoData]) -> ReleaseNf
     resolution = _first_match_or_none([episode.resolution for episode in episodes])
     video_tag = _first_match_or_none([episode.video_codec for episode in episodes])
     hdr_display = _first_match_or_none([episode.hdr_display for episode in episodes])
-
-    audio_tag = None
-    if episodes and episodes[0].audio_tracks:
-        first_audio = episodes[0].audio_tracks[0]
-        if first_audio.codec and first_audio.channels:
-            audio_tag = f"{first_audio.codec}.{first_audio.channels}"
-        elif first_audio.codec:
-            audio_tag = first_audio.codec
-
-    title_display = None
-    series_title = None
-    year = None
-
-    if media_kind == "movie":
-        title_display, year = _movie_title_and_year_from_release(release_title)
-    else:
-        series_title = _common_series_title(episodes)
-        title_display = series_title
-        year = _common_year(episodes)
-
-    subtitle_summary_by_episode = _subtitle_summary_by_episode(episodes)
-    if media_kind in {"movie", "single_episode"}:
-        subtitle_summary_by_episode = []
+    audio_tag = _audio_tag_from_episode(episodes)
+    title_display, series_title, year = _title_fields(media_kind, release_title, episodes)
+    subtitle_summary_lines, subtitle_summary_by_episode = _subtitle_summary_for_kind(
+        media_kind, episodes
+    )
 
     return ReleaseNfoData(
         media_kind=media_kind,
@@ -359,7 +370,7 @@ def build_release_nfo(folder: Path, episodes: list[EpisodeNfoData]) -> ReleaseNf
         audio_tag=audio_tag,
         language_tag=_language_tag_display(episodes),
         audio_languages_display=_audio_languages_display(episodes),
-        subtitle_summary_lines=_subtitle_summary_lines(episodes),
+        subtitle_summary_lines=subtitle_summary_lines,
         subtitle_summary_by_episode=subtitle_summary_by_episode,
         hdr_display=hdr_display,
         team=_common_team_from_episodes(episodes),

@@ -1,0 +1,21 @@
+# VF Only CleanMKV Preset
+# =======================
+# Keep only French audio and French subtitles (forced and SDH if available)
+# First available French subtitle will be default (forced preferred, then full/SDH)
+
+vf_only:
+  name: "VF Only - FR audio + FR subs"
+  keep_audio_filters:
+    - "french"
+  default_audio_filter: "french"
+  keep_subtitle_filters:
+    - "french"
+  keep_subtitle_variants:
+    - "forced"
+    - "full"
+    - "sdh"
+  default_subtitle_filter: "french"
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+

@@ -10,8 +10,8 @@ except ImportError:
     import re as _re
 
     def sanitize_filename(filename: str, replacement_text: str = "_") -> str:
-        """
-        Sanitize a filename by replacing characters illegal on most filesystems.
+        """Sanitize a filename by replacing characters illegal on most filesystems.
+
         This fallback keeps alphanumeric characters, dots, dashes and underscores,
         and replaces any other sequence with the given replacement_text.
         """
@@ -23,6 +23,7 @@ EPISODE_TOKEN_RE = re.compile(r"(?i)E\d{1,3}(?=([. _-]|$))")
 
 
 def release_name_from_mkv_paths(paths: list[Path] | tuple[Path, ...]) -> str:
+    """Handle release name from mkv paths."""
     mkv_paths = sorted(
         (Path(path) for path in paths if Path(path).suffix.lower() == ".mkv"),
         key=lambda p: p.name.lower(),
@@ -37,6 +38,7 @@ def release_name_from_mkv_paths(paths: list[Path] | tuple[Path, ...]) -> str:
 
 
 def torrent_name_from_payload(path: Path) -> str:
+    """Handle torrent name from payload."""
     payload = Path(path)
     if payload.is_file():
         return sanitize_filename(payload.stem, replacement_text="_").strip(" .") or "release"
@@ -47,8 +49,7 @@ def torrent_name_from_payload(path: Path) -> str:
 
 
 def sanitized_release_dir(template: str, release: str) -> str:
-    """
-    Build a release folder name from a template containing a `{release}` placeholder.
+    """Build a release folder name from a template containing a `{release}` placeholder.
 
     The release value is sanitized to avoid invalid filesystem characters and leading/trailing
     separators. A missing sanitize_filename function is handled by falling back to a simple

@@ -1,0 +1,36 @@
+name: "Series - h265 to h264"
+description: "Optimized preset for TV series (CRF 21, medium, high)"
+aliases:
+  - s264
+  - serie264
+  - tv264
+source_codec: h265
+target_codec: h264
+encoder: libx264
+
+video:
+  crf: 21
+  preset: medium
+  tune: null
+  profile: high
+  level: "4.1"
+  pix_fmt: yuv420p
+
+audio:
+  copy: true
+
+subtitles:
+  copy: true
+
+metadata:
+  preserve: true
+
+chapters:
+  preserve: true
+
+advanced:
+  two_pass: false
+  x264_params:
+    - "aq-mode=3"
+    - "aq-strength=0.8"
+    - "deblock=-1:-1"

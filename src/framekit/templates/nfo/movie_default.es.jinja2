@@ -56,5 +56,11 @@
 {{ ui.line("Vídeo", movie.video_codec) }}
 {{ ui.line("HDR", movie.hdr_display) }}
 {{ ui.line("Audio", movie.audio_summary | join(" | ")) }}
+{% for track in movie.audio_tracks %}
+{{ ui.line(track.display_id ~ " Idioma", track.language_display) }}
+{{ ui.line(track.display_id ~ " Códec", track.codec) }}
+{{ ui.line(track.display_id ~ " Canales", track.channels) }}
+{{ ui.line(track.display_id ~ " Predeterminada", ui.yesno(track.is_default, "Sí", "No")) }}
+{% endfor %}
 {{ ui.line("Subtítulos", movie.subtitle_summary | join(" | ")) }}
 {% endif %}

@@ -1,0 +1,15 @@
+# MULTI.EN CleanMKV Preset
+# =======================
+# Keep all tracks, English audio as default, no default subtitle
+
+multi_en:
+  name: "MULTI.EN - All tracks, EN audio default"
+  keep_audio_filters: []
+  default_audio_filter: "english"
+  keep_subtitle_filters: []
+  keep_subtitle_variants: []
+  default_subtitle_filter: null
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+

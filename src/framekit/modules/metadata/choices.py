@@ -13,6 +13,8 @@ from framekit.core.paths import get_lock_dir, get_metadata_choice_store_file
 
 @dataclass(slots=True)
 class StoredMetadataChoice:
+    """Stored metadata choice."""
+
     provider_name: str
     provider_id: str
     kind: str
@@ -25,44 +27,56 @@ class StoredMetadataChoice:
 
 
 def build_release_signature(release: ReleaseNfoData) -> str:
+    """Build release signature."""
     if release.media_kind == "movie":
-        return " | ".join(
-            [
-                "movie",
-                (release.title_display or "").strip().lower(),
-                (release.year or "").strip(),
-            ]
-        )
-
+        return _movie_signature(release)
     if release.media_kind == "single_episode":
-        episode = release.episodes[0] if release.episodes else None
-        episode_code = episode.episode_code if episode else ""
-        return " | ".join(
-            [
-                "single_episode",
-                (release.series_title or "").strip().lower(),
-                (release.year or "").strip(),
-                (episode_code or "").strip().upper(),
-            ]
-        )
-
+        return _single_episode_signature(release)
     if release.media_kind == "season_pack":
-        episode_codes = sorted(
-            episode.episode_code.strip().upper()
-            for episode in release.episodes
-            if episode.episode_code
-        )
-        season_hint = episode_codes[0][:3] if episode_codes else ""
-        return " | ".join(
-            [
-                "season_pack",
-                (release.series_title or "").strip().lower(),
-                (release.year or "").strip(),
-                season_hint,
-                ",".join(episode_codes),
-            ]
-        )
+        return _season_pack_signature(release)
+    return _fallback_signature(release)
 
+
+def _movie_signature(release: ReleaseNfoData) -> str:
+    return " | ".join(
+        [
+            "movie",
+            (release.title_display or "").strip().lower(),
+            (release.year or "").strip(),
+        ]
+    )
+
+
+def _single_episode_signature(release: ReleaseNfoData) -> str:
+    episode = release.episodes[0] if release.episodes else None
+    episode_code = episode.episode_code if episode else ""
+    return " | ".join(
+        [
+            "single_episode",
+            (release.series_title or "").strip().lower(),
+            (release.year or "").strip(),
+            (episode_code or "").strip().upper(),
+        ]
+    )
+
+
+def _season_pack_signature(release: ReleaseNfoData) -> str:
+    episode_codes = sorted(
+        episode.episode_code.strip().upper() for episode in release.episodes if episode.episode_code
+    )
+    season_hint = episode_codes[0][:3] if episode_codes else ""
+    return " | ".join(
+        [
+            "season_pack",
+            (release.series_title or "").strip().lower(),
+            (release.year or "").strip(),
+            season_hint,
+            ",".join(episode_codes),
+        ]
+    )
+
+
+def _fallback_signature(release: ReleaseNfoData) -> str:
     return " | ".join(
         [
             release.media_kind,
@@ -72,6 +86,8 @@ def build_release_signature(release: ReleaseNfoData) -> str:
 
 
 class MetadataChoiceStore:
+    """Metadata choice store."""
+
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path) if path else get_metadata_choice_store_file()
         self.lock = FileLock(str(get_lock_dir() / f"{self.path.name}.lock"))
@@ -95,6 +111,7 @@ class MetadataChoiceStore:
             )
 
     def get(self, release: ReleaseNfoData) -> StoredMetadataChoice | None:
+        """Handle get."""
         data = self._load_raw()
         signature = build_release_signature(release)
         raw = data.get(signature)
@@ -103,6 +120,7 @@ class MetadataChoiceStore:
         return StoredMetadataChoice(**raw)
 
     def set(self, release: ReleaseNfoData, candidate: MetadataCandidate) -> None:
+        """Handle set."""
         data = self._load_raw()
         signature = build_release_signature(release)
 
@@ -122,6 +140,7 @@ class MetadataChoiceStore:
         self._save_raw(data)
 
     def clear(self, release: ReleaseNfoData) -> None:
+        """Handle clear."""
         data = self._load_raw()
         signature = build_release_signature(release)
         if signature in data:

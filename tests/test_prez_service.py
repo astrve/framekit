@@ -28,8 +28,14 @@ def _track(
     is_default: bool = True,
     is_forced: bool = False,
 ) -> TrackNfoData:
+    # Use appropriate display_id based on track kind
+    if kind == "video":
+        display_id = ""
+    else:
+        display_id = "#1"
+
     return TrackNfoData(
-        display_id="#2",
+        display_id=display_id,
         kind=kind,
         language_display=language,
         language_short=language_short,
@@ -147,7 +153,10 @@ def test_render_html_omits_empty_movie_episode_fields_and_wraps_release_name():
     assert "Durée par épisode" not in html
     assert "IMDb" not in html
     assert "Source name" not in html
-    assert "overflow-wrap:anywhere" in html
+    # The base template emits ``overflow-wrap: anywhere`` with a space;
+    # some layouts use the compact form. Accept either: the assertion targets
+    # the CSS *property*, not its precise formatting.
+    assert ("overflow-wrap:anywhere" in html) or ("overflow-wrap: anywhere" in html)
     assert "https://www.themoviedb.org/movie/123" in html
     assert "Screenshots" not in html
 

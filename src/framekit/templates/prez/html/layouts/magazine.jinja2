@@ -1,0 +1,301 @@
+{# Magazine Layout - Multi-column editorial layout #}
+{% extends "_base.jinja2" %}
+{% import "_macros.jinja2" as macros %}
+
+{% block layout_styles %}
+<style>
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 50px 30px;
+    background: var(--primary);
+  }
+  
+  /* Masthead */
+  .masthead {
+    border-left: 8px solid var(--accent);
+    padding: 20px 0 30px 30px;
+    margin-bottom: 40px;
+  }
+  
+  .kicker {
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-weight: 900;
+    font-size: 0.75rem;
+    margin-bottom: 12px;
+  }
+  
+  h1 {
+    font-size: clamp(2.5rem, 7vw, 5rem);
+    line-height: 0.95;
+    margin: 0 0 16px;
+    letter-spacing: -0.05em;
+    font-weight: 900;
+  }
+  
+  h2 {
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-size: 0.9rem;
+    margin: 0 0 16px;
+    font-weight: 800;
+  }
+  
+  .deck {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.5;
+    margin: 20px 0;
+    color: var(--text);
+  }
+  
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 20px 0;
+  }
+  
+  .badge {
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    padding: 6px 16px;
+    font-weight: 800;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  
+  /* Two-column layout - Optimized for 1200px */
+  .article-layout {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    gap: 50px;
+    margin-bottom: 40px;
+  }
+  
+  .poster {
+    width: 100%;
+    border-radius: 4px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Sections */
+  section {
+    border-top: 3px solid var(--line);
+    padding: 30px 0;
+    margin-bottom: 20px;
+  }
+  
+  section h2 {
+    margin-bottom: 20px;
+  }
+  
+  /* Full-width synopsis below the poster/info grid */
+  .synopsis p {
+    column-count: 2;
+    column-gap: 40px;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    max-width: 100%;
+  }
+  
+  /* Info grid - Optimized for 1200px */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+  
+  .info-card {
+    border-bottom: 2px solid var(--line);
+    padding: 12px 0;
+  }
+  
+  .info-card.wide {
+    grid-column: span 2;
+  }
+  
+  .info-card span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 900;
+    margin-bottom: 6px;
+  }
+  
+  .info-card strong {
+    display: block;
+    font-size: 1rem;
+    color: var(--text);
+  }
+  
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    table-layout: fixed;
+  }
+  
+  th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  th {
+    color: var(--accent);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    font-weight: 900;
+  }
+  
+  /* Fixed column widths for audio/subtitle tables */
+  th:nth-child(1), td:nth-child(1) { width: 30%; } /* Language */
+  th:nth-child(2), td:nth-child(2) { width: 25%; } /* Codec/Type */
+  th:nth-child(3), td:nth-child(3) { width: 20%; } /* Channels/Format */
+  th:nth-child(4), td:nth-child(4) { width: 25%; } /* Bitrate/Additional */
+  
+  /* Pull quote style */
+  .technical-summary {
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding: 20px;
+    border-left: 4px solid var(--accent);
+    background: var(--card);
+    margin: 20px 0;
+  }
+  
+  /* MediaInfo */
+  .mediainfo {
+    margin-top: 30px;
+    border: 2px solid var(--line);
+    padding: 20px;
+    background: var(--card);
+  }
+  
+  summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  
+  pre {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--primary);
+    overflow-x: auto;
+    font-size: 0.85rem;
+  }
+  
+  /* Responsive */
+  @media (max-width: 900px) {
+    .article-layout {
+      grid-template-columns: 1fr;
+    }
+    
+    .synopsis p {
+      column-count: 1;
+    }
+    
+    .info-card.wide {
+      grid-column: span 1;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    main {
+      padding: 30px 20px;
+    }
+    
+    .masthead {
+      padding-left: 20px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main>
+  <header class="masthead">
+    <div class="kicker">{{ data.release_name }}</div>
+    <h1>{{ data.title }}</h1>
+    {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+    {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+    {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+    {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+    <div class="technical-summary">{{ data.technical_summary }}</div>
+    <div class="badges">
+      {% for badge in data.badges %}<span class="badge">{{ badge }}</span>{% endfor %}
+    </div>
+  </header>
+  
+  <div class="article-layout">
+    <aside>
+      {% if data.poster_url != '-' %}
+        <img class="poster" src="{{ data.poster_url }}" alt="poster">
+      {% endif %}
+    </aside>
+
+    <div>
+      {% if data.info_fields %}
+      <section class="info-section">
+        <h2>{{ tr('prez.section.infos', default='Informations') }}</h2>
+        {{ macros.render_info_grid(data.info_fields) }}
+      </section>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if data.overview != '-' %}
+  <section class="synopsis">
+    <h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2>
+    <p>{{ data.overview }}</p>
+  </section>
+  {% endif %}
+  
+  {% if data.release_fields %}
+  <section class="release-section">
+    <h2>{{ tr('prez.section.release', default='Release') }}</h2>
+    {{ macros.render_info_grid(data.release_fields) }}
+  </section>
+  {% endif %}
+  
+  {% if data.has_metadata_section %}
+  <section class="metadata-section">
+    <h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>
+    {{ macros.render_metadata(data.metadata_fields, data.cast, data.crew) }}
+  </section>
+  {% endif %}
+  
+  {% if data.video_fields %}
+  <section class="video-section">
+    <h2>{{ tr('prez.section.video', default='Video') }}</h2>
+    {{ macros.render_info_grid(data.video_fields) }}
+  </section>
+  {% endif %}
+  
+  <section class="audio-section">
+    <h2>{{ tr('prez.section.audio', default='Audio') }}</h2>
+    {{ macros.render_audio_tracks(data.audio_track_groups) }}
+  </section>
+  
+  <section class="subtitle-section">
+    <h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>
+    {{ macros.render_subtitle_tracks(data.subtitle_track_groups) }}
+  </section>
+  
+  {{ macros.render_mediainfo(data.has_mediainfo, data.mediainfo_text) }}
+</main>
+{% endblock %}

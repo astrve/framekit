@@ -8,6 +8,7 @@ from framekit.core.languages import (
 from framekit.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
 from framekit.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
 from framekit.modules.cleanmkv.presets import (
+    load_named_external_preset,
     load_preset_file,
     preset_from_dict,
     save_preset_file,
@@ -314,6 +315,237 @@ def test_invalid_preset_rejected():
         assert "Invalid audio filter" in str(exc)
     else:
         raise AssertionError("Expected invalid preset to raise ValueError")
+
+
+def test_build_remux_plan_empty_filters_mean_keep_all_tracks():
+    scan = MkvFileScan(
+        path=Path("keep_all.mkv"),
+        audio_tracks=[
+            TrackInfo(
+                track_id=0,
+                kind="audio",
+                codec="AAC",
+                language="french",
+                language_variant=None,
+                subtitle_variant=None,
+                title=None,
+                is_default=True,
+                is_forced=False,
+            ),
+            TrackInfo(
+                track_id=1,
+                kind="audio",
+                codec="AAC",
+                language="english",
+                language_variant=None,
+                subtitle_variant=None,
+                title=None,
+                is_default=False,
+                is_forced=False,
+            ),
+        ],
+        subtitle_tracks=[
+            TrackInfo(
+                track_id=2,
+                kind="subtitle",
+                codec="PGS",
+                language="french",
+                language_variant=None,
+                subtitle_variant="forced",
+                title=None,
+                is_default=False,
+                is_forced=True,
+            ),
+            TrackInfo(
+                track_id=3,
+                kind="subtitle",
+                codec="SRT",
+                language="english",
+                language_variant=None,
+                subtitle_variant="full",
+                title=None,
+                is_default=False,
+                is_forced=False,
+            ),
+        ],
+    )
+
+    preset = preset_from_dict(
+        {
+            "name": "keep_all",
+            "keep_audio_filters": [],
+            "default_audio_filter": None,
+            "keep_subtitle_filters": [],
+            "keep_subtitle_variants": [],
+            "default_subtitle_filter": None,
+            "default_subtitle_variant": None,
+        }
+    )
+
+    plan = build_remux_plan(scan, preset=preset, output_dir_name="clean")
+
+    assert plan.keep_audio_track_ids == [0, 1]
+    assert plan.keep_subtitle_track_ids == [2, 3]
+
+
+def test_project_multi_fr_external_preset_keeps_all_tracks_and_sets_defaults():
+    scan = MkvFileScan(
+        path=Path("multi_fr.mkv"),
+        audio_tracks=[
+            TrackInfo(
+                track_id=0,
+                kind="audio",
+                codec="AAC",
+                language="french",
+                language_variant=None,
+                subtitle_variant=None,
+                title=None,
+                is_default=False,
+                is_forced=False,
+            ),
+            TrackInfo(
+                track_id=1,
+                kind="audio",
+                codec="AAC",
+                language="english",
+                language_variant=None,
+                subtitle_variant=None,
+                title=None,
+                is_default=True,
+                is_forced=False,
+            ),
+        ],
+        subtitle_tracks=[
+            TrackInfo(
+                track_id=2,
+                kind="subtitle",
+                codec="PGS",
+                language="french",
+                language_variant=None,
+                subtitle_variant="forced",
+                title=None,
+                is_default=False,
+                is_forced=True,
+            ),
+            TrackInfo(
+                track_id=3,
+                kind="subtitle",
+                codec="SRT",
+                language="english",
+                language_variant=None,
+                subtitle_variant="full",
+                title=None,
+                is_default=True,
+                is_forced=False,
+            ),
+        ],
+    )
+
+    preset = load_named_external_preset("multi_fr")
+    plan = build_remux_plan(scan, preset=preset, output_dir_name="clean")
+
+    assert plan.keep_audio_track_ids == [0, 1]
+    assert plan.keep_subtitle_track_ids == [2, 3]
+    assert plan.default_audio_track_id == 0
+    assert plan.default_subtitle_track_id == 2
+
+
+def test_project_multi_fr_external_preset_avoids_full_subtitle_when_french_audio_exists():
+    scan = MkvFileScan(
+        path=Path("multi_fr_no_forced.mkv"),
+        audio_tracks=[
+            TrackInfo(
+                track_id=0,
+                kind="audio",
+                codec="AAC",
+                language="french",
+                language_variant=None,
+                subtitle_variant=None,
+                title=None,
+                is_default=False,
+                is_forced=False,
+            ),
+            TrackInfo(
+                track_id=1,
+                kind="audio",
+                codec="AAC",
+                language="english",
+                language_variant=None,
+                subtitle_variant=None,
+                title=None,
+                is_default=True,
+                is_forced=False,
+            ),
+        ],
+        subtitle_tracks=[
+            TrackInfo(
+                track_id=2,
+                kind="subtitle",
+                codec="SRT",
+                language="french",
+                language_variant=None,
+                subtitle_variant="full",
+                title=None,
+                is_default=True,
+                is_forced=False,
+            ),
+        ],
+    )
+
+    preset = load_named_external_preset("multi_fr")
+    plan = build_remux_plan(scan, preset=preset, output_dir_name="clean")
+
+    assert plan.default_audio_track_id == 0
+    assert plan.default_subtitle_track_id is None
+
+
+def test_project_multi_fr_external_preset_falls_back_to_vost_when_french_audio_missing():
+    scan = MkvFileScan(
+        path=Path("multi_fr_vost.mkv"),
+        audio_tracks=[
+            TrackInfo(
+                track_id=0,
+                kind="audio",
+                codec="AAC",
+                language="english",
+                language_variant=None,
+                subtitle_variant=None,
+                title=None,
+                is_default=True,
+                is_forced=False,
+            ),
+        ],
+        subtitle_tracks=[
+            TrackInfo(
+                track_id=2,
+                kind="subtitle",
+                codec="SRT",
+                language="french",
+                language_variant=None,
+                subtitle_variant="full",
+                title=None,
+                is_default=False,
+                is_forced=False,
+            ),
+            TrackInfo(
+                track_id=3,
+                kind="subtitle",
+                codec="SRT",
+                language="english",
+                language_variant=None,
+                subtitle_variant="full",
+                title=None,
+                is_default=True,
+                is_forced=False,
+            ),
+        ],
+    )
+
+    preset = load_named_external_preset("multi_fr")
+    plan = build_remux_plan(scan, preset=preset, output_dir_name="clean")
+
+    assert plan.default_audio_track_id is None
+    assert plan.default_subtitle_track_id == 2
 
 
 def test_normalize_language_variants():

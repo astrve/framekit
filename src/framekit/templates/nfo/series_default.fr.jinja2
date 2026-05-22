@@ -55,6 +55,12 @@
 {{ ui.line("Vidéo", episode.video_codec) }}
 {{ ui.line("HDR", episode.hdr_display) }}
 {{ ui.line("Audio", episode.audio_summary | join(" | ")) }}
+{% for track in episode.audio_tracks %}
+{{ ui.line(track.display_id ~ " Langue", track.language_display) }}
+{{ ui.line(track.display_id ~ " Codec", track.codec) }}
+{{ ui.line(track.display_id ~ " Canaux", track.channels) }}
+{{ ui.line(track.display_id ~ " Par défaut", ui.yesno(track.is_default, "Oui", "Non")) }}
+{% endfor %}
 {{ ui.line("Sous-titres", episode.subtitle_summary | join(" | ")) }}
 
 {% endfor %}

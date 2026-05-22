@@ -1,3 +1,5 @@
+"""Tests for NFO template registry - template management and storage."""
+
 from pathlib import Path
 
 from framekit.modules.nfo.template_registry import (
@@ -9,6 +11,7 @@ from framekit.modules.nfo.template_registry import (
 
 
 def test_builtin_template_records():
+    """Test that builtin template records are correctly defined."""
     records = builtin_template_records()
     assert len(records) == 2
     assert records[0].display_name == "Default"
@@ -16,12 +19,14 @@ def test_builtin_template_records():
 
 
 def test_scope_matches():
+    """Test template scope matching logic."""
     assert scope_matches("universal", "movie") is True
     assert scope_matches("movie", "movie") is True
     assert scope_matches("movie", "season_pack") is False
 
 
 def test_registry_roundtrip(tmp_path: Path):
+    """Test that templates can be registered and retrieved from the registry."""
     registry = NfoTemplateRegistry(tmp_path / "registry.json")
     record = NfoTemplateRecord(
         display_name="My Layout",

@@ -1,0 +1,20 @@
+# EN Only CleanMKV Preset
+# =======================
+# Keep only English audio and English subtitles (forced and SDH if available)
+# First available English subtitle will be default (forced preferred, then SDH)
+
+en_only:
+  name: "EN Only - EN audio + EN subs"
+  keep_audio_filters:
+    - "english"
+  default_audio_filter: "english"
+  keep_subtitle_filters:
+    - "english"
+  keep_subtitle_variants:
+    - "forced"
+    - "sdh"
+  default_subtitle_filter: "english"
+  default_subtitle_variant: null
+  audio_default_explicit: true
+  subtitle_default_explicit: true
+

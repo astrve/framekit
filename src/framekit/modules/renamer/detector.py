@@ -7,6 +7,13 @@ from framekit.core.mediainfo import probe_media_file
 from framekit.core.models.media import MediaFileInfo
 
 MediaInfoSource = Path | MediaFileInfo
+_EAC3_FORMATS = {"E-AC-3", "EAC3"}
+_AC3_FORMATS = {"AC-3", "AC3"}
+_HDR_DV_MARKERS = ("DOLBYVISION", "DVHE")
+_HDR10PLUS_MARKERS = ("HDR10PLUS", "HDR10P", "ST2094", "SMPTEST2094")
+_HDR_HLG_MARKERS = ("HLG", "ARIBSTDB67")
+_HDR10_MARKERS = ("HDR10", "SMPTEST2084", "BT2020", "PQ")
+_HDR10PLUS_TEXT_MARKERS = ("HDR10+",)
 
 
 def _info(source: MediaInfoSource) -> MediaFileInfo:
@@ -15,7 +22,45 @@ def _info(source: MediaInfoSource) -> MediaFileInfo:
     return probe_media_file(source)
 
 
+def _has_any_marker(value: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in value for marker in markers)
+
+
+def _hdr_parts(info: MediaFileInfo) -> tuple[str, str]:
+    hdr = " ".join(
+        str(value or "")
+        for value in (
+            info.hdr_format,
+            getattr(info, "video_profile", None),
+            getattr(info, "video_format_name", None),
+        )
+    ).upper()
+    compact = hdr.replace(" ", "").replace("_", "").replace("-", "")
+    return hdr, compact
+
+
+def _detect_hdr10plus(hdr_text: str, compact: str) -> bool:
+    return _has_any_marker(hdr_text, _HDR10PLUS_TEXT_MARKERS) or _has_any_marker(
+        compact, _HDR10PLUS_MARKERS
+    )
+
+
+def _detect_hdr10(compact: str) -> bool:
+    return _has_any_marker(compact, _HDR10_MARKERS)
+
+
+def _format_audio_tag(codec: str, channels: str) -> str:
+    if codec in _EAC3_FORMATS:
+        return f"EAC3.{channels}" if channels else "EAC3"
+    if codec in _AC3_FORMATS:
+        return f"AC3.{channels}" if channels else "AC3"
+    if codec == "AAC":
+        return f"AAC.{channels}" if channels else "AAC"
+    return f"{codec}.{channels}" if codec and channels else codec
+
+
 def get_preferred_video_tag(source: MediaInfoSource) -> str:
+    """Return the preferred video tag."""
     info = _info(source)
 
     if not info.video_codec:
@@ -34,6 +79,7 @@ def get_preferred_video_tag(source: MediaInfoSource) -> str:
 
 
 def get_preferred_audio_tag(source: MediaInfoSource) -> str:
+    """Return the preferred audio tag."""
     info = _info(source)
 
     if not info.audio_tracks:
@@ -42,18 +88,11 @@ def get_preferred_audio_tag(source: MediaInfoSource) -> str:
     track = info.audio_tracks[0]
     fmt = (track.codec or "").upper()
     channels = track.channels or ""
-
-    if fmt in {"E-AC-3", "EAC3"}:
-        return f"EAC3.{channels}" if channels else "EAC3"
-    if fmt in {"AC-3", "AC3"}:
-        return f"AC3.{channels}" if channels else "AC3"
-    if fmt == "AAC":
-        return f"AAC.{channels}" if channels else "AAC"
-
-    return f"{fmt}.{channels}" if fmt and channels else fmt
+    return _format_audio_tag(fmt, channels)
 
 
 def get_preferred_resolution(source: MediaInfoSource) -> str:
+    """Return the preferred resolution."""
     info = _info(source)
 
     if not info.height:
@@ -74,36 +113,53 @@ def get_preferred_resolution(source: MediaInfoSource) -> str:
 
 
 def get_hdr_canonical(source: MediaInfoSource) -> str:
-    info = _info(source)
-    hdr = " ".join(
-        str(value or "")
-        for value in (
-            info.hdr_format,
-            getattr(info, "video_profile", None),
-            getattr(info, "video_format_name", None),
-        )
-    ).upper()
+    """Detect the primary HDR format from media info.
 
+    Returns a single canonical HDR format identifier.
+    For multiple HDR formats, use get_all_hdr_formats().
+    """
+    info = _info(source)
+    hdr, compact = _hdr_parts(info)
     if not hdr:
         return ""
-
-    compact = hdr.replace(" ", "").replace("_", "").replace("-", "")
-    if "DOLBYVISION" in compact or "DVHE" in compact:
+    if _has_any_marker(compact, _HDR_DV_MARKERS):
         return "dolby_vision"
-    if "HDR10+" in hdr or "HDR10PLUS" in compact or "ST2094" in compact or "SMPTEST2094" in compact:
+    if _detect_hdr10plus(hdr, compact):
         return "hdr10plus"
-    if "HLG" in compact or "ARIBSTDB67" in compact:
+    if _has_any_marker(compact, _HDR_HLG_MARKERS):
         return "hlg"
-    if "HDR10" in compact or "SMPTEST2084" in compact or "BT2020" in compact or "PQ" in compact:
+    if _detect_hdr10(compact):
         return "hdr10"
-
     return ""
 
 
+def get_all_hdr_formats(source: MediaInfoSource) -> list[str]:
+    """Detect all HDR formats present in the media.
+
+    Returns a list of canonical HDR format identifiers.
+    Useful for files with multiple HDR formats (e.g., Dolby Vision + HDR10).
+    """
+    info = _info(source)
+    hdr, compact = _hdr_parts(info)
+    if not hdr:
+        return []
+    formats: list[str] = []
+    if _has_any_marker(compact, _HDR_DV_MARKERS):
+        formats.append("dolby_vision")
+    if _detect_hdr10plus(hdr, compact):
+        formats.append("hdr10plus")
+    elif _detect_hdr10(compact):
+        formats.append("hdr10")
+    if _has_any_marker(compact, _HDR_HLG_MARKERS):
+        formats.append("hlg")
+    return formats
+
+
 def hdr_release_label(value: str) -> str:
+    """Handle hdr release label."""
     mapping = {
         "dolby_vision": "DV",
-        "hdr10plus": "HDR10Plus",
+        "hdr10plus": "HDR10PLUS",
         "hdr10": "HDR10",
         "hlg": "HLG",
     }
@@ -111,6 +167,7 @@ def hdr_release_label(value: str) -> str:
 
 
 def hdr_display_label(value: str) -> str:
+    """Handle hdr display label."""
     mapping = {
         "dolby_vision": "Dolby Vision",
         "hdr10plus": "HDR10+",
@@ -120,7 +177,20 @@ def hdr_display_label(value: str) -> str:
     return mapping.get(value, "")
 
 
+def hdr_display_label_all(source: MediaInfoSource) -> str:
+    """Get a display label for all HDR formats present in the media.
+
+    Returns formats separated by " + " (e.g., "Dolby Vision + HDR10+").
+    """
+    formats = get_all_hdr_formats(source)
+    if not formats:
+        return ""
+    labels = [hdr_display_label(fmt) for fmt in formats]
+    return " + ".join(label for label in labels if label)
+
+
 def infer_source_from_name(name: str) -> str:
+    """Handle infer source from name."""
     upper = name.upper()
 
     if "WEBRIP" in upper:

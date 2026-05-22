@@ -6,6 +6,8 @@ from pathlib import Path
 
 @dataclass(slots=True)
 class RenamePlanItem:
+    """Rename plan item."""
+
     source: Path
     target: Path
     reason: str
@@ -27,3 +29,5 @@ class RenamePlanItem:
 
     parsed_episode_code: str | None = None
     parsed_episode_title: str | None = None
+
+    multi_language_detected: bool = False

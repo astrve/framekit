@@ -15,32 +15,32 @@
 {% if data.poster_url != '-' %}
 [center][img]{{ bb(data.poster_url) }}[/img][/center]
 {% endif %}
-[size=16][b]{{ tr('prez.section.infos', default='Informations') }}[/b][/size]
+{% if data.banner_information %}{{ bbcode_banner(data.banner_information) }}{% else %}[size=16][b]{{ tr("prez.section.infos", default='Informations') }}[/b][/size]{% endif %}
 {% for field in data.info_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
 {% endfor %}
 {% if data.overview != '-' %}
 [hr]
 
-[size=16][b]{{ tr('prez.section.synopsis', default='Synopsis') }}[/b][/size]
+{% if data.banner_synopsis %}{{ bbcode_banner(data.banner_synopsis) }}{% else %}[size=16][b]{{ tr("prez.section.synopsis", default='Synopsis') }}[/b][/size]{% endif %}
 
 {{ bb(data.overview) }}
 {% endif %}
 {% if data.has_metadata_section %}
 [hr]
 
-[size=16][b]{{ tr('prez.section.metadata', default='Metadata') }}[/b][/size]
+{% if data.banner_metadata %}{{ bbcode_banner(data.banner_metadata) }}{% else %}[size=16][b]{{ tr("prez.section.metadata", default='Metadata') }}[/b][/size]{% endif %}
 {% for field in data.metadata_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
 {% endfor %}{% if data.cast != '-' %}[b]{{ tr('prez.label.cast', default='Cast') }} :[/b] {{ bb(data.cast) }}
 {% endif %}{% if data.crew != '-' %}[b]{{ tr('prez.label.crew', default='Crew') }} :[/b] {{ bb(data.crew) }}
 {% endif %}{% endif %}
 [hr]
 
-[size=16][b]{{ tr('prez.section.release', default='Release') }}[/b][/size]
+{% if data.banner_release %}{{ bbcode_banner(data.banner_release) }}{% else %}[size=16][b]{{ tr("prez.section.release", default='Release') }}[/b][/size]{% endif %}
 {% for field in data.release_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
 {% endfor %}
 [hr]
 
-[size=16][b]{{ tr('prez.section.technical', default='Technical information') }}[/b][/size]
+{% if data.banner_technical %}{{ bbcode_banner(data.banner_technical) }}{% else %}[size=16][b]{{ tr("prez.section.technical", default='Technical information') }}[/b][/size]{% endif %}
 
 {{ bb(data.technical_summary) }}
 
@@ -48,11 +48,11 @@
 {% for field in data.video_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
 {% endfor %}
 
-[size=14][b]{{ tr('prez.section.audio', default='Audio') }}[/b][/size]
+{% if data.banner_audio %}{{ bbcode_banner(data.banner_audio) }}{% else %}[size=14][b]{{ tr("prez.section.audio", default='Audio') }}[/b][/size]{% endif %}
 
 {{ audio_table_bbcode(data.audio_tracks) }}
 
-[size=14][b]{{ tr('prez.section.subtitles', default='Subtitles') }}[/b][/size]
+{% if data.banner_subtitles %}{{ bbcode_banner(data.banner_subtitles) }}{% else %}[size=14][b]{{ tr("prez.section.subtitles", default='Subtitles') }}[/b][/size]{% endif %}
 
 {{ subtitle_table_bbcode(data.subtitle_tracks) }}
-{{ mediainfo_spoiler(data.mediainfo_text) }}
+{{ bbcode_banner(data.banner_mediainfo) }}{{ mediainfo_spoiler(data.mediainfo_text) }}

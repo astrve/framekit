@@ -1,3 +1,5 @@
+"""Tests for cleanmkv remuxer module."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -10,15 +12,27 @@ from framekit.modules.cleanmkv import remuxer
 
 
 class _Registry(ToolRegistry):
+    """Mock tool registry for testing."""
+
     def __init__(self, mkvmerge: str | None = "mkvmerge") -> None:
         self.mkvmerge = mkvmerge
+        # Initialize parent class without settings
+        self.settings = None
 
     def resolve_tool_path(self, tool_name: str) -> str | None:
         assert tool_name == "mkvmerge"
         return self.mkvmerge
 
+    def require_tool(self, tool_name: str) -> str:
+        """Override require_tool to avoid settings dependency."""
+        path = self.resolve_tool_path(tool_name)
+        if path is None:
+            raise RuntimeError(f"{tool_name} is not available")
+        return path
+
 
 def _plan(tmp_path, *, copy_only: bool) -> RemuxPlan:
+    """Create a mock RemuxPlan for testing."""
     source = tmp_path / "movie.mkv"
     source.write_bytes(b"mkv")
     return RemuxPlan(
@@ -33,6 +47,7 @@ def _plan(tmp_path, *, copy_only: bool) -> RemuxPlan:
 
 
 def test_copy_only_plan_copies_when_enabled(tmp_path):
+    """Test that copy_only plan copies file when copy_unchanged_files is True."""
     plan = _plan(tmp_path, copy_only=True)
 
     remuxer.apply_remux_plan(plan, _Registry(), copy_unchanged_files=True)
@@ -41,6 +56,7 @@ def test_copy_only_plan_copies_when_enabled(tmp_path):
 
 
 def test_copy_only_plan_can_skip_copying_unchanged_files(tmp_path):
+    """Test that copy_only plan skips copying when copy_unchanged_files is False."""
     plan = _plan(tmp_path, copy_only=True)
 
     remuxer.apply_remux_plan(plan, _Registry(), copy_unchanged_files=False)
@@ -49,6 +65,7 @@ def test_copy_only_plan_can_skip_copying_unchanged_files(tmp_path):
 
 
 def test_remux_command_sets_default_flags_for_all_kept_tracks(monkeypatch, tmp_path):
+    """Test that remux command correctly sets default flags for audio and subtitle tracks."""
     plan = _plan(tmp_path, copy_only=False)
     captured: dict[str, list[str]] = {}
 
@@ -72,6 +89,7 @@ def test_remux_command_sets_default_flags_for_all_kept_tracks(monkeypatch, tmp_p
 
 
 def test_remux_plan_requires_mkvmerge(tmp_path):
+    """Test that remux plan raises RuntimeError when mkvmerge is not available."""
     plan = _plan(tmp_path, copy_only=False)
 
     with pytest.raises(RuntimeError, match="mkvmerge"):
@@ -79,6 +97,7 @@ def test_remux_plan_requires_mkvmerge(tmp_path):
 
 
 def test_remux_failure_raises_runtime_error(monkeypatch, tmp_path):
+    """Test that remux failure raises RuntimeError with stderr message."""
     plan = _plan(tmp_path, copy_only=False)
     monkeypatch.setattr(
         remuxer,

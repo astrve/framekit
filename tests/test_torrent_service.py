@@ -93,7 +93,7 @@ def test_torrent_payload_auto_ignores_sidecars(tmp_path):
     (tmp_path / "Movie.2024.1080p.nfo").write_text("nfo")
     (tmp_path / "notes.txt").write_text("notes")
 
-    payload = resolve_torrent_payload(tmp_path, content_mode="auto")
+    payload, warning = resolve_torrent_payload(tmp_path, content_mode="auto")
 
     assert payload.name == "Movie.2024.1080p"
     assert [path.name for path in payload.files] == ["Movie.2024.1080p.mkv"]
@@ -101,6 +101,7 @@ def test_torrent_payload_auto_ignores_sidecars(tmp_path):
         "Movie.2024.1080p.nfo",
         "notes.txt",
     ]
+    assert warning is None  # No ambiguity in this case
 
 
 def test_torrent_payload_auto_detects_release_subfolder(tmp_path):
@@ -114,11 +115,12 @@ def test_torrent_payload_auto_detects_release_subfolder(tmp_path):
 
     from framekit.modules.torrent.payload import resolve_torrent_payload
 
-    payload = resolve_torrent_payload(release, content_mode="auto")
+    payload, warning = resolve_torrent_payload(release, content_mode="auto")
 
     assert payload.path == payload_dir
     assert payload.name == "Show.S01"
     assert len(payload.files) == 2
+    assert warning is None  # No ambiguity in this case
 
 
 def test_torrent_payload_auto_refuses_multiple_root_groups(tmp_path):
@@ -127,12 +129,23 @@ def test_torrent_payload_auto_refuses_multiple_root_groups(tmp_path):
     (tmp_path / "Movie.A.2024.mkv").write_bytes(b"a")
     (tmp_path / "Movie.B.2023.mkv").write_bytes(b"b")
 
+    # Without allow_ambiguous, should still raise ValueError
     try:
-        resolve_torrent_payload(tmp_path, content_mode="auto")
+        resolve_torrent_payload(tmp_path, content_mode="auto", allow_ambiguous=False)
     except ValueError as exc:
         assert "multiple media groups" in str(exc).lower()
     else:
-        raise AssertionError("auto mode should refuse ambiguous root media groups")
+        raise AssertionError(
+            "auto mode should refuse ambiguous root media groups when allow_ambiguous=False"
+        )
+
+    # With allow_ambiguous=True, should return payload with warning
+    payload, warning = resolve_torrent_payload(tmp_path, content_mode="auto", allow_ambiguous=True)
+    assert payload is not None
+    assert warning is not None
+    assert "multiple media groups" in warning.lower()
+    # Should use first group (Movie.A)
+    assert len(payload.files) == 1
 
 
 def test_torrent_service_can_use_resolved_media_subset(tmp_path):

@@ -11,6 +11,8 @@ EPISODE_CODE_RE = re.compile(r"^S(?P<season>\d{2})E(?P<episode>\d{2})$", re.IGNO
 
 @dataclass(frozen=True, slots=True)
 class EpisodeCompleteness:
+    """Episode completeness."""
+
     status: str
     found: int
     expected: int | None
@@ -19,10 +21,12 @@ class EpisodeCompleteness:
 
     @property
     def is_complete(self) -> bool:
+        """Return ``True`` if is complete."""
         return self.status == "complete"
 
     @property
     def label(self) -> str:
+        """Handle label."""
         if self.status == "complete" and self.expected is not None:
             return f"Complete ({self.found}/{self.expected})"
         if self.status == "incomplete" and self.expected is not None:
@@ -48,19 +52,33 @@ def _episode_code_numbers(codes: Iterable[str]) -> list[tuple[int, int, str]]:
 
 
 def inspect_release_completeness(release: ReleaseNfoData) -> EpisodeCompleteness:
+    """Handle inspect release completeness."""
     if release.media_kind not in {"season_pack", "special_pack", "single_episode"}:
-        return EpisodeCompleteness(status="n/a", found=len(release.episodes), expected=None)
+        return _not_applicable_completeness(release)
 
     items = _episode_code_numbers(
         episode.episode_code for episode in release.episodes if episode.episode_code
     )
     if not items:
-        return EpisodeCompleteness(status="partial", found=len(release.episodes), expected=None)
+        return _partial_completeness(found=len(release.episodes))
+    if _has_multiple_seasons(items):
+        return _partial_completeness(found=len(items))
+    return _single_season_completeness(items)
 
-    seasons = {season for season, _episode, _code in items}
-    if len(seasons) != 1:
-        return EpisodeCompleteness(status="partial", found=len(items), expected=None)
 
+def _not_applicable_completeness(release: ReleaseNfoData) -> EpisodeCompleteness:
+    return EpisodeCompleteness(status="n/a", found=len(release.episodes), expected=None)
+
+
+def _partial_completeness(*, found: int) -> EpisodeCompleteness:
+    return EpisodeCompleteness(status="partial", found=found, expected=None)
+
+
+def _has_multiple_seasons(items: list[tuple[int, int, str]]) -> bool:
+    return len({season for season, _episode, _code in items}) != 1
+
+
+def _single_season_completeness(items: list[tuple[int, int, str]]) -> EpisodeCompleteness:
     season = items[0][0]
     found_codes = tuple(dict.fromkeys(code for _season, _episode, code in items))
     episode_numbers = sorted({episode for _season, episode, _code in items})
@@ -78,8 +96,10 @@ def inspect_release_completeness(release: ReleaseNfoData) -> EpisodeCompleteness
 
 
 def completeness_label(release: ReleaseNfoData) -> str:
+    """Handle completeness label."""
     return inspect_release_completeness(release).label
 
 
 def missing_episode_codes(release: ReleaseNfoData) -> tuple[str, ...]:
+    """Handle missing episode codes."""
     return inspect_release_completeness(release).missing_codes

@@ -1,3 +1,5 @@
+"""Tests for cleanmkv scanner module."""
+
 from __future__ import annotations
 
 import json
@@ -12,6 +14,8 @@ from framekit.modules.cleanmkv import scanner
 
 
 class _Registry(ToolRegistry):
+    """Mock tool registry for testing."""
+
     def __init__(self, mkvmerge: str | None = "mkvmerge") -> None:
         super().__init__()
         self.mkvmerge = mkvmerge
@@ -22,10 +26,12 @@ class _Registry(ToolRegistry):
 
 
 def _completed(payload: dict, *, returncode: int = 0, stderr: str = "") -> SimpleNamespace:
+    """Create a mock subprocess.CompletedProcess result."""
     return SimpleNamespace(returncode=returncode, stdout=json.dumps(payload), stderr=stderr)
 
 
 def _media_info(path: Path) -> MediaFileInfo:
+    """Create mock MediaFileInfo for testing."""
     return MediaFileInfo(
         path=path,
         container="Matroska",
@@ -71,6 +77,7 @@ def _media_info(path: Path) -> MediaFileInfo:
 
 
 def test_scan_mkv_file_parses_tracks_and_enriches_with_mediainfo(monkeypatch, tmp_path):
+    """Test that scan_mkv_file correctly parses mkvmerge output and enriches with mediainfo."""
     movie = tmp_path / "Movie.MKV"
     movie.write_bytes(b"fake")
 
@@ -138,6 +145,7 @@ def test_scan_mkv_file_parses_tracks_and_enriches_with_mediainfo(monkeypatch, tm
 
 
 def test_scan_folder_accepts_uppercase_mkv_and_ignores_other_files(monkeypatch, tmp_path):
+    """Test that scan_folder processes both .mkv and .MKV files but ignores other extensions."""
     upper = tmp_path / "A.MKV"
     lower = tmp_path / "B.mkv"
     other = tmp_path / "notes.txt"
@@ -159,11 +167,13 @@ def test_scan_folder_accepts_uppercase_mkv_and_ignores_other_files(monkeypatch, 
 
 
 def test_scan_mkv_file_requires_mkvmerge(tmp_path):
+    """Test that scan_mkv_file raises RuntimeError when mkvmerge is not available."""
     with pytest.raises(RuntimeError, match="mkvmerge"):
         scanner.scan_mkv_file(tmp_path / "missing.mkv", _Registry(mkvmerge=None))
 
 
 def test_scan_mkv_file_reports_mkvmerge_failure(monkeypatch, tmp_path):
+    """Test that scan_mkv_file raises RuntimeError when mkvmerge fails."""
     movie = tmp_path / "broken.mkv"
     movie.write_bytes(b"x")
     monkeypatch.setattr(

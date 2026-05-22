@@ -20,6 +20,7 @@ def _parse_episode_code(code: str | None) -> tuple[int | None, int | None]:
 
 
 def build_lookup_request(release: ReleaseNfoData) -> MetadataLookupRequest:
+    """Build lookup request."""
     if release.media_kind == "movie":
         return MetadataLookupRequest(
             media_kind="movie",
@@ -61,4 +62,5 @@ def build_lookup_request(release: ReleaseNfoData) -> MetadataLookupRequest:
 
 
 def sort_candidates(candidates: list[MetadataCandidate]) -> list[MetadataCandidate]:
+    """Handle sort candidates."""
     return sorted(candidates, key=lambda item: item.confidence, reverse=True)

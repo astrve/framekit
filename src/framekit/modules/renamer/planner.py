@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import NamedTuple
 
 from framekit.core.mediainfo import probe_media_file
 from framekit.core.models.renamer import RenamePlanItem
 from framekit.modules.renamer.detector import (
+    MediaInfoSource,
     get_hdr_canonical,
     get_preferred_audio_tag,
     get_preferred_resolution,
@@ -15,10 +17,26 @@ from framekit.modules.renamer.detector import (
 )
 from framekit.modules.renamer.rules import (
     DEFAULT_LANG,
+    SINGLE_LANG_TAGS,
     VIDEO_EXTENSIONS,
     normalize_name_part,
     split_team,
 )
+
+
+class _RenameContext(NamedTuple):
+    inferred_video_tag: str
+    inferred_audio_tag: str
+    inferred_resolution: str
+    hdr_canonical: str
+    hdr_release: str
+    hdr_display: str
+    existing_language_tag: str | None
+    resulting_language_tag: str | None
+    parsed_episode_code: str | None
+    parsed_episode_title: str | None
+    normalized_name: str
+    multi_language_detected: bool
 
 
 def _clean_removed_term_separators(value: str) -> str:
@@ -54,57 +72,205 @@ def _remove_terms_from_normalized_name(name: str, remove_terms: tuple[str, ...])
     return result or name
 
 
+def _insert_after_token(
+    name: str,
+    insert_after_pairs: tuple[tuple[str, str], ...],
+    missing_tokens: set[str],
+) -> str:
+    """Insert terms after existing tokens in the filename.
+
+    Args:
+        name: The filename to modify
+        insert_after_pairs: Tuples of (existing_token, term_to_add)
+        missing_tokens: Set to collect tokens that were not found
+
+    Returns:
+        Modified filename with inserted terms
+    """
+    result = name
+    for existing_token, term_to_add in insert_after_pairs:
+        existing = existing_token.strip()
+        to_add = term_to_add.strip()
+        if not existing or not to_add:
+            continue
+
+        # Create a pattern to find the existing token
+        pattern = _term_pattern(existing)
+
+        # Check if the token exists in the name
+        if not pattern.search(result):
+            missing_tokens.add(existing)
+            continue
+
+        # Insert the new term after the existing token
+        # We need to preserve the separator style (. or space)
+        def replacer(match: re.Match[str], val: str = to_add) -> str:
+            matched_text = match.group(0)
+            # Add the new term with a dot separator
+            return f"{matched_text}.{val}"
+
+        result = pattern.sub(replacer, result, count=1)
+
+    return result
+
+
+def _collect_media_files(folder: Path) -> list[Path]:
+    return sorted(
+        file_path
+        for file_path in folder.iterdir()
+        if file_path.is_file() and file_path.suffix.lower() in VIDEO_EXTENSIONS
+    )
+
+
+def _resolve_original_stem(
+    file_path: Path,
+    insert_after_pairs: tuple[tuple[str, str], ...],
+    missing_tokens: set[str],
+) -> str:
+    stem = file_path.stem
+    if not insert_after_pairs:
+        return stem
+    return _insert_after_token(stem, insert_after_pairs, missing_tokens)
+
+
+def _detect_multi_language(info: MediaInfoSource) -> bool:
+    """Return True when the media file has more than one audio track."""
+    from framekit.core.models.media import MediaFileInfo
+
+    if isinstance(info, MediaFileInfo):
+        return len(info.audio_tracks) > 1
+    return len(probe_media_file(info).audio_tracks) > 1
+
+
+def _build_rename_context(
+    stem: str,
+    *,
+    default_lang: str,
+    force_lang: bool,
+    remove_terms: tuple[str, ...],
+    info: MediaInfoSource,
+) -> _RenameContext:
+    inferred_video_tag = get_preferred_video_tag(info)
+    inferred_audio_tag = get_preferred_audio_tag(info)
+    inferred_resolution = get_preferred_resolution(info)
+
+    hdr_canonical = get_hdr_canonical(info)
+    hdr_release = hdr_release_label(hdr_canonical)
+    hdr_display = hdr_display_label(hdr_canonical)
+
+    (
+        normalized,
+        existing_language_tag,
+        resulting_language_tag,
+        parsed_episode_code,
+        parsed_episode_title,
+    ) = normalize_name_part(
+        stem,
+        preferred_video_tag=inferred_video_tag,
+        preferred_audio_tag=inferred_audio_tag,
+        preferred_resolution=inferred_resolution,
+        preferred_hdr=hdr_release,
+        default_lang=default_lang,
+        force_lang=force_lang,
+    )
+
+    normalized = _remove_terms_from_normalized_name(normalized, remove_terms)
+    multi_detected = (
+        _detect_multi_language(info) and (existing_language_tag or "") in SINGLE_LANG_TAGS
+    )
+    return _RenameContext(
+        inferred_video_tag=inferred_video_tag,
+        inferred_audio_tag=inferred_audio_tag,
+        inferred_resolution=inferred_resolution,
+        hdr_canonical=hdr_canonical,
+        hdr_release=hdr_release,
+        hdr_display=hdr_display,
+        existing_language_tag=existing_language_tag,
+        resulting_language_tag=resulting_language_tag,
+        parsed_episode_code=parsed_episode_code,
+        parsed_episode_title=parsed_episode_title,
+        normalized_name=normalized,
+        multi_language_detected=multi_detected,
+    )
+
+
+def _build_target_name(
+    normalized_name: str,
+    team: str | None,
+    *,
+    remove_terms: tuple[str, ...],
+) -> str:
+    name = normalized_name
+    if team:
+        name = f"{name}-{team}"
+    return _remove_terms_from_normalized_name(name, remove_terms)
+
+
+def _detect_collision(
+    source: Path,
+    target: Path,
+    *,
+    changed: bool,
+    case_only: bool,
+    reserved_targets: dict[str, Path],
+) -> tuple[bool, str]:
+    reserved_key = str(target).lower()
+
+    if changed and reserved_key in reserved_targets and reserved_targets[reserved_key] != source:
+        return True, reserved_key
+
+    if changed and target.exists() and target.resolve() != source.resolve() and not case_only:
+        return True, reserved_key
+
+    return False, reserved_key
+
+
+def _warn_missing_tokens(missing_tokens: set[str]) -> None:
+    if not missing_tokens:
+        return
+    from framekit.core.i18n import tr
+    from framekit.ui.console import print_warning
+
+    for token in sorted(missing_tokens):
+        print_warning(
+            tr(
+                "renamer.warning.insert_after_token_not_found",
+                default="Token not found for insertion: {token}",
+                token=token,
+            )
+        )
+
+
 def build_rename_plan(
     folder: Path,
     *,
     default_lang: str = DEFAULT_LANG,
     force_lang: bool = False,
     remove_terms: tuple[str, ...] = (),
+    insert_after_pairs: tuple[tuple[str, str], ...] = (),
 ) -> list[RenamePlanItem]:
+    """Build rename plan."""
     plan: list[RenamePlanItem] = []
     reserved_targets: dict[str, Path] = {}
-
-    media_files = sorted(
-        file_path
-        for file_path in folder.iterdir()
-        if file_path.is_file() and file_path.suffix.lower() in VIDEO_EXTENSIONS
-    )
+    missing_tokens: set[str] = set()
+    media_files = _collect_media_files(folder)
 
     for file_path in media_files:
         info = probe_media_file(file_path)
-        stem, team = split_team(_remove_terms_from_stem(file_path.stem, remove_terms))
-
-        inferred_video_tag = get_preferred_video_tag(info)
-        inferred_audio_tag = get_preferred_audio_tag(info)
-        inferred_resolution = get_preferred_resolution(info)
-
-        hdr_canonical = get_hdr_canonical(info)
-        hdr_release = hdr_release_label(hdr_canonical)
-        hdr_display = hdr_display_label(hdr_canonical)
-
-        (
-            normalized,
-            existing_language_tag,
-            resulting_language_tag,
-            parsed_episode_code,
-            parsed_episode_title,
-        ) = normalize_name_part(
+        original_stem = _resolve_original_stem(file_path, insert_after_pairs, missing_tokens)
+        stem, team = split_team(_remove_terms_from_stem(original_stem, remove_terms))
+        context = _build_rename_context(
             stem,
-            preferred_video_tag=inferred_video_tag,
-            preferred_audio_tag=inferred_audio_tag,
-            preferred_resolution=inferred_resolution,
-            preferred_hdr=hdr_release,
             default_lang=default_lang,
             force_lang=force_lang,
+            remove_terms=remove_terms,
+            info=info,
         )
-
-        normalized = _remove_terms_from_normalized_name(normalized, remove_terms)
-
-        if team:
-            normalized = f"{normalized}-{team}"
-
-        normalized = _remove_terms_from_normalized_name(normalized, remove_terms)
-
+        normalized = _build_target_name(
+            context.normalized_name,
+            team,
+            remove_terms=remove_terms,
+        )
         target = file_path.with_name(f"{normalized}{file_path.suffix}")
 
         source_name_lower = file_path.name.lower()
@@ -112,25 +278,13 @@ def build_rename_plan(
 
         changed = file_path.name != target.name
         case_only = changed and source_name_lower == target_name_lower
-
-        collision = False
-        reserved_key = str(target).lower()
-
-        if (
-            changed
-            and reserved_key in reserved_targets
-            and reserved_targets[reserved_key] != file_path
-        ):
-            collision = True
-
-        if (
-            changed
-            and target.exists()
-            and target.resolve() != file_path.resolve()
-            and not case_only
-        ):
-            collision = True
-
+        collision, reserved_key = _detect_collision(
+            file_path,
+            target,
+            changed=changed,
+            case_only=case_only,
+            reserved_targets=reserved_targets,
+        )
         reserved_targets[reserved_key] = file_path
 
         plan.append(
@@ -141,18 +295,20 @@ def build_rename_plan(
                 changed=changed,
                 case_only=case_only,
                 collision=collision,
-                inferred_video_tag=inferred_video_tag or None,
-                inferred_audio_tag=inferred_audio_tag or None,
+                inferred_video_tag=context.inferred_video_tag or None,
+                inferred_audio_tag=context.inferred_audio_tag or None,
                 inferred_source=None,
-                inferred_resolution=inferred_resolution or None,
-                hdr_canonical=hdr_canonical or None,
-                hdr_release_label=hdr_release or None,
-                hdr_display_label=hdr_display or None,
-                existing_language_tag=existing_language_tag,
-                resulting_language_tag=resulting_language_tag,
-                parsed_episode_code=parsed_episode_code,
-                parsed_episode_title=parsed_episode_title,
+                inferred_resolution=context.inferred_resolution or None,
+                hdr_canonical=context.hdr_canonical or None,
+                hdr_release_label=context.hdr_release or None,
+                hdr_display_label=context.hdr_display or None,
+                existing_language_tag=context.existing_language_tag,
+                resulting_language_tag=context.resulting_language_tag,
+                parsed_episode_code=context.parsed_episode_code,
+                parsed_episode_title=context.parsed_episode_title,
+                multi_language_detected=context.multi_language_detected,
             )
         )
 
+    _warn_missing_tokens(missing_tokens)
     return plan

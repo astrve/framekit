@@ -1,0 +1,398 @@
+{# Vintage Retro Layout - 80s/90s aesthetic with pastel gradients #}
+{% extends "_base.jinja2" %}
+{% import "_macros.jinja2" as macros %}
+
+{% block layout_styles %}
+<style>
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 50px 30px;
+    background:
+      linear-gradient(135deg, var(--secondary) 0%, var(--primary) 50%, var(--secondary) 100%);
+  }
+  
+  /* Retro header */
+  header {
+    text-align: center;
+    margin-bottom: 50px;
+    padding: 45px 40px;
+    background: linear-gradient(135deg, var(--card), var(--secondary));
+    border-radius: 30px;
+    box-shadow: 
+      0 10px 40px rgba(0, 0, 0, 0.2),
+      inset 0 -2px 10px rgba(255, 255, 255, 0.1);
+    border: 3px solid var(--accent);
+  }
+  
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+  
+  .badge {
+    background: linear-gradient(135deg, var(--accent), var(--line));
+    color: var(--primary);
+    padding: 10px 22px;
+    font-weight: 800;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border-radius: 25px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    border: 2px solid color-mix(in srgb, var(--accent) 80%, white);
+  }
+  
+  h1 {
+    font-size: clamp(2.8rem, 6vw, 5rem);
+    line-height: 1.1;
+    margin: 0 0 18px;
+    letter-spacing: 0.02em;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--accent), var(--text));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+  }
+  
+  h2 {
+    color: var(--accent);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin: 0 0 14px;
+    font-weight: 700;
+  }
+  
+  h3 {
+    color: var(--muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 10px 0;
+  }
+  
+  /* Retro poster frame */
+  .poster-container {
+    text-align: center;
+    margin: 45px 0;
+  }
+  
+  .poster-frame {
+    display: inline-block;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--card), var(--secondary));
+    border-radius: 25px;
+    box-shadow: 
+      0 15px 50px rgba(0, 0, 0, 0.25),
+      inset 0 -2px 10px rgba(255, 255, 255, 0.1);
+    border: 4px solid var(--accent);
+    position: relative;
+  }
+  
+  .poster-frame::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-radius: 20px;
+    pointer-events: none;
+  }
+  
+  .poster {
+    max-width: 350px;
+    width: 100%;
+    border-radius: 18px;
+    display: block;
+    filter: saturate(1.2) contrast(1.05);
+  }
+  
+  /* Retro sections */
+  section {
+    background: linear-gradient(135deg, var(--card), var(--secondary));
+    border-radius: 25px;
+    padding: 35px;
+    margin-bottom: 30px;
+    box-shadow: 
+      0 8px 30px rgba(0, 0, 0, 0.2),
+      inset 0 -2px 10px rgba(255, 255, 255, 0.1);
+    border: 3px solid var(--line);
+  }
+  
+  section h2 {
+    margin-bottom: 25px;
+    padding-bottom: 14px;
+    border-bottom: 3px solid var(--accent);
+    text-align: center;
+    background: linear-gradient(90deg, var(--accent), var(--line));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Info grid with retro cards - Optimized for 1200px */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 26px;
+  }
+  
+  .info-card {
+    background: linear-gradient(135deg, var(--secondary), var(--card));
+    border-radius: 15px;
+    padding: 20px;
+    border: 2px solid var(--line);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+  }
+  
+  .info-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+    border-color: var(--accent);
+  }
+  
+  .info-card.wide {
+    grid-column: span 2;
+  }
+  
+  .info-card span {
+    display: block;
+    color: var(--accent);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 800;
+    margin-bottom: 10px;
+  }
+  
+  .info-card strong {
+    display: block;
+    font-size: 1.05rem;
+    color: var(--text);
+    font-weight: 600;
+  }
+  
+  /* Retro tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 18px;
+    border-radius: 12px;
+    overflow: hidden;
+    table-layout: fixed;
+  }
+  
+  th, td {
+    padding: 14px 12px;
+    text-align: left;
+    border-bottom: 2px solid var(--line);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  th {
+    background: linear-gradient(135deg, var(--accent), var(--line));
+    color: var(--primary);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    font-weight: 800;
+  }
+  
+  /* Fixed column widths for audio/subtitle tables */
+  th:nth-child(1), td:nth-child(1) { width: 30%; } /* Language */
+  th:nth-child(2), td:nth-child(2) { width: 25%; } /* Codec/Type */
+  th:nth-child(3), td:nth-child(3) { width: 20%; } /* Channels/Format */
+  th:nth-child(4), td:nth-child(4) { width: 25%; } /* Bitrate/Additional */
+  
+  tr:nth-child(even) {
+    background: color-mix(in srgb, var(--line) 20%, transparent);
+  }
+  
+  tr:hover {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  
+  /* Synopsis with retro style */
+  .synopsis p {
+    font-size: 1.1rem;
+    line-height: 1.75;
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto;
+    color: var(--text);
+  }
+  
+  /* Technical summary badge */
+  .tech-badge {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, var(--accent), var(--line));
+    color: var(--primary);
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 25px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    border: 2px solid color-mix(in srgb, var(--accent) 80%, white);
+  }
+  
+  /* MediaInfo retro */
+  .mediainfo {
+    background: linear-gradient(135deg, var(--card), var(--secondary));
+    border-radius: 25px;
+    padding: 28px;
+    margin-top: 30px;
+    box-shadow: 
+      0 8px 30px rgba(0, 0, 0, 0.2),
+      inset 0 -2px 10px rgba(255, 255, 255, 0.1);
+    border: 3px solid var(--line);
+  }
+  
+  summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    text-align: center;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--secondary), var(--card));
+    border-radius: 15px;
+    border: 2px solid var(--accent);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+  }
+  
+  summary:hover {
+    transform: scale(1.02);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+  
+  pre {
+    margin-top: 20px;
+    padding: 22px;
+    background: var(--primary);
+    border-radius: 15px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    border: 2px solid var(--line);
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Responsive */
+  @media (max-width: 900px) {
+    .info-card.wide {
+      grid-column: span 1;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    main {
+      padding: 35px 20px;
+    }
+    
+    header {
+      padding: 35px 25px;
+      border-radius: 20px;
+    }
+    
+    section {
+      padding: 28px 22px;
+      border-radius: 20px;
+    }
+    
+    .poster-frame {
+      padding: 12px;
+      border-radius: 20px;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+    }
+    
+    .synopsis p {
+      text-align: left;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main>
+  <header>
+    <div class="badges">
+      {% for badge in data.badges %}<span class="badge">{{ badge }}</span>{% endfor %}
+    </div>
+    <h1>{{ data.title }}</h1>
+    {% if data.season_label != '-' %}<h2 class="season-heading">{{ data.season_label }}</h2>{% endif %}
+    {% if data.heading_subtitle != '-' %}<p class="muted"><strong>{{ data.heading_subtitle }}</strong></p>{% endif %}
+    {% if data.season_episode_range != '-' %}<h3 class="episode-heading">{{ data.season_episode_range }}</h3>{% endif %}
+    {% if data.subtitle_line %}<p class="muted">{{ data.subtitle_line }}</p>{% endif %}
+    <span class="tech-badge">{{ data.technical_summary }}</span>
+  </header>
+  
+  {% if data.poster_url != '-' %}
+  <div class="poster-container">
+    <div class="poster-frame">
+      <img class="poster" src="{{ data.poster_url }}" alt="poster">
+    </div>
+  </div>
+  {% endif %}
+  
+  {% if data.overview != '-' %}
+  <section class="synopsis">
+    <h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2>
+    <p>{{ data.overview }}</p>
+  </section>
+  {% endif %}
+  
+  {% if data.info_fields %}
+  <section class="info-section">
+    <h2>{{ tr('prez.section.infos', default='Informations') }}</h2>
+    {{ macros.render_info_grid(data.info_fields) }}
+  </section>
+  {% endif %}
+  
+  {% if data.release_fields %}
+  <section class="release-section">
+    <h2>{{ tr('prez.section.release', default='Release') }}</h2>
+    {{ macros.render_info_grid(data.release_fields) }}
+  </section>
+  {% endif %}
+  
+  {% if data.has_metadata_section %}
+  <section class="metadata-section">
+    <h2>{{ tr('prez.section.metadata', default='Metadata') }}</h2>
+    {{ macros.render_metadata(data.metadata_fields, data.cast, data.crew) }}
+  </section>
+  {% endif %}
+  
+  {% if data.video_fields %}
+  <section class="video-section">
+    <h2>{{ tr('prez.section.video', default='Video') }}</h2>
+    {{ macros.render_info_grid(data.video_fields) }}
+  </section>
+  {% endif %}
+  
+  <section class="audio-section">
+    <h2>{{ tr('prez.section.audio', default='Audio') }}</h2>
+    {{ macros.render_audio_tracks(data.audio_track_groups) }}
+  </section>
+  
+  <section class="subtitle-section">
+    <h2>{{ tr('prez.section.subtitles', default='Subtitles') }}</h2>
+    {{ macros.render_subtitle_tracks(data.subtitle_track_groups) }}
+  </section>
+  
+  {{ macros.render_mediainfo(data.has_mediainfo, data.mediainfo_text) }}
+</main>
+{% endblock %}
