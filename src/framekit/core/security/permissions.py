@@ -33,7 +33,9 @@ PermissionMode = Literal["owner_only", "owner_group", "world_readable"]
 _WINDOWS_SAFE_PRINCIPALS = {
     "builtin\\administrators",
     "nt authority\\system",
+    "owner rights",
     "*s-1-5-18",
+    "*s-1-3-4",
     "*s-1-5-32-544",
 }
 
