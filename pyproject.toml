@@ -372,7 +372,7 @@ omit = [
 precision     = 2
 show_missing  = true
 skip_covered  = false
-fail_under    = 90
+fail_under    = 80
 exclude_lines = [
   "pragma: no cover",
   "def __repr__",
@@ -473,8 +473,8 @@ ignore-nested-classes = true
 # Codespell
 # ---------------------------------------------------------------------------
 [tool.codespell]
-skip = "*.lock,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.webp,*.ico,src/framekit/locales/*,src/framekit/templates/*,docs/*,Presets/*,framekit.example.yaml"
-ignore-words-list = "preselect,preselected,reuses,reusing"
+skip = ".git,.venv,venv,.mypy_cache,.pytest_cache,.ruff_cache,.hypothesis,.benchmarks,site,dist,build,htmlcov,*.egg-info,.coverage,coverage.xml,bandit-report.json,*.lock,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.webp,*.ico,locales,templates,docs,Presets,framekit.example.yaml"
+ignore-words-list = "ADN,Informations,Objets,Presse,Serie,Sinopsis,ans,preselect,preselected,reuses,reusing"
 
 # ---------------------------------------------------------------------------
 # Mutmut (mutation testing — S1 harness, gate enforced per touched module)

@@ -492,6 +492,3 @@ class TestAudioExtractor:
         assert "libopus" in cmd
         assert "-b:a" in cmd
         assert "128k" in cmd
-
-
-# Made with Bob

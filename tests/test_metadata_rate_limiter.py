@@ -238,6 +238,3 @@ def test_rate_limiter_multiple_rate_limits():
     assert result2 is True
     assert limiter1.tokens <= 5.0
     assert limiter2.tokens <= 50.0
-
-
-# Made with Bob

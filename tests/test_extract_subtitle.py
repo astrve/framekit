@@ -533,6 +533,3 @@ class TestSubtitleExtractorIntegration:
 
         assert "ffmpeg" in cmd[0]
         assert "mkvextract" not in cmd[0]
-
-
-# Made with Bob

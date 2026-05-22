@@ -15,7 +15,7 @@
 {% if data.poster_url != '-' %}
 [center][img]{{ bb(data.poster_url) }}[/img][/center]
 {% endif %}
-[quote][b]{{ tr('prez.section.infos', default='Informations') }}[/b]
+[quote][b]{{ tr('prez.section.infos', default='Information') }}[/b]
 {% for field in data.info_fields %}{{ field.label }} : {{ field_url_bbcode(field) }}
 {% endfor %}[/quote]
 {% if data.overview != '-' %}[quote][b]{{ tr('prez.section.synopsis', default='Synopsis') }}[/b]

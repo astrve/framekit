@@ -326,6 +326,3 @@ class TestRealWorldScenarios:
         # Verify we skip these regions
         assert timestamps[0] >= 360, "First screenshot should skip intro region"
         assert timestamps[-1] <= 6840, "Last screenshot should skip outro region"
-
-
-# Made with Bob

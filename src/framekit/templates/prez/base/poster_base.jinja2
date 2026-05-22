@@ -49,7 +49,7 @@
     <aside>{% if data.poster_url != '-' %}<img class="poster" src="{{ data.poster_url }}" alt="poster">{% endif %}</aside>
     <div>
       {% if data.overview != '-' %}<section><h2>{{ tr('prez.section.synopsis', default='Synopsis') }}</h2><p>{{ data.overview }}</p></section>{% endif %}
-      {% if data.info_fields %}<section><h2>{{ tr('prez.section.infos', default='Informations') }}</h2><div class="info-grid">{% for field in data.info_fields %}<div class="info-card{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></section>{% endif %}
+      {% if data.info_fields %}<section><h2>{{ tr('prez.section.infos', default='Information') }}</h2><div class="info-grid">{% for field in data.info_fields %}<div class="info-card{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></section>{% endif %}
       {% if data.release_fields %}<section><h2>{{ tr('prez.section.release', default='Release') }}</h2><div class="info-grid">{% for field in data.release_fields %}<div class="info-card{% if field.wide %} wide{% endif %}"><span>{{ field.label }}</span><strong>{{ field_url_html(field)|safe }}</strong></div>{% endfor %}</div></section>{% endif %}
     </div>
   </div>

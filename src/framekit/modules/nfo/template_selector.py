@@ -65,7 +65,7 @@ class TemplateSelector:
     def run(self) -> TemplateOption | None:
         """Render the selector and return the picked option.
 
-        Pre-selects the entry whose ``template_name`` matches
+        Preselects the entry whose ``template_name`` matches
         ``preferred_name`` so the cursor lands on the user's current
         ``active_template`` rather than the first entry. Without this, a
         user with ``active_template = "detailed"`` would still see the

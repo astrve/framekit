@@ -458,6 +458,3 @@ class TestCacheRaceConditions:
                 future.result()
 
         assert len(errors) == 0, f"Errors during concurrent invalidation: {errors}"
-
-
-# Made with Bob

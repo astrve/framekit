@@ -209,7 +209,7 @@ def _pick_default_subtitle_track(
 
     # When the user has explicitly picked "no default subtitle" through the
     # wizard or the interactive track selector, respect that choice instead
-    # of silently re-using the source file's is_default flag — which used to
+    # of silently reusing the source file's is_default flag — which used to
     # cause a random subtitle track to be marked default on some files.
     if preset.subtitle_default_explicit:
         return None

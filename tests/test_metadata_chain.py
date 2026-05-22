@@ -341,6 +341,3 @@ def test_provider_result_dataclass():
     assert result.metadata == candidate
     assert result.error is None
     assert result.duration_ms == 123.45
-
-
-# Made with Bob

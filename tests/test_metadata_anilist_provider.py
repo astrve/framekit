@@ -420,6 +420,3 @@ class TestAniListGraphQLQueries:
         assert "variables" in query_data
         assert "id" in query_data["variables"]
         assert query_data["variables"]["id"] == 12345
-
-
-# Made with Bob

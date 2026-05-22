@@ -501,6 +501,3 @@ class TestExtractionService:
             assert len(results) == 1
             assert report.warnings
             assert mock_subtitle_extractor.extract_subtitle.call_count == 1
-
-
-# Made with Bob

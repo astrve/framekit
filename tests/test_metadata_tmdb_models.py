@@ -566,6 +566,3 @@ class TestTMDbImage:
 
         poster_dict = image.to_poster_dict(name="Test Poster")
         assert poster_dict["language"] == "en"
-
-
-# Made with Bob

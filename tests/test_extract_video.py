@@ -494,6 +494,3 @@ class TestVideoExtractionIntegration:
         call_args = mock_run.call_args
         assert call_args[1].get("shell") is not True
         assert isinstance(call_args[0][0], list)
-
-
-# Made with Bob

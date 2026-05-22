@@ -308,6 +308,3 @@ def test_health_monitor_success_rate():
     metrics = monitor.metrics["provider1"]
     success_rate = metrics.successful_requests / metrics.total_requests
     assert success_rate == 0.7
-
-
-# Made with Bob

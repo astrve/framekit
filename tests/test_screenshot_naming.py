@@ -212,6 +212,3 @@ class TestPathSanitization:
         result = sanitize_release_name(long_name)
         # Should be truncated to reasonable length (e.g., 200 chars)
         assert len(result) <= 200
-
-
-# Made with Bob

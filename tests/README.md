@@ -363,5 +363,3 @@ When adding new features:
 5. Update this README if adding new patterns
 
 ---
-
-*Made with Bob*

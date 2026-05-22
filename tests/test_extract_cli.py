@@ -318,6 +318,3 @@ class TestExtractCLI:
         # Should fail with invalid format
         assert result.exit_code != 0
         assert "invalid" in result.output.lower() or "choice" in result.output.lower()
-
-
-# Made with Bob

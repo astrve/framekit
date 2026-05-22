@@ -375,6 +375,3 @@ class TestBackwardCompatibility:
         level_after = get_verbosity_level()
 
         assert level_before == level_after
-
-
-# Made with Bob

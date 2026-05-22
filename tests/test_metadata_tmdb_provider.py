@@ -615,6 +615,3 @@ class TestTMDbCaching:
         assert results1 == results2
         # HTTP client should only be called once if caching works
         # (This depends on cache implementation)
-
-
-# Made with Bob

@@ -316,6 +316,3 @@ class TestErrorSuggestions:
             context={},
         )
         assert len(suggestions) > 0
-
-
-# Made with Bob

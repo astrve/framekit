@@ -245,6 +245,3 @@ class TestTVDBArtwork:
         assert artwork.image == "https://example.com/artwork.jpg"
         assert artwork.thumbnail is None
         assert artwork.type == "banner"
-
-
-# Made with Bob
