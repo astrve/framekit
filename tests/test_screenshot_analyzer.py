@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,6 +14,7 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
+from framekit.core.subprocess_safe import SafeSubprocessError  # noqa: E402
 from framekit.core.tools import ToolRegistry  # noqa: E402
 from framekit.modules.screenshot.analyzer import FrameAnalyzer  # noqa: E402
 
@@ -48,7 +48,9 @@ class TestFrameAnalyzer:
         mock_result.returncode = 0
         mock_result.stdout = json.dumps({"format": {"duration": "3600.5"}})
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "framekit.modules.screenshot.analyzer.run_safe", return_value=mock_result
+        ) as mock_run:
             duration = analyzer.get_video_duration(video_path)
 
             assert duration == 3600.5
@@ -80,7 +82,7 @@ class TestFrameAnalyzer:
         mock_result.returncode = 1
         mock_result.stdout = ""
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.analyzer.run_safe", return_value=mock_result):
             duration = analyzer.get_video_duration(video_path)
 
             assert duration is None
@@ -90,7 +92,15 @@ class TestFrameAnalyzer:
         video_path = tmp_path / "video.mkv"
         video_path.write_text("fake video")
 
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("ffprobe", 10)):
+        with patch(
+            "framekit.modules.screenshot.analyzer.run_safe",
+            side_effect=SafeSubprocessError(
+                "timeout",
+                tool="ffprobe",
+                argv=("ffprobe",),
+                returncode=None,
+            ),
+        ):
             duration = analyzer.get_video_duration(video_path)
 
             assert duration is None
@@ -104,7 +114,7 @@ class TestFrameAnalyzer:
         mock_result.returncode = 0
         mock_result.stdout = "invalid json"
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.analyzer.run_safe", return_value=mock_result):
             duration = analyzer.get_video_duration(video_path)
 
             assert duration is None
@@ -173,7 +183,7 @@ class TestFrameAnalyzer:
             "[blackdetect @ 0x123] black_start:30.0 black_end:31.5 black_duration:1.5\n"
         )
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.analyzer.run_safe", return_value=mock_result):
             black_frames = analyzer.detect_black_frames(video_path, threshold=0.05, duration=0.5)
 
             assert len(black_frames) == 2
@@ -189,7 +199,7 @@ class TestFrameAnalyzer:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.analyzer.run_safe", return_value=mock_result):
             black_frames = analyzer.detect_black_frames(video_path)
 
             assert black_frames == []
@@ -203,7 +213,7 @@ class TestFrameAnalyzer:
         mock_result.returncode = 1
         mock_result.stderr = "Error"
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.analyzer.run_safe", return_value=mock_result):
             black_frames = analyzer.detect_black_frames(video_path)
 
             assert black_frames == []
@@ -253,7 +263,7 @@ class TestFrameAnalyzer:
             }
         )
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.analyzer.run_safe", return_value=mock_result):
             info = analyzer.get_video_info(video_path)
 
             assert info is not None

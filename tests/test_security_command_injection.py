@@ -25,11 +25,15 @@ class TestNFOCommandInjection:
         malicious_file = malicious_dir / "test.nfo"
         malicious_file.write_text("test")
 
-        with patch("sys.platform", "darwin"), patch("subprocess.Popen") as mock_popen:
-            # _open_folder catches PathValidationError internally
-            # and returns without calling subprocess
+        with (
+            patch("sys.platform", "darwin"),
+            patch("framekit.commands.nfo.popen_safe") as mock_popen,
+        ):
             _open_folder(malicious_file)
-            mock_popen.assert_not_called()
+            mock_popen.assert_called_once()
+            call_args = mock_popen.call_args[0][0]
+            assert isinstance(call_args, list)
+            assert call_args == ["open", str(malicious_dir.resolve())]
 
     @pytest.mark.skipif(platform.system() == "Windows", reason="Unix-specific test")
     def test_open_folder_with_malicious_path_linux(self, tmp_path):
@@ -39,9 +43,15 @@ class TestNFOCommandInjection:
         malicious_file = malicious_dir / "test.nfo"
         malicious_file.write_text("test")
 
-        with patch("sys.platform", "linux"), patch("subprocess.Popen") as mock_popen:
+        with (
+            patch("sys.platform", "linux"),
+            patch("framekit.commands.nfo.popen_safe") as mock_popen,
+        ):
             _open_folder(malicious_file)
-            mock_popen.assert_not_called()
+            mock_popen.assert_called_once()
+            call_args = mock_popen.call_args[0][0]
+            assert isinstance(call_args, list)
+            assert call_args == ["xdg-open", str(malicious_dir.resolve())]
 
     def test_open_folder_with_path_traversal(self, tmp_path):
         """Test that path traversal to nonexistent dir is blocked."""
@@ -70,7 +80,7 @@ class TestNFOCommandInjection:
                 _open_folder(test_file)
                 mock_startfile.assert_called_once()
         else:
-            with patch("subprocess.Popen") as mock_popen:
+            with patch("framekit.commands.nfo.popen_safe") as mock_popen:
                 _open_folder(test_file)
                 mock_popen.assert_called_once()
                 call_args = mock_popen.call_args[0][0]
@@ -117,7 +127,7 @@ class TestNFOCommandInjection:
                         # os.startfile is safe with special chars
                         mock_startfile.assert_called_once()
                 else:
-                    with patch("subprocess.Popen") as mock_popen:
+                    with patch("framekit.commands.nfo.popen_safe") as mock_popen:
                         _open_folder(special_file)
                         mock_popen.assert_called_once()
             except OSError:
@@ -156,7 +166,7 @@ class TestNFOCommandInjection:
                     assert mock_validate.called
                     assert mock_open.called
             else:
-                with patch("subprocess.Popen") as mock_popen:
+                with patch("framekit.commands.nfo.popen_safe") as mock_popen:
                     _open_folder(test_file)
                     assert mock_validate.called
                     assert mock_popen.called
@@ -171,7 +181,7 @@ class TestSubprocessArgumentSafety:
         test_file = tmp_path / "test.nfo"
         test_file.write_text("test")
 
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("framekit.commands.nfo.popen_safe") as mock_popen:
             _open_folder(test_file)
 
             call_args = mock_popen.call_args
@@ -186,7 +196,10 @@ class TestSubprocessArgumentSafety:
         test_file = tmp_path / "test.nfo"
         test_file.write_text("test")
 
-        with patch("subprocess.Popen") as mock_popen, patch("sys.platform", "linux"):
+        with (
+            patch("framekit.commands.nfo.popen_safe") as mock_popen,
+            patch("sys.platform", "linux"),
+        ):
             _open_folder(test_file)
 
             call_args = mock_popen.call_args[0][0]
