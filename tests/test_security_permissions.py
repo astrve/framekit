@@ -158,6 +158,7 @@ class TestVerifySecurePermissions:
         """Test that Windows structural principals are not flagged as user access."""
         assert not _grants_other_user_access("NT AUTHORITY\\SYSTEM:(F)", "runneradmin")
         assert not _grants_other_user_access("BUILTIN\\Administrators:(F)", "runneradmin")
+        assert not _grants_other_user_access("OWNER RIGHTS:(F)", "runneradmin")
         assert not _grants_other_user_access("DESKTOP\\runneradmin:(F)", "runneradmin")
         assert not _grants_other_user_access(
             "C:\\Temp\\secret.txt runneradmin:(F)",
