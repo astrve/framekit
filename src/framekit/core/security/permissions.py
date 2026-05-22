@@ -11,6 +11,7 @@ Every external-tool invocation goes through :mod:`framekit.core.subprocess_safe`
 
 import os
 import platform
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -28,6 +29,30 @@ class PermissionError(Exception):
 
 
 PermissionMode = Literal["owner_only", "owner_group", "world_readable"]
+
+_WINDOWS_SAFE_PRINCIPALS = {
+    "builtin\\administrators",
+    "nt authority\\system",
+    "*s-1-5-18",
+    "*s-1-5-32-544",
+}
+
+_WINDOWS_ACCESS_TOKENS = {
+    "F",
+    "M",
+    "RX",
+    "R",
+    "W",
+    "GA",
+    "GR",
+    "GW",
+    "GX",
+    "RD",
+    "WD",
+    "AD",
+    "REA",
+    "WEA",
+}
 
 
 def _set_windows_acl(filepath: Path, mode: PermissionMode = "owner_only") -> None:
@@ -191,8 +216,7 @@ def _verify_secure_permissions_windows(filepath: Path) -> bool:
     import getpass
 
     username = getpass.getuser()
-    lines = result.stdout.strip().split("\n")
-    for line in lines[1:]:
+    for line in _iter_windows_acl_entries(result.stdout, filepath):
         if _grants_other_user_access(line, username):
             logger.warning(f"File {filepath} has permissions for other users")
             return False
@@ -211,10 +235,48 @@ def _read_windows_acl(filepath: Path):
         return None
 
 
+def _iter_windows_acl_entries(output: str, filepath: Path):
+    path_prefix = str(filepath.resolve())
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith(path_prefix):
+            line = line[len(path_prefix) :].strip()
+        if _parse_windows_acl_entry(line) is not None:
+            yield line
+
+
+def _parse_windows_acl_entry(line: str) -> tuple[str, set[str]] | None:
+    match = re.match(r"^(?P<principal>.+?):(?P<permissions>(?:\([^)]+\))+)$", line.strip())
+    if match is None:
+        return None
+    tokens = {token.upper() for token in re.findall(r"\(([^)]+)\)", match.group("permissions"))}
+    return match.group("principal").strip(), tokens
+
+
 def _grants_other_user_access(line: str, username: str) -> bool:
-    if not line.strip() or username in line:
+    entry = _parse_windows_acl_entry(line)
+    if entry is None:
         return False
-    return any(permission in line for permission in ["(F)", "(M)", "(RX)", "(R)", "(W)"])
+
+    principal, tokens = entry
+    normalized_principal = principal.replace("/", "\\").lower()
+
+    if _is_current_windows_user(normalized_principal, username):
+        return False
+    if normalized_principal in _WINDOWS_SAFE_PRINCIPALS:
+        return False
+    if "DENY" in tokens or "N" in tokens:
+        return False
+    return bool(tokens & _WINDOWS_ACCESS_TOKENS)
+
+
+def _is_current_windows_user(normalized_principal: str, username: str) -> bool:
+    normalized_username = username.lower()
+    return normalized_principal == normalized_username or normalized_principal.endswith(
+        f"\\{normalized_username}"
+    )
 
 
 def _verify_secure_permissions_unix(filepath: Path) -> bool:

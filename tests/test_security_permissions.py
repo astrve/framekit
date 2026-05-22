@@ -12,6 +12,8 @@ import pytest
 
 from framekit.core.security.permissions import (
     PermissionError,
+    _grants_other_user_access,
+    _iter_windows_acl_entries,
     get_permission_info,
     set_secure_permissions,
     verify_secure_permissions,
@@ -151,6 +153,32 @@ class TestVerifySecurePermissions:
         os.chmod(test_file, 0o400)
 
         assert verify_secure_permissions(test_file) is True
+
+    def test_windows_acl_parser_allows_system_and_administrators(self):
+        """Test that Windows structural principals are not flagged as user access."""
+        assert not _grants_other_user_access("NT AUTHORITY\\SYSTEM:(F)", "runneradmin")
+        assert not _grants_other_user_access("BUILTIN\\Administrators:(F)", "runneradmin")
+        assert not _grants_other_user_access("DESKTOP\\runneradmin:(F)", "runneradmin")
+
+    def test_windows_acl_parser_rejects_broad_principals(self):
+        """Test that broad Windows principals with access rights are flagged."""
+        assert _grants_other_user_access("BUILTIN\\Users:(RX)", "runneradmin")
+        assert _grants_other_user_access("Everyone:(R)", "runneradmin")
+        assert not _grants_other_user_access("Everyone:(DENY)(W)", "runneradmin")
+
+    def test_windows_acl_parser_reads_first_icacls_entry(self, tmp_path):
+        """Test that the first icacls entry on the path line is parsed."""
+        test_file = tmp_path / "secure file.txt"
+        output = (
+            f"{test_file.resolve()} BUILTIN\\Users:(RX)\n"
+            "                            NT AUTHORITY\\SYSTEM:(F)\n\n"
+            "Successfully processed 1 files; Failed processing 0 files"
+        )
+
+        assert list(_iter_windows_acl_entries(output, test_file)) == [
+            "BUILTIN\\Users:(RX)",
+            "NT AUTHORITY\\SYSTEM:(F)",
+        ]
 
 
 class TestGetPermissionInfo:
