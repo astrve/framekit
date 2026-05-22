@@ -8,6 +8,7 @@ import json
 
 import pytest
 
+import framekit.core.security.keyring as keyring_module
 from framekit.core.security import KeyStorage, KeyStorageError
 
 
@@ -138,15 +139,23 @@ class TestKeyStorageKeyringMode:
         # Should initialize without error
         assert storage is not None
 
-    def test_keyring_fallback_to_file(self, tmp_path):
+    def test_keyring_fallback_to_file(self, tmp_path, monkeypatch):
         """Test that keyring falls back to file if unavailable."""
+
+        class UnavailableKeyring:
+            def get_keyring(self):
+                raise RuntimeError("keyring unavailable")
+
+        monkeypatch.setattr(keyring_module, "KEYRING_AVAILABLE", True)
+        monkeypatch.setattr(keyring_module, "keyring", UnavailableKeyring())
+
         key_file = tmp_path / "key.json"
         storage = KeyStorage(key_file=key_file, prefer_keyring=True)
 
         test_key = b"a" * 32
         storage.store_key(test_key)
 
-        # Should work even if keyring is not available
+        assert key_file.exists()
         retrieved = storage.retrieve_key()
         assert retrieved == test_key
 
