@@ -116,7 +116,7 @@ docs = [
   "mkdocstrings[python]>=0.24.0",
 ]
 build-binary = [
-  "pyinstaller>=6.0.0",
+  "pyinstaller>=6.20.0",
 ]
 
 [project.scripts]
