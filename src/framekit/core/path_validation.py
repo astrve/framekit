@@ -106,6 +106,8 @@ def _check_symlink(path: Path, strict: bool = False) -> None:
                 logger.warning(msg)
                 return
 
+    except PathValidationError:
+        raise
     except Exception as e:
         if strict:
             raise PathValidationError(f"Failed to check for symlinks: {e}") from e
@@ -262,6 +264,8 @@ def validate_file_path(
         strict=strict,
         allowed_base_dirs=allowed_base_dirs,
     )
+    if not config.allow_symlinks:
+        _check_symlink(Path(file_path), strict=strict_effective)
     path = _resolve_path(file_path, must_exist=must_exist)
     _validate_common_security_checks(
         path=path,
@@ -306,6 +310,8 @@ def validate_directory_path(
         strict=strict,
         allowed_base_dirs=allowed_base_dirs,
     )
+    if not config.allow_symlinks:
+        _check_symlink(Path(dir_path), strict=strict_effective)
     path = _resolve_directory_path(dir_path)
     _validate_common_security_checks(
         path=path,

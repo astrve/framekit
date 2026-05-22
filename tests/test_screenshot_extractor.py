@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,6 +14,7 @@ if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
 from framekit.core.path_validation import PathValidationError  # noqa: E402
+from framekit.core.subprocess_safe import SafeSubprocessError  # noqa: E402
 from framekit.core.tools import ToolRegistry  # noqa: E402
 from framekit.modules.screenshot.extractor import ScreenshotExtractor  # noqa: E402
 
@@ -138,7 +138,9 @@ class TestScreenshotExtractor:
         mock_result = Mock()
         mock_result.returncode = 0
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "framekit.modules.screenshot.extractor.run_safe", return_value=mock_result
+        ) as mock_run:
             # Create fake output file
             output_path.write_bytes(b"fake png data")
 
@@ -167,7 +169,7 @@ class TestScreenshotExtractor:
         mock_result.returncode = 1
         mock_result.stderr = "Error: Invalid file"
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.extractor.run_safe", return_value=mock_result):
             result = extractor.extract_screenshot(
                 video_path=video_path,
                 output_path=output_path,
@@ -182,7 +184,15 @@ class TestScreenshotExtractor:
         video_path.write_text("fake video")
         output_path = tmp_path / "screenshot.png"
 
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("ffmpeg", 30)):
+        with patch(
+            "framekit.modules.screenshot.extractor.run_safe",
+            side_effect=SafeSubprocessError(
+                "timeout",
+                tool="ffmpeg",
+                argv=("ffmpeg",),
+                returncode=None,
+            ),
+        ):
             result = extractor.extract_screenshot(
                 video_path=video_path,
                 output_path=output_path,
@@ -201,7 +211,7 @@ class TestScreenshotExtractor:
         mock_result = Mock()
         mock_result.returncode = 0
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.extractor.run_safe", return_value=mock_result):
             # Don't create output file
             result = extractor.extract_screenshot(
                 video_path=video_path,
@@ -224,7 +234,7 @@ class TestScreenshotExtractor:
         mock_result = Mock()
         mock_result.returncode = 0
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.extractor.run_safe", return_value=mock_result):
             # Create fake output files
             for path in output_paths:
                 path.write_bytes(b"fake png data")
@@ -251,7 +261,7 @@ class TestScreenshotExtractor:
         # Mock alternating success/failure
         mock_results = [Mock(returncode=0), Mock(returncode=1), Mock(returncode=0)]
 
-        with patch("subprocess.run", side_effect=mock_results):
+        with patch("framekit.modules.screenshot.extractor.run_safe", side_effect=mock_results):
             # Create output files for successful extractions
             output_paths[0].write_bytes(b"fake png data")
             output_paths[2].write_bytes(b"fake png data")
@@ -285,7 +295,7 @@ class TestScreenshotExtractor:
         mock_result = Mock()
         mock_result.returncode = 0
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("framekit.modules.screenshot.extractor.run_safe", return_value=mock_result):
             for path in output_paths:
                 path.write_bytes(b"fake png data")
 
@@ -361,7 +371,9 @@ class TestCommandSecurity:
         mock_result = Mock()
         mock_result.returncode = 0
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "framekit.modules.screenshot.extractor.run_safe", return_value=mock_result
+        ) as mock_run:
             output_path.write_bytes(b"fake png data")
 
             extractor.extract_screenshot(
@@ -385,7 +397,7 @@ class TestCommandSecurity:
         video_path.write_text("fake video")
         output_path = tmp_path / "screenshot.png"
 
-        with patch("subprocess.run") as mock_run:
+        with patch("framekit.modules.screenshot.extractor.run_safe") as mock_run:
             extractor.extract_screenshot(
                 video_path=video_path,
                 output_path=output_path,
@@ -425,7 +437,10 @@ class TestErrorHandling:
         video_path.write_text("fake video")
         output_path = tmp_path / "screenshot.png"
 
-        with patch("subprocess.run", side_effect=PermissionError("Access denied")):
+        with patch(
+            "framekit.modules.screenshot.extractor.run_safe",
+            side_effect=PermissionError("Access denied"),
+        ):
             result = extractor.extract_screenshot(
                 video_path=video_path,
                 output_path=output_path,
@@ -440,7 +455,10 @@ class TestErrorHandling:
         video_path.write_text("fake video")
         output_path = tmp_path / "screenshot.png"
 
-        with patch("subprocess.run", side_effect=OSError("No space left on device")):
+        with patch(
+            "framekit.modules.screenshot.extractor.run_safe",
+            side_effect=OSError("No space left on device"),
+        ):
             result = extractor.extract_screenshot(
                 video_path=video_path,
                 output_path=output_path,

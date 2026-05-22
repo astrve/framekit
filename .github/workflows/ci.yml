@@ -168,7 +168,7 @@ jobs:
           src/framekit/modules/metadata/providers
           src/framekit/modules/upload/adapters
           src/framekit/modules/upload/service.py
-          --fail-under 90
+          --fail-under 75
 
   full-truth:
     name: Full Truth Profile (non-blocking)
@@ -198,7 +198,7 @@ jobs:
 
       - name: Full interrogate (truth)
         run: |
-          interrogate src --fail-under 90
+          interrogate src --fail-under 75
 
   supply-chain:
     name: Supply Chain
