@@ -159,11 +159,23 @@ class TestVerifySecurePermissions:
         assert not _grants_other_user_access("NT AUTHORITY\\SYSTEM:(F)", "runneradmin")
         assert not _grants_other_user_access("BUILTIN\\Administrators:(F)", "runneradmin")
         assert not _grants_other_user_access("DESKTOP\\runneradmin:(F)", "runneradmin")
+        assert not _grants_other_user_access(
+            "C:\\Temp\\secret.txt runneradmin:(F)",
+            "runneradmin",
+        )
+        assert not _grants_other_user_access(
+            "C:\\Temp\\secret.txt NT AUTHORITY\\SYSTEM:(F)",
+            "runneradmin",
+        )
 
     def test_windows_acl_parser_rejects_broad_principals(self):
         """Test that broad Windows principals with access rights are flagged."""
         assert _grants_other_user_access("BUILTIN\\Users:(RX)", "runneradmin")
         assert _grants_other_user_access("Everyone:(R)", "runneradmin")
+        assert _grants_other_user_access(
+            "C:\\Temp\\secret.txt BUILTIN\\Users:(RX)",
+            "runneradmin",
+        )
         assert not _grants_other_user_access("Everyone:(DENY)(W)", "runneradmin")
 
     def test_windows_acl_parser_reads_first_icacls_entry(self, tmp_path):

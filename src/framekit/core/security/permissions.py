@@ -218,7 +218,7 @@ def _verify_secure_permissions_windows(filepath: Path) -> bool:
     username = getpass.getuser()
     for line in _iter_windows_acl_entries(result.stdout, filepath):
         if _grants_other_user_access(line, username):
-            logger.warning(f"File {filepath} has permissions for other users")
+            logger.warning(f"File {filepath} has permissions for other users: {line}")
             return False
     return True
 
@@ -265,7 +265,9 @@ def _grants_other_user_access(line: str, username: str) -> bool:
 
     if _is_current_windows_user(normalized_principal, username):
         return False
-    if normalized_principal in _WINDOWS_SAFE_PRINCIPALS:
+    if any(
+        _matches_windows_principal(normalized_principal, safe) for safe in _WINDOWS_SAFE_PRINCIPALS
+    ):
         return False
     if "DENY" in tokens or "N" in tokens:
         return False
@@ -273,9 +275,12 @@ def _grants_other_user_access(line: str, username: str) -> bool:
 
 
 def _is_current_windows_user(normalized_principal: str, username: str) -> bool:
-    normalized_username = username.lower()
-    return normalized_principal == normalized_username or normalized_principal.endswith(
-        f"\\{normalized_username}"
+    return _matches_windows_principal(normalized_principal, username.lower())
+
+
+def _matches_windows_principal(normalized_principal: str, expected: str) -> bool:
+    return normalized_principal == expected or normalized_principal.endswith(
+        (f"\\{expected}", f" {expected}")
     )
 
 
