@@ -188,7 +188,9 @@ class TestAliasRemoveCommand:
         assert result.exit_code == 0
         assert "removed" in result.output.lower()
 
-    def test_remove_builtin_alias_hides_from_list_and_dispatch(self, cli_runner, tmp_path, monkeypatch):
+    def test_remove_builtin_alias_hides_from_list_and_dispatch(
+        self, cli_runner, tmp_path, monkeypatch
+    ):
         """Test removing a builtin alias hides it from list and root dispatch."""
         settings_file = tmp_path / "framekit.yaml"
         monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))

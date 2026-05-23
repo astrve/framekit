@@ -336,7 +336,11 @@ def run_seedbox_push(
     requested_path = Path(path) if path else Path.cwd()
     if not requested_path.exists():
         print_error(
-            tr("seedbox.error.path_not_found", default="Path not found: {path}", path=requested_path)
+            tr(
+                "seedbox.error.path_not_found",
+                default="Path not found: {path}",
+                path=requested_path,
+            )
         )
         return 1
     payloads = _resolve_local_payloads(requested_path)
@@ -457,7 +461,9 @@ def run_seedbox_pull(
     src_path = remote_path or sb.get("remote_base_path", "/")
     source = f"{remote}:{src_path}"
     if not local_path and not allow_cwd:
-        print_error("Refusing implicit current-directory download. Pass a destination or use --cwd.")
+        print_error(
+            "Refusing implicit current-directory download. Pass a destination or use --cwd."
+        )
         return 1
     dest = Path(local_path) if local_path else Path.cwd()
 

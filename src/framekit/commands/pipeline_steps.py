@@ -795,7 +795,9 @@ def _resolve_pipeline_banner_design(
     banner_design: str | None = prez_settings.get("banner_design")
     can_select = not auto_mode and sys.stdin.isatty() and "bbcode" in formats_tuple and not preset
     if can_select:
-        chosen = select_banner_design(language=banner_language, current_design=banner_design, default_textual=True)
+        chosen = select_banner_design(
+            language=banner_language, current_design=banner_design, default_textual=True
+        )
         banner_design = _persist_pipeline_banner_design(
             chosen=chosen,
             current_design=banner_design,

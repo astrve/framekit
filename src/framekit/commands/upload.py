@@ -658,7 +658,9 @@ def _resolve_custom_api_options(
         season_id = _select_int_value("Select custom API season option", CUSTOM_API_SEASON_VALUES)
         if season_id is not None:
             options["7"] = season_id
-        episode_id = _select_int_value("Select custom API episode option", CUSTOM_API_EPISODE_VALUES)
+        episode_id = _select_int_value(
+            "Select custom API episode option", CUSTOM_API_EPISODE_VALUES
+        )
         if episode_id is not None:
             options["6"] = episode_id
 
@@ -778,7 +780,10 @@ def _render_upload_preview(
     table.add_row("Tracker", tracker)
     table.add_row("Tracker URL", tracker_url)
     table.add_row("Name", metadata.name)
-    is_custom_api = metadata.custom_api_category_id is not None or metadata.custom_api_subcategory_id is not None
+    is_custom_api = (
+        metadata.custom_api_category_id is not None
+        or metadata.custom_api_subcategory_id is not None
+    )
     if is_custom_api:
         table.add_row("Category", metadata.category)
         table.add_row("Type", metadata.type)
@@ -792,7 +797,9 @@ def _render_upload_preview(
     if metadata.custom_api_subcategory_id is not None:
         table.add_row("custom API subcategoryId", str(metadata.custom_api_subcategory_id))
     if metadata.custom_api_options:
-        table.add_row("custom API options", json.dumps(metadata.custom_api_options, ensure_ascii=False))
+        table.add_row(
+            "custom API options", json.dumps(metadata.custom_api_options, ensure_ascii=False)
+        )
     if metadata.nfo_path:
         table.add_row("NFO file", metadata.nfo_path)
     if metadata.custom_api_draft:
@@ -1701,7 +1708,9 @@ def discover_command(url: str, api_key: str, name: str, tracker_type: str | None
 @click.option("--resolution", default=None, help="Resolution (e.g. 1920x1080)")
 @click.option("--category-id", type=int, default=None, help="custom API categoryId")
 @click.option("--subcategory-id", type=int, default=None, help="custom API subcategoryId")
-@click.option("--options-json", default=None, help='custom API options JSON (e.g. \'{"1":[4],"2":10}\')')
+@click.option(
+    "--options-json", default=None, help='custom API options JSON (e.g. \'{"1":[4],"2":10}\')'
+)
 @click.option(
     "--description-format",
     type=click.Choice(["standard", "html"]),

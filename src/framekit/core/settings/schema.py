@@ -247,7 +247,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             },
             "bat": {"command": "batch", "description": "Shortcut for batch", "enabled": True},
             "seed": {"command": "seedbox", "description": "Shortcut for seedbox", "enabled": True},
-            "pull": {"command": "seedbox pull", "description": "Shortcut for seedbox pull", "enabled": True},
+            "pull": {
+                "command": "seedbox pull",
+                "description": "Shortcut for seedbox pull",
+                "enabled": True,
+            },
         },
     },
 }
