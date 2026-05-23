@@ -503,9 +503,7 @@ def _pipeline_output_folder(work_folder: Path, root: Path | None = None) -> Path
     if work_folder.parent.name == "Release":
         return work_folder.parent
     if root is not None:
-        release_folder = _release_artifacts_folder(root)
-        if release_folder.exists() or work_folder != root:
-            return release_folder
+        return _release_artifacts_folder(root)
     return work_folder
 
 

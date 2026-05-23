@@ -1,46 +1,36 @@
 # Upload
 
-> **Status: Beta.** The Upload module is functional but the API may change between releases. Test with `--dry-run` before real uploads.
+> **Status: Beta.** The Upload module is functional but API contracts may evolve. Use `--dry-run` before real uploads.
 
-Uploads a release (torrent file + presentation) to one or more configured trackers.
+Uploads a release (`.torrent` + description) to one or more configured trackers.
 
 ---
 
 ## Usage
 
 ```bash
-fk upload /path/to/release [OPTIONS]
-fk upload /path/to/release --tracker BHD
-fk upload /path/to/release --dry-run
+fk upload run /path/to/release.torrent --tracker "BeyondHD (BHD)"
+fk upload run /path/to/release-folder --dry-run
+fk upload assistant --name "my-tracker" --base-url "https://tracker.example"
 ```
 
 ---
 
-## Options
+## Supported tracker engines
 
-| Option | Description |
-|--------|-------------|
-| `--tracker NAME` | Upload to a specific tracker profile by name |
-| `--dry-run` | Print upload payload without sending |
-| `--json` | Emit upload result as JSON |
-
----
-
-## Supported tracker types
-
-| Type | Description | Known trackers |
-|------|-------------|----------------|
-| `c411` | C411 private tracker API | C411 |
-| `unit3d` | UNIT3D tracker engine | BHD, BLU, ATH, RFX, STT, HWK, OTW |
-| `gazelle` | Gazelle-based trackers | OPS, RED |
+| Engine | Description | Typical trackers |
+|--------|-------------|------------------|
+| `unit3d` | UNIT3D API | BHD, BLU, ATH, RFX, STT, HWK, OTW |
+| `gazelle` | Gazelle API | OPS, RED |
+| `custom_json_api_v1` | Bearer-token custom JSON upload API | Private tracker APIs exposing `/api/torrents` |
+| `custom` | User-defined adapter/config | Any custom endpoint |
 
 ---
 
-## Known tracker profiles
+## Built-in profile shortcuts
 
-| Name | URL | Type |
-|------|-----|------|
-| C411 | c411.org | c411 |
+| Name | URL | Engine |
+|------|-----|--------|
 | BeyondHD (BHD) | beyond-hd.me | unit3d |
 | Blutopia (BLU) | blutopia.cc | unit3d |
 | Aither (ATH) | aither.cc | unit3d |
@@ -58,52 +48,36 @@ fk upload /path/to/release --dry-run
 ```yaml
 upload:
   trackers:
-    - name: BHD
+    - name: BeyondHD (BHD)
       type: unit3d
       url: https://beyond-hd.me
-      api_key: ""          # stored encrypted when security.enabled = true
-      category: movies
-      auto_approve: false
-
-    - name: C411
-      type: c411
-      url: https://c411.org
       api_key: ""
-      category_id: 1
-      subcategory_id: 6
-      language_id: 2
+      categories:
+        Movies: 1
+
+    - name: my-tracker
+      type: custom_json_api_v1
+      url: https://tracker.example
+      api_key: ""
+      defaults:
+        custom_api_category_id: 1
+        custom_api_subcategory_id: 6
 ```
 
-### C411 category IDs
+For safer local setup, generate tracker files with:
 
-| ID | Category |
-|----|---------|
-| 1 | Films & Videos |
-| 2 | Ebook |
-| 3 | Audio |
+```bash
+fk upload assistant
+```
 
-### C411 subcategory IDs (Films, category 1)
-
-| ID | Subcategory |
-|----|------------|
-| 1 | Animation |
-| 2 | Animation Serie |
-| 4 | Documentaire |
-| 6 | Film |
-| 7 | Serie TV |
-
-### C411 language IDs
-
-| ID | Language |
-|----|---------|
-| 1 | Anglais |
-| 2 | Francais (VFF) |
-| 3 | Muet |
+This creates `trackers/*.yaml` using `token_env` (no secret stored in repo config).
 
 ---
 
-## In the pipeline
+## In pipeline
 
-The `upload` step is the last in the pipeline. It reads `PipelineContext.torrent_path` and `prez_outputs` (for the BBCode description), then POSTs to each configured tracker.
+`upload` runs last in pipeline. It consumes:
+- `PipelineContext.torrent_path`
+- generated prez output as description source
 
-The step is skipped in `--dry-run` mode. When no trackers are configured, the step exits cleanly with an info message.
+With `--dry-run`, upload payload is previewed only.

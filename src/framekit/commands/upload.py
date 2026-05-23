@@ -31,7 +31,6 @@ from framekit.ui.unified_selector import (
 # ── Known tracker profiles ───────────────────────────────────────────────────
 
 KNOWN_TRACKERS: dict[str, dict] = {
-    "C411": {"url": "https://c411.org", "type": "custom_json_api_v1"},
     "BeyondHD (BHD)": {"url": "https://beyond-hd.me", "type": "unit3d"},
     "Blutopia (BLU)": {"url": "https://blutopia.cc", "type": "unit3d"},
     "Aither (ATH)": {"url": "https://aither.cc", "type": "unit3d"},
@@ -41,7 +40,8 @@ KNOWN_TRACKERS: dict[str, dict] = {
     "OldToons World (OTW)": {"url": "https://oldtoons.world", "type": "unit3d"},
     "Orpheus Network (OPS)": {"url": "https://orpheus.network", "type": "gazelle"},
     "Redacted (RED)": {"url": "https://redacted.ch", "type": "gazelle"},
-    "Custom / Other": {"url": "", "type": "custom_json_api_v1"},
+    "Custom JSON API": {"url": "", "type": "custom_json_api_v1"},
+    "Custom / Other": {"url": "", "type": "custom"},
 }
 
 CUSTOM_API_CATEGORIES: dict[int, str] = {
