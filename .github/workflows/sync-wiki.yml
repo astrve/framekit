@@ -1,0 +1,47 @@
+﻿name: Sync Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/sync-wiki.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync docs -> wiki
+        env:
+          TOKEN: ${{ secrets.WIKI_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git clone "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki
+
+          find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -R docs/. wiki/
+
+          if [ ! -f wiki/Home.md ]; then
+            if [ -f wiki/README.md ]; then mv wiki/README.md wiki/Home.md; fi
+            if [ -f wiki/index.md ]; then cp wiki/index.md wiki/Home.md; fi
+          fi
+
+          cd wiki
+          git config user.name "astrve"
+          git config user.email "novae.wav@gmail.com"
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No wiki changes"
+            exit 0
+          fi
+
+          git commit -m "docs(wiki): sync from main"
+          git push origin master
