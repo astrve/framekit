@@ -1,219 +1,155 @@
 # Templates
 
-Framekit uses Jinja2 templates to generate NFO files and presentation files (BBCode and HTML).
+Framekit uses Jinja2 templates for NFO files and presentations.
 
 ---
 
 ## NFO templates
 
-**Location:** `src/framekit/templates/nfo/`
-**Naming:** `{scope}_{style}.{locale}.jinja2`
+Location: `src/framekit/templates/nfo/`
 
-### Available templates
+### Jinja2 environment
 
-| Scope | Style | Locales |
-|-------|-------|---------|
-| `movie` | `default`, `detailed` | `en`, `fr`, `es` |
-| `series` | `default`, `detailed` | `en`, `fr`, `es` |
-| `single_episode` | `default`, `detailed` | `en`, `fr`, `es` |
+- `trim_blocks=False`, `lstrip_blocks=False`
+- `SandboxedEnvironment` (no arbitrary code execution)
+- Auto-escaping disabled (NFO output is plain text)
 
-Framekit auto-selects the scope based on the detected media kind. You can override the style:
+### Available variables
 
-```bash
-fk nfo /release --template detailed
-```
+| Variable | Type | Description |
+|----------|------|-------------|
+| `release` | `Release` | Scanned release object |
+| `metadata` | `MetadataContext \| None` | TMDb metadata |
+| `title` | `str` | Resolved display title |
+| `year` | `str \| None` | Release year |
+| `quality` | `str` | Detected quality string |
+| `codec` | `str` | Video codec |
+| `audio_tracks` | `list[AudioTrack]` | All audio tracks |
+| `subtitle_tracks` | `list[SubtitleTrack]` | All subtitle tracks |
+| `mediainfo_text` | `str` | Raw MediaInfo output |
+| `nfo_version` | `str` | Framekit version |
+
+### Macros
+
+| Macro | Description |
+|-------|-------------|
+| `audio_table(tracks)` | Render a text-art audio track table |
+| `subtitle_table(tracks)` | Render a text-art subtitle track table |
+| `separator(char, width)` | Draw a horizontal rule |
+
+### Custom templates
+
+Place a `.j2` or `.jinja2` file in `~/.config/framekit/nfo_templates/` and reference it with `--template <name>`.
+
+---
+
+## BBCode templates (Prez)
+
+Location: `src/framekit/templates/prez/bbcode/`
+
+Naming convention: `{template}.{language}.jinja2`
+
+Available: `classic.en`, `classic.fr`, `classic.es`, `detailed.en`, `detailed.fr`, `detailed.es`, `tracker.en`, `tracker.fr`, `tracker.es`
+
+### Jinja2 environment
+
+- `trim_blocks=True`, `lstrip_blocks=True`
+- Note: `trim_blocks` eats the newline after `{% %}` tags. When you need a blank line after a conditional block, add an extra blank line in the template.
 
 ### Template variables
 
-**`release` object (`ReleaseNfoData`):**
+All under the `data` object:
 
-| Variable | Type | Contains |
-|----------|------|---------|
-| `release.release_title` | string | Full release name |
-| `release.title_display` | string | Clean display title |
-| `release.series_title` | string | Series name (if applicable) |
-| `release.year` | string | Year |
-| `release.source` | string | Source tag (e.g., `BluRay`, `WEB-DL`) |
-| `release.resolution` | string | Resolution (e.g., `1080p`) |
-| `release.video_tag` | string | Video codec tag |
-| `release.audio_tag` | string | Primary audio tag |
-| `release.language_tag` | string | Language tag (e.g., `MULTI.VFF`) |
-| `release.audio_languages_display` | string | Human-readable audio languages |
-| `release.hdr_display` | string | HDR format string |
-| `release.team` | string | Release group name |
-| `release.episodes` | list | List of `EpisodeNfoData` |
-| `release.total_size_bytes` | int | Total release size |
-| `release.total_duration_ms` | int | Total duration in milliseconds |
-| `release.media_kind` | string | `movie`, `single_episode`, `season_pack`, `special_pack`, `anime` |
-| `release.subtitle_summary_lines` | list | Subtitle track summary lines |
-
-**Per-episode (`EpisodeNfoData`):**
-
-| Variable | Contains |
-|----------|---------|
-| `.file_name` | Filename |
-| `.size_bytes` | File size |
-| `.duration_ms` | Duration in ms |
-| `.overall_bitrate_kbps` | Overall bitrate |
-| `.resolution` | Resolution string |
-| `.aspect_ratio_display` | Aspect ratio |
-| `.video_codec` | Video codec |
-| `.hdr_display` | HDR format |
-| `.audio_tracks` | List of `TrackNfoData` |
-| `.subtitle_summary` | Subtitle track summary |
-
-**Metadata (injected when metadata fetching succeeds):**
-
-| Variable | Contains |
-|----------|---------|
-| `metadata_movie` | Movie object: `.title`, `.imdb_id`, `.external_url`, `.genres`, `.runtime_minutes`, `.overview` |
-| `metadata_episode` | Episode object |
-| `metadata_season` | Season object |
-| `metadata_episode_map` | `{episode_code: episode_metadata}` |
-| `logo_text` | Contents of the active logo file |
-
-### Built-in macros (`_macros.jinja2`)
-
-| Macro | Renders |
-|-------|---------|
-| `ui.section(title)` | Section header separator |
-| `ui.line(label, value)` | Key-value line |
-| `ui.yesno(bool)` | "Yes" / "No" string |
-| `filesize` filter | Human-readable file size |
-| `duration_ms` filter | Human-readable duration |
-| `bitrate_kbps` filter | Human-readable bitrate |
-
-### Importing custom templates
-
-```bash
-fk nfo --import-template /path/to/my.jinja2 --import-name "My Template" --import-scope movie
-fk nfo --list-templates
-fk nfo --template "My Template"
-```
-
-User-imported templates take precedence over bundled ones.
-
----
-
-## Prez BBCode templates
-
-**Location:** `src/framekit/templates/prez/bbcode/`
-**Naming:** `{name}.{locale}.jinja2`
-**Locales:** `en`, `fr`, `es`
-
-### Available templates
-
-| Template | Style |
-|----------|-------|
-| `classic` | Standard with all sections: info, synopsis, metadata, release, technical, audio, subtitles |
-| `detailed` | Expanded, with full per-track details |
-| `compact` | Condensed single-block format with bullet points |
-| `technical` | Technical specs focused, with video fields |
-| `cinematic` | Technical summary + synopsis in a cinematic layout |
-| `tracker` | Minimal tracker-upload format |
-| `spoiler` | Content inside `[spoiler=...]` tags |
-| `boxed` | Sections in `[quote]` boxes |
-
-### Template variables (`data: PrezData`)
-
-| Variable | Contains |
-|----------|---------|
+| Variable | Description |
+|----------|-------------|
 | `data.title` | Release title |
-| `data.year` | Year |
-| `data.season_label` | Season label (e.g., `Season 2`) |
-| `data.heading_subtitle` | Episode heading subtitle |
-| `data.season_episode_range` | Episode range (e.g., `S01E01-E12`) |
-| `data.poster_url` | Poster image URL |
-| `data.banner_information` | Banner URL for the Information section |
-| `data.banner_synopsis` | Banner URL for the Synopsis section |
-| `data.banner_metadata` | Banner URL for the Metadata section |
-| `data.banner_release` | Banner URL for the Release section |
-| `data.banner_technical` | Banner URL for the Technical section |
-| `data.banner_audio` | Banner URL for the Audio section |
-| `data.banner_subtitles` | Banner URL for the Subtitles section |
-| `data.info_fields` | List of `PrezField` (label + value) |
-| `data.overview` | Synopsis text |
-| `data.metadata_fields` | Metadata fields |
-| `data.cast` | Cast string |
-| `data.crew` | Crew string |
-| `data.release_fields` | Release fields |
-| `data.video_fields` | Video detail fields |
-| `data.audio_tracks` | List of `PrezTrack` |
-| `data.subtitle_tracks` | List of `PrezTrack` |
+| `data.year` | Release year |
+| `data.season_label` | Season label for series, or `'-'` |
+| `data.heading_subtitle` | Subtitle or `'-'` |
+| `data.season_episode_range` | Episode range or `'-'` |
+| `data.poster_url` | Poster image URL or `'-'` |
 | `data.technical_summary` | One-line technical summary |
-| `data.mediainfo_text` | Raw MediaInfo output (when enabled) |
-| `data.has_metadata_section` | `true` if metadata is available |
+| `data.video_fields` | List of `LabeledField` for video section |
+| `data.audio_tracks` | List of audio track objects |
+| `data.subtitle_tracks` | List of subtitle track objects |
+| `data.info_fields` | List of `LabeledField` for information section |
+| `data.metadata_fields` | List of `LabeledField` for metadata section |
+| `data.release_fields` | List of `LabeledField` for release section |
+| `data.synopsis` | Overview text |
+| `data.mediainfo_text` | Raw MediaInfo output |
+| `data.banner_*` | Banner URL for each section (empty string = no banner) |
 
-### Jinja2 functions in BBCode templates
+Banner variables:
 
-| Function | Returns |
+| Variable | Section |
 |----------|---------|
-| `bb(text)` | BBCode-escaped text |
-| `bbcode_banner(url)` | `[img]url[/img]` banner tag |
-| `field_url_bbcode(field)` | Field value with optional URL |
-| `audio_table_bbcode(tracks)` | Formatted audio track table |
-| `subtitle_table_bbcode(tracks)` | Formatted subtitle track table |
-| `mediainfo_spoiler(text)` | Content wrapped in spoiler tags |
-| `tr(key, default)` | I18n translated string |
+| `data.banner_audio` | Audio section header |
+| `data.banner_information` | Information section header |
+| `data.banner_metadata` | Metadata section header |
+| `data.banner_release` | Release section header |
+| `data.banner_subtitles` | Subtitles section header |
+| `data.banner_synopsis` | Synopsis section header |
+| `data.banner_technical` | Technical section header |
 
-### Banner images
+### Jinja2 functions
 
-Banners are image headers for each section. They are fetched from the online catalog on the `feature/banners` branch. Select a design interactively:
+| Function | Description |
+|----------|-------------|
+| `bb(value)` | Escape BBCode-unsafe characters |
+| `bbcode_banner(url)` | Render `[img]url[/img]` or empty string |
+| `field_url_bbcode(field)` | Render a field value with URL if present |
+| `audio_table_bbcode(tracks)` | Render BBCode audio table |
+| `subtitle_table_bbcode(tracks)` | Render BBCode subtitle table |
+| `mediainfo_spoiler(text)` | Wrap MediaInfo in a `[spoiler]` block |
+| `tr(key, default, **kwargs)` | Internationalized string |
 
-```bash
-fk prez /release --select-templates
-```
+### Banner pattern
 
-Or configure in `framekit.yaml`:
+Use this pattern in templates to support both image and text-only modes:
 
-```yaml
-modules:
-  prez:
-    preset: default    # banner_design is part of the preset
+```jinja2
+{% if data.banner_audio %}{{ bbcode_banner(data.banner_audio) }}{% else %}[size=14][b]{{ tr('prez.section.audio', default='Audio') }}[/b][/size]{% endif %}
 ```
 
 ---
 
-## Prez HTML templates
+## HTML templates (Prez)
 
-**Location:** `src/framekit/templates/prez/html/generated/`
-**Count:** 140 templates (10 designs × 14 color variants)
+Location: `src/framekit/templates/prez/html/`
 
-### Designs
+Over 140 template variants organized by design and color.
 
-`cinematic`, `magazine`, `minimal`, `card`, `timeline`, `glassmorphism`, `brutalist`, `neon_cyberpunk`, `vintage_retro`, `neumorphism`
+### Structure
 
-### Color variants
-
-`dark`, `forest`, `sunset`, `ocean`, `sepia`, `rainbow`, `midnight`, `cherry`, `lavender`, `mint`, `amber`, `slate`, `coral`, `teal`
-
-Full template name: `{design}_{color}` — e.g., `cinematic_dark`, `magazine_ocean`, `brutalist_amber`.
-
-### Common aliases
-
-| Alias | Resolves to |
-|-------|-------------|
-| `cinema` | `cinematic_dark` |
-| `magazine` | `magazine_dark` |
-| `minimal` | `minimal_dark` |
-| `neon` | `neon_cyberpunk_dark` |
-| `poster` | `card_dark` |
-| `timeline` | `timeline_dark` |
-
-### Prez presets
-
-Presets bundle a format, HTML template, BBCode template, and mediainfo mode:
-
-| Preset | Format | HTML | BBCode | MediaInfo |
-|--------|--------|------|--------|-----------|
-| `default` | both | `minimal_dark` | `classic` | none |
-| `tracker` | bbcode | `magazine_dark` | `tracker` | none |
-| `compact` | bbcode | `minimal_dark` | `compact` | none |
-| `detailed` | both | `magazine_dark` | `detailed` | none |
-| `premium` | both | `cinematic_dark` | `cinematic` | none |
-| `technical` | both | `minimal_dark` | `technical` | inline |
-
-```bash
-fk prez /release --preset premium
-fk prez /release --preset technical
 ```
+html/
+  {design}/
+    {color}/
+      index.html.jinja2
+      style.css
+```
+
+### Available designs
+
+`astro`, `cinema`, `dark-fantasy`, `diagonal`, `digital`, `folder`, `gold-frame`, `iron-man`, `large-basic`, `leaf`, `linear`, `metal-frame`, `military`, `minimal`, `mojave`, `movie-custom`, `old-label`, `ores`, `oval`, `palace`, `patterns`, `robotic`, `spectral`, `wavy`, `white-steel`
+
+### Color aliases
+
+Many designs ship multiple color variants:
+
+| Design | Colors |
+|--------|--------|
+| `cinema` | `pink`, `purple` |
+| `gold-frame` | `black`, `green` |
+| `robotic` | `grey`, `purple` |
+| `spectral` | `blue_and_purple` |
+
+### Template variables (HTML)
+
+Same as BBCode `data` object, plus:
+
+| Variable | Description |
+|----------|-------------|
+| `data.screenshots` | List of screenshot paths/URLs |
+| `data.design` | Active design name |
+| `data.color` | Active color variant |

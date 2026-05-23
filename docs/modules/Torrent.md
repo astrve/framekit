@@ -1,65 +1,90 @@
-# Torrent Module
+# Torrent
 
-The Torrent module creates `.torrent` files from release folders using the bencode-open library.
+Creates a `.torrent` file for the release. Supports single announce URL, multi-tracker lists, and automatic piece-length calculation.
 
 ---
 
-## Basic usage
+## Usage
 
 ```bash
-fk torrent /path/to/release
+fk torrent /path/to/release [OPTIONS]
 fk torrent /path/to/release --announce https://tracker.example.com/announce
-fk torrent /path/to/release --content auto --piece-length 1m
+fk torrent /path/to/release --piece-length 4096
+fk torrent /path/to/release --output-dir /tmp/torrents
 ```
+
+---
 
 ## Options
 
-| Option | Default | Purpose |
-|--------|---------|---------|
-| `--output / -o PATH` | — | Output `.torrent` path |
-| `--announce / -a STR` | — | Announce URL |
-| `--private / --no-private` | private | Private torrent flag |
-| `--piece-length STR` | `auto` | Piece length (`auto`, `512k`, `1m`, `2m`, `4m`, ...) |
-| `--content` | `auto` | Payload mode: `auto`, `media`, `folder`, `select` |
-| `--dry-run` | off | Preview only |
+| Option | Description |
+|--------|-------------|
+| `--announce URL` | Primary announce URL |
+| `--add-announce URL` | Add extra announce URL (repeatable) |
+| `--piece-length SIZE` | Piece size in KiB, or `auto` |
+| `--output-dir DIR` | Write .torrent to this directory |
+| `--no-folder` | Exclude the top-level folder from the torrent payload |
+| `--dry-run` | Show torrent metadata without creating the file |
+| `--json` | Emit torrent metadata as JSON |
 
 ---
 
 ## Payload modes
 
-| Mode | Includes |
-|------|---------|
-| `auto` | Detected MKV release or season pack only |
-| `media` | All recognized media files (MKV, MP4, M4V, AVI) |
-| `folder` | Everything except existing `.torrent` files |
-| `select` | Interactive multi-group picker |
+| Mode | Config | Behavior |
+|------|--------|----------|
+| Folder (default) | `include_release_folder: true` | Top-level folder + all files inside |
+| Files only | `include_release_folder: false` | Files at the root of the torrent, no folder |
 
 ---
 
-## Announce URL management
+## Piece length guide
 
-Framekit can save announce URLs to the vault for reuse:
+| Release size | Recommended piece length |
+|-------------|-------------------------|
+| < 1 GB | 512 KiB |
+| 1–4 GB | 1024 KiB |
+| 4–8 GB | 2048 KiB |
+| 8–16 GB | 4096 KiB |
+| > 16 GB | 8192 KiB |
+
+`auto` (default) selects based on total release size.
+
+---
+
+## Multi-tracker
 
 ```yaml
-modules:
-  torrent:
-    announce: ""                   # default announce URL
-    announce_urls: []              # multiple URLs
-    private: true
-    piece_length: auto
-    prompt_save_announce: true     # prompt to save new URLs
+torrent:
+  announce_url: "https://primary.tracker.com/announce"
+  announce_urls:
+    - "https://secondary.tracker.com/announce"
+    - "udp://backup.tracker.com:6969/announce"
 ```
 
-The first time you use a new announce URL, Framekit offers to save it. Disable the prompt with `prompt_save_announce: false`.
+Or on the CLI:
+
+```bash
+fk torrent /path/to/release \
+  --announce https://primary.tracker.com/announce \
+  --add-announce https://secondary.tracker.com/announce
+```
 
 ---
 
-## Piece length selection
+## Configuration
 
-| Option | Best for |
-|--------|---------|
-| `auto` | Let Framekit choose based on release size |
-| `512k` | Small releases |
-| `1m` | Standard releases (recommended for 1–10 GB) |
-| `2m` | Large releases |
-| `4m` | Very large multi-disc releases |
+```yaml
+torrent:
+  announce_url: ""
+  announce_urls: []
+  piece_length: auto
+  output_dir_name: ""
+  include_release_folder: true
+```
+
+---
+
+## In the pipeline
+
+The `torrent` step runs after `prez`. The torrent path is stored in `PipelineContext.torrent_path` and passed to the `upload` step.

@@ -1,101 +1,84 @@
 # Security
 
-Framekit stores sensitive values (API tokens, announce URLs, tracker credentials) in an **encrypted vault** backed by AES-GCM encryption.
+Framekit can encrypt sensitive values (API tokens, credentials) using an AES-GCM vault. The vault is optional — without it, secrets are stored as plain text in `framekit.yaml`.
 
 ---
 
-## Encrypted vault
+## Enabling the vault
 
-When `security.enabled: true` (the default), the vault is an encrypted JSON file. The encryption key is stored separately via the OS keyring (`keyring` backend) or a key file (`file` backend).
+```bash
+fk settings set security.enabled true
+```
 
-Vault contents include:
+On first use, a random 256-bit key is generated and stored via the configured `key_backend`.
 
-- TMDb / TVDb / AniList / Trakt tokens
-- Tracker API keys and passkeys
-- Torrent announce URLs
-- Image host API keys
-- Torrent client credentials
+---
 
-### Key storage backends
+## Key backends
 
-| Backend | Config value | Where key is stored |
+| Backend | Config value | Where the key lives |
 |---------|-------------|---------------------|
-| OS keyring | `keyring` (default) | System credential store (Keychain / Secret Service / DPAPI) |
-| File | `file` | `~/.config/framekit/vault.key` with mode `600` |
+| OS keyring (default) | `keyring` | System keychain (macOS Keychain, GNOME Keyring, Windows Credential Locker) |
+| File | `file` | `~/.config/framekit/.vault_key` (chmod 600) |
 
-Configure in `framekit.yaml`:
+Set the backend:
 
-```yaml
-security:
-  enabled: true
-  key_storage: keyring   # or "file"
+```bash
+fk settings set security.key_backend keyring   # or: file
 ```
 
-### Vault file location
-
-Default: platform data directory (e.g., `~/.local/share/framekit/vault.enc`).
-
-Override:
-
-```yaml
-security:
-  vault_path: /secure/location/framekit.vault
-```
+The file backend is useful on headless servers where no keyring daemon is available.
 
 ---
 
-## Disable the vault
+## What gets encrypted
 
-If you prefer to store tokens in plaintext `framekit.yaml` (not recommended):
+When security is enabled, the following values are stored encrypted in the vault rather than plain text in `framekit.yaml`:
 
-```yaml
-security:
-  enabled: false
-```
+- `metadata.tmdb_read_access_token`
+- `upload.trackers[*].api_key`
+- Any value stored with `fk metadata --set-token`
 
-Sensitive values then live directly under their config keys (e.g., `metadata.tmdb_read_access_token`).
+All other config values remain in plain text.
 
 ---
 
 ## VaultKeyMismatchError
 
-If the OS keyring is wiped (e.g., after a password reset) while the vault file still exists, Framekit raises `VaultKeyMismatchError` at startup.
+If Framekit cannot decrypt the vault (e.g. the key was rotated or the keyring was wiped), it raises `VaultKeyMismatchError`. Resolution:
 
-Recovery options:
-
-```bash
-fk setup              # re-run setup to reconfigure credentials
-```
-
-Or manually delete the vault file and re-enter all credentials:
-
-```bash
-rm ~/.local/share/framekit/vault.enc   # Linux
-```
+1. Clear the encrypted value: `fk metadata --set-token` (then re-enter your token)
+2. Or disable security: `fk settings set security.enabled false`
 
 ---
 
 ## Subprocess safety
 
-Framekit enforces a rule: **all subprocess calls must go through `run_safe()` or `popen_safe()`** from `framekit.core.subprocess_safe`. Direct use of `subprocess.run()` with shell strings is blocked by a ruff `TID251` rule.
+Framekit never passes secrets as CLI arguments to child processes. API tokens are passed via environment variables or temporary files with restricted permissions. The `subprocess_safe` module ensures no secret appears in process listings.
 
 ---
 
 ## Secret masking
 
-Tokens and API keys are masked in logs and terminal output using `mask_secret()` from `framekit.modules.metadata.config`. Raw secret values are never written to JSONL logs.
+All log output and console tables mask secrets: only the first 4 and last 4 characters are shown, with `...` in between. Example:
+
+```
+eyJh...xNiJ
+```
 
 ---
 
-## Running the security check
+## Audit log
 
-```bash
-fk doctor
+Every pipeline run and upload attempt is appended to:
+
+```
+~/.local/share/framekit/logs/audit.ndjson
 ```
 
-The `doctor` command runs a **Security** section that checks:
+Entries include timestamp, command, path, and outcome — but never raw secret values.
 
-- Vault status (initialized / locked / missing)
-- Key storage backend availability
-- File permissions on vault and key files
-- TMDb token presence and format
+```bash
+fk audit-log           # view recent entries
+fk audit-log --tail 20
+```

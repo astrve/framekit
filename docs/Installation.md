@@ -2,118 +2,106 @@
 
 ## Requirements
 
-- **Python 3.12 or newer** (3.13 and 3.14 are tested in CI)
-- External media tools on `PATH` (see below)
+- **Python 3.12+** (CPython)
+- External tools on `PATH` — see [External tools](#external-tools)
 
 ---
 
-## Option A — Pre-built binary (recommended)
+## Install options
 
-Download the standalone binary for your platform from the [Releases page](https://github.com/astrve/framekit/releases):
+### Pre-built binary (recommended)
+
+Download the standalone binary for your platform from the [Releases page](https://github.com/astrve/framekit/releases). No Python installation required.
 
 | Platform | File |
 |----------|------|
 | Linux x86-64 | `framekit-linux-x86_64` |
-| macOS Apple Silicon | `framekit-macos-arm64` |
+| macOS arm64 | `framekit-macos-arm64` |
 | Windows x86-64 | `framekit-windows-x86_64.exe` |
 
-The binary bundles Python and all Python dependencies. External media tools are **not** bundled.
+Rename to `fk` (or `fk.exe`) and place on your `PATH`.
+
+### pip / pipx
 
 ```bash
-# Linux / macOS
-chmod +x framekit-linux-x86_64
-mv framekit-linux-x86_64 /usr/local/bin/fk
+# Isolated install (recommended)
+pipx install framekit
+
+# Or standard pip
+pip install framekit
+```
+
+### From source
+
+```bash
+git clone https://github.com/astrve/framekit.git
+cd framekit
+pip install -e ".[dev]"
+```
+
+---
+
+## External tools
+
+Framekit shells out to these — install them and ensure they are on `PATH`:
+
+| Tool | Package | Required by |
+|------|---------|-------------|
+| `mkvmerge`, `mkvextract`, `mkvpropedit` | [MKVToolNix](https://mkvtoolnix.download/) | CleanMKV, Extract |
+| `mediainfo` | [MediaInfo CLI](https://mediaarea.net/en/MediaInfo) | NFO, Prez |
+| `ffmpeg`, `ffprobe` | [FFmpeg](https://ffmpeg.org/) | Encode, Screenshot, Extract |
+| `rclone` | [rclone](https://rclone.org/) | Seedbox |
+| `mktorrent` or `torrentool` | system / pip | Torrent (optional) |
+
+Verify your setup:
+
+```bash
 fk doctor
 ```
 
 ---
 
-## Option B — From source (scripted)
-
-### Linux / macOS
+## First-time setup
 
 ```bash
-git clone https://github.com/astrve/framekit.git
-cd framekit
-bash install.sh
+fk init
 ```
 
-`install.sh` verifies Python 3.12+, creates `.venv`, runs `pip install -e .`, and prints PATH instructions.
+This creates `~/.config/framekit/framekit.yaml` with defaults and prompts for your TMDb token.
 
-### Windows
+Set your TMDb token at any time:
 
-```bat
-git clone https://github.com/astrve/framekit.git
-cd framekit
-install.bat
+```bash
+fk metadata --set-token
 ```
 
-`install.bat` additionally offers to install MKVToolNix and FFmpeg via **winget** or **Chocolatey**.
+Get a free TMDb Read Access Token at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api).
 
 ---
 
-## Option C — Manual install
+## Custom paths
+
+| Env var | Default | Purpose |
+|---------|---------|---------|
+| `FRAMEKIT_CONFIG_DIR` | `~/.config/framekit` | Config and settings |
+| `FRAMEKIT_CACHE_DIR` | `~/.cache/framekit` | API response cache, banner index |
+| `FRAMEKIT_LOG_DIR` | `~/.local/share/framekit/logs` | Audit and run logs |
+
+---
+
+## Dev install
 
 ```bash
 git clone https://github.com/astrve/framekit.git
 cd framekit
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
-fk --version
-```
-
-Both `fk` and `framekit` are registered as entry points and are interchangeable.
-
----
-
-## External tools
-
-Run `fk doctor` after install — it will report any missing tools.
-
-### MKVToolNix — CleanMKV, Extract
-
-- **Linux**: `sudo apt install mkvtoolnix`
-- **macOS**: `brew install mkvtoolnix`
-- **Windows**: `winget install MKVToolNix.MKVToolNix`
-
-Required binaries: `mkvmerge`, `mkvextract`, `mkvpropedit`
-
-### MediaInfo — NFO, Prez, Inspect
-
-- **Linux**: `sudo apt install mediainfo`
-- **macOS**: `brew install mediainfo`
-- **Windows**: `winget install MediaArea.MediaInfo`
-
-### FFmpeg — Encode, Screenshot, Extract
-
-- **Linux**: `sudo apt install ffmpeg`
-- **macOS**: `brew install ffmpeg`
-- **Windows**: `winget install Gyan.FFmpeg`
-
-Required binaries: `ffmpeg`, `ffprobe`
-
----
-
-## Custom tool paths
-
-If tools are not on `PATH`, set their paths in `framekit.yaml`:
-
-```yaml
-tools:
-  mkvmerge: /opt/mkvtoolnix/bin/mkvmerge
-  ffmpeg: /usr/local/bin/ffmpeg
-  ffprobe: /usr/local/bin/ffprobe
-  mediainfo: /usr/local/bin/mediainfo
-```
-
----
-
-## Development install
-
-```bash
-pip install -e ".[dev,docs,build-binary]"
+pip install -e ".[dev]"
 pre-commit install
 ```
 
-See [Contributing](Contributing.md) for the full development setup.
+Run tests:
+
+```bash
+pytest
+```

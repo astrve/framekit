@@ -1,64 +1,52 @@
 # Quick Start
 
-This guide walks through the first-run experience from install to a complete pipeline run.
+Complete walkthrough from installation to your first uploaded release.
 
 ---
 
-## 1. Verify install
+## 1. Verify external tools
 
 ```bash
 fk doctor
 ```
 
-All items should show **OK**. Fix any **Warning** or **Error** before continuing.
+Fix any red items before continuing.
 
 ---
 
-## 2. Run setup
+## 2. Set your TMDb token
 
 ```bash
-fk setup
+fk metadata --set-token
 ```
 
-The setup wizard configures:
-
-- UI language (English, French, Spanish)
-- TMDb read access token (for metadata enrichment)
-- Default folders per module
-- NFO template and logo preferences
-- Vault and security settings
-
-You can re-run `fk setup` at any time to update any setting.
+Paste your TMDb Read Access Token when prompted. See [Installation](Installation.md) for how to get one.
 
 ---
 
-## 3. Inspect a release
+## 3. Inspect a release folder
 
 ```bash
-fk inspect /path/to/MyRelease.2024.BluRay.1080p
+fk inspect /path/to/Movie.2024.1080p.BluRay
 ```
 
-Prints a summary: detected title, media kind (movie / series / single episode), file count, total size, resolution, codec, audio languages, episode completeness.
+Shows detected files, track info, and what the pipeline will process.
 
 ---
 
-## 4. Run the pipeline
-
-The `pipeline` command is the primary way to process a release:
+## 4. Run the full pipeline
 
 ```bash
-fk pipeline /path/to/release
+fk pipeline /path/to/Movie.2024.1080p.BluRay
 ```
 
-Framekit will interactively:
+The pipeline runs each module in order, prompting at interactive steps:
 
-1. Ask which modules to enable (renamer, cleanmkv, nfo, torrent, prez, ...)
-2. Ask for a torrent announce URL if none is configured
-3. Ask whether to enrich with TMDb metadata
-4. Execute each enabled module in order
-5. Write outputs to `Release/{release}/` inside the folder
+```
+folder → renamer → cleanmkv → metadata → nfo → prez → torrent → upload
+```
 
-To run fully automatically with a saved preset:
+### Fully automatic (no prompts)
 
 ```bash
 fk pipeline /path/to/release --auto --pipeline-preset multi_fr
@@ -66,57 +54,64 @@ fk pipeline /path/to/release --auto --pipeline-preset multi_fr
 
 ---
 
-## 5. Run modules individually
+## 5. Use a preset
 
-Each module can be run standalone:
+Built-in pipeline presets:
+
+| Preset | Description |
+|--------|-------------|
+| `single_fr` | Single French-language film |
+| `multi_fr` | Multi-audio film with French |
+| `series_fr` | TV series, French tracks |
+
+```bash
+fk pipeline /path/to/release --pipeline-preset multi_fr
+```
+
+---
+
+## 6. Run individual modules
+
+Every pipeline step is also an independent command:
 
 ```bash
 fk renamer /path/to/release          # rename files
-fk cleanmkv /path/to/release         # clean MKV tracks interactively
+fk cleanmkv /path/to/release         # strip unwanted tracks
+fk metadata /path/to/release         # fetch TMDb metadata
 fk nfo /path/to/release              # generate NFO
-fk prez /path/to/release             # build BBCode + HTML presentation
-fk torrent /path/to/release          # create .torrent file
-fk validate /path/to/release         # validate release structure
+fk prez /path/to/release             # build BBCode/HTML presentation
+fk torrent /path/to/release          # create .torrent
+fk upload /path/to/release           # upload to trackers
 ```
 
 ---
 
-## 6. Batch mode
+## 7. Dry run
 
-Process multiple releases at once:
+Preview what any command will do without making changes:
 
 ```bash
-fk batch /path/to/parent/folder
+fk pipeline /path/to/release --dry-run
+fk cleanmkv /path/to/release --dry-run
 ```
-
-Framekit scans subfolders, builds a queue, and shows an interactive dashboard. Use `--auto` for fully unattended batch processing.
 
 ---
 
-## 7. Pipeline presets
-
-Save a preset once, reuse everywhere:
+## 8. Day-to-day commands
 
 ```bash
-fk pipeline --create-preset              # interactive preset wizard
-fk pipeline /release --pipeline-preset multi_fr
-fk batch /parent --pipeline-preset anime_multi_fr
+fk batch /path/to/releases/          # process multiple releases
+fk watch /path/to/watch/dir          # auto-process new arrivals
+fk validate /path/to/release         # check release quality
+fk screenshot /path/to/release       # extract screenshots
+fk encode /path/to/file.mkv          # re-encode with preset
 ```
-
-Shipped presets: `multi_fr`, `multi_en`, `multi_es`, `vf_only`, `ve_only`, `en_only`, `anime_multi_fr`, `anime_vo_multi`, and more.
-
-See [Presets](Presets.md) for the full list and format reference.
 
 ---
 
-## 8. Useful day-to-day commands
+## Next steps
 
-```bash
-fk settings                # view all settings (sensitive values redacted)
-fk alias list              # list all command aliases
-fk logs                    # inspect JSONL operation logs
-fk rollback                # undo the last pipeline run
-fk language fr             # switch UI to French
-fk about                   # version, copyright, and license info
-fk doctor                  # full environment health check
-```
+- [Configuration](Configuration.md) — all settings
+- [Pipeline](Pipeline.md) — deep dive on the pipeline
+- [Presets](Presets.md) — create custom presets
+- [CLI Reference](CLI-Reference.md) — every option for every command
