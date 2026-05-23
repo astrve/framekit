@@ -1,100 +1,105 @@
-# CleanMKV Module
+# CleanMKV
 
-CleanMKV remuxes MKV files to keep only the desired audio and subtitle tracks, removing unwanted languages and track variants.
+Removes unwanted audio and subtitle tracks from MKV files. Operates in-place or to a separate output directory.
 
 ---
 
-## Basic usage
+## Usage
 
 ```bash
-fk cleanmkv /path/to/release
-fk cleanmkv /path/to/release --preset multi_fr --apply
-fk cleanmkv /path/to/release --wizard
+fk cleanmkv /path/to/release [OPTIONS]
+fk cleanmkv /path/to/release --preset multi_fr
+fk cleanmkv /path/to/release --output-dir /tmp/cleaned --dry-run
 ```
+
+---
 
 ## Options
 
-| Option | Default | Purpose |
-|--------|---------|---------|
-| `--apply / -a` | off | Apply changes without confirmation |
-| `--preset / -p STR` | `multi` | Built-in preset name |
-| `--preset-file / -pf PATH` | — | Load preset from JSON file |
-| `--external-preset / -ep STR` | — | Load saved external preset by name |
-| `--wizard / -w` | off | Open interactive preset wizard |
-| `--save-preset / -sp STR` | — | Save wizard preset under this name |
-| `--list-presets / -L` | off | List available presets |
-| `--dry-run` | off | Preview only |
-| `--diff` | off | Show before/after track comparison |
-| `--details` | off | Show per-file details |
-
-Preset resolution priority: `--wizard` → `--preset-file` → `--external-preset` → `--preset` → settings default
+| Option | Description |
+|--------|-------------|
+| `--preset NAME` | Apply a named CleanMKV preset |
+| `--preset-file FILE` | Load preset from a specific YAML file |
+| `--output-dir DIR` | Write cleaned MKVs to a different directory |
+| `--in-place` | Overwrite source files |
+| `--dry-run` | Show which tracks would be removed |
+| `--json` | Emit results as JSON |
 
 ---
 
-## Output directory
+## How it works
 
-By default, remuxed files are written to `Release/{release}/` inside the release folder. Configure via:
+1. Scans all `.mkv` files in the release folder
+2. For each file, lists audio and subtitle tracks with language tags
+3. Applies the preset rules to determine which tracks to keep
+4. Calls `mkvmerge` to write a new MKV with only the selected tracks
+5. If `--in-place`, replaces the original file
 
-```yaml
-modules:
-  cleanmkv:
-    output_dir_name: "Release/{release}"   # {release} = derived release name
-```
+Tracks without a language tag (`und`) are kept by default.
 
 ---
 
 ## Interactive wizard
 
-```bash
-fk cleanmkv /release --wizard
-fk cleanmkv /release --wizard --save-preset "my_preset"
-```
+Without `--preset`, CleanMKV shows a track picker:
 
-The wizard lets you pick audio and subtitle languages, set defaults, and choose subtitle variants (forced, full, SDH). The result can be saved as a named preset.
+```
+Audio tracks:
+  [x] Track 1 — fra (French) — DTS-HD MA 7.1
+  [x] Track 2 — eng (English) — AC-3 5.1
+  [ ] Track 3 — spa (Spanish) — AC-3 2.0
+
+Subtitle tracks:
+  [x] Track 4 — fra (French) — PGS
+  [x] Track 5 — fra.forced (French Forced) — PGS
+  [ ] Track 6 — eng (English) — SRT
+```
 
 ---
 
 ## Built-in presets
 
-| Preset | Description |
-|--------|-------------|
-| `multi` | Keep all detected languages |
-| `keep_all` | Keep all tracks without filtering |
-| `multi_fr` | Multi audio, French as default |
-| `multi_en` | Multi audio, English as default |
-| `multi_es` | Multi audio, Spanish as default |
-| `vf_only` | French audio only |
-| `ve_only` | English audio only |
-| `en_only` | English audio + English subtitles only |
-
-See [Presets — CleanMKV](../Presets.md#cleanmkv-presets) for the full format and shipped preset list.
+| Name | Audio kept | Subtitles kept |
+|------|-----------|---------------|
+| `single_fr` | French only | French, forced |
+| `multi_fr` | French + English | French, forced |
+| `series_fr` | French + English | French, forced |
+| `en_only` | English only | English |
 
 ---
 
-## Preset format (JSON / YAML)
+## Preset format
 
 ```yaml
-name: Multi FR
-keep_audio_filters:
-  - "french"
-  - "english:us"
-default_audio_filter: "french"
-keep_subtitle_filters:
-  - "french"
-  - "english"
-keep_subtitle_variants: [full, forced, sdh]
-default_subtitle_filter: "french"
-default_subtitle_variant: forced
+name: my_preset
+description: "Keep French and English, French subs"
+
+audio:
+  keep_languages: ["fra", "fre", "eng"]
+  keep_commentary: false
+  keep_descriptive: false
+
+subtitles:
+  keep_languages: ["fra", "fre"]
+  keep_forced: true
+  keep_sdh: false
+  remove_all: false
 ```
+
+Store presets in `~/.config/framekit/cleanmkv_presets/` or `./cleanmkv_presets/`.
 
 ---
 
 ## Configuration
 
 ```yaml
-modules:
-  cleanmkv:
-    default_preset: multi_fr
-    output_dir_name: "Release/{release}"
-    copy_unchanged_files: true
+cleanmkv:
+  default_preset: multi_fr   # auto-applied without prompting
+  output_dir_name: ""        # empty = in-place
 ```
+
+---
+
+## External dependency
+
+Requires `mkvmerge` on `PATH` (from [MKVToolNix](https://mkvtoolnix.download/)).

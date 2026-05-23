@@ -1,103 +1,101 @@
-# Prez Module
+# Prez
 
-The Prez module generates BBCode and HTML presentation files for release threads on trackers and forums.
+Builds BBCode and HTML presentations for a release. Supports multiple templates, three languages, and online banner images.
 
 ---
 
-## Basic usage
+## Usage
 
 ```bash
-fk prez /path/to/release
-fk prez /path/to/release --preset detailed --locale fr
-fk prez /path/to/release --format bbcode --bbcode-template tracker
+fk prez /path/to/release [OPTIONS]
+fk prez /path/to/release --template classic --language fr
+fk prez /path/to/release --banner-design minimal_blue --language en
+fk prez /path/to/release --no-html
 ```
+
+---
 
 ## Options
 
-| Option | Default | Purpose |
-|--------|---------|---------|
-| `--format / -f` | `both` | Output: `html`, `bbcode`, or `both` |
-| `--preset / -P STR` | `default` | Prez preset name |
-| `--html-template STR` | — | HTML template name |
-| `--bbcode-template STR` | — | BBCode template name |
-| `--with-metadata / --no-metadata` | on | Enrich with TMDb data |
-| `--locale STR` | `auto` | Output language |
-| `--mediainfo-mode` | `none` | MediaInfo inclusion: `none`, `inline`, `spoiler` |
-| `--select-templates` | off | Interactive template picker |
-| `--list-templates` | off | List templates and presets |
-| `--output-dir / -o PATH` | — | Custom output directory |
-| `--dry-run` | off | Preview only |
+| Option | Description |
+|--------|-------------|
+| `--template NAME` | Presentation template: `classic`, `detailed`, `tracker` |
+| `--language LANG` | Section label language: `en`, `fr`, `es` |
+| `--banner-design NAME` | Banner design name, or `textual` for text-only headers |
+| `--output-dir DIR` | Write output to this directory |
+| `--no-bbcode` | Skip BBCode generation |
+| `--no-html` | Skip HTML generation |
+| `--dry-run` | Print to stdout, do not write files |
 
 ---
 
-## Presets
-
-| Preset | Format | HTML template | BBCode template | MediaInfo |
-|--------|--------|---------------|-----------------|-----------|
-| `default` | both | `minimal_dark` | `classic` | none |
-| `tracker` | bbcode | — | `tracker` | none |
-| `compact` | bbcode | — | `compact` | none |
-| `detailed` | both | `magazine_dark` | `detailed` | none |
-| `premium` | both | `cinematic_dark` | `cinematic` | none |
-| `technical` | both | `minimal_dark` | `technical` | inline |
-
----
-
-## BBCode templates
+## Templates
 
 | Template | Description |
 |----------|-------------|
-| `classic` | Standard layout: info, synopsis, metadata, release, technical, audio, subtitles |
-| `detailed` | Expanded with full per-track details |
-| `compact` | Condensed bullet-point format |
-| `technical` | Technical specs focused |
-| `cinematic` | Technical summary + synopsis |
-| `tracker` | Minimal tracker-upload format |
-| `spoiler` | Sections inside `[spoiler=...]` tags |
-| `boxed` | Sections inside `[quote]` boxes |
+| `classic` | Standard layout with synopsis, technical, audio, subtitles, metadata, information, release sections |
+| `detailed` | Extended layout with more fields |
+| `tracker` | Compact single-block layout for tracker posts |
 
 ---
 
-## HTML templates
+## Languages
 
-140 templates = 10 designs × 14 color variants.
-
-Designs: `cinematic`, `magazine`, `minimal`, `card`, `timeline`, `glassmorphism`, `brutalist`, `neon_cyberpunk`, `vintage_retro`, `neumorphism`
-
-Colors: `dark`, `forest`, `sunset`, `ocean`, `sepia`, `rainbow`, `midnight`, `cherry`, `lavender`, `mint`, `amber`, `slate`, `coral`, `teal`
-
-Examples: `cinematic_dark`, `magazine_ocean`, `brutalist_amber`, `neon_cyberpunk_rainbow`
+| Code | Labels in |
+|------|-----------|
+| `en` | English |
+| `fr` | French |
+| `es` | Spanish |
 
 ---
 
 ## Banner images
 
-Banner images are section headers fetched from the online catalog. Select interactively:
+Banners are PNG section header images hosted on the `feature/banners` GitHub branch. The module fetches an index of available designs on first run and caches it for 24 hours.
 
-```bash
-fk prez /release --select-templates
-```
+### Selecting a banner
 
-The banner catalog is cached for 24 hours. To force a refresh, use `--select-templates` which always fetches the latest index.
+In interactive mode, `fk prez` (standalone) asks whether to fetch banners, then shows a design selector. In the pipeline, the default is **text-only** (`textual`) to avoid accidental selections.
+
+### Banner sections
+
+| Section | Banner variable |
+|---------|----------------|
+| Audio | `data.banner_audio` |
+| Information | `data.banner_information` |
+| Metadata | `data.banner_metadata` |
+| Release | `data.banner_release` |
+| Subtitles | `data.banner_subtitles` |
+| Synopsis | `data.banner_synopsis` |
+| Technical | `data.banner_technical` |
+
+### Fallback
+
+When GitHub is unreachable and no cache exists, a static list of 30 design names is used. Banner URLs are built to the same pattern but may 404 if a design does not have all sections.
+
+---
+
+## Output
+
+Writes to the release folder (or `--output-dir`):
+
+- `<release-name>.bbcode.txt` — BBCode for tracker posts
+- `<release-name>.html` — Standalone HTML file
 
 ---
 
 ## Configuration
 
 ```yaml
-modules:
-  prez:
-    locale: fr
-    format: both
-    preset: default
-    html_template: minimal_dark
-    bbcode_template: classic
-    mediainfo_mode: none
-    with_metadata: true
+prez:
+  template: classic
+  language: fr
+  banner_design: textual
+  output_dir_name: ""
 ```
 
 ---
 
-## Template variables
+## In the pipeline
 
-See [Templates — Prez BBCode variables](../Templates.md#template-variables-prezdata) for the full reference.
+The `prez` step runs after `nfo`. Banner selection uses `prez.banner_design` from config (default: `textual`) when running in `--auto` mode.

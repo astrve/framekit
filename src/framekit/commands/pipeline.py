@@ -503,7 +503,9 @@ def _pipeline_output_folder(work_folder: Path, root: Path | None = None) -> Path
     if work_folder.parent.name == "Release":
         return work_folder.parent
     if root is not None:
-        return _release_artifacts_folder(root)
+        release_folder = _release_artifacts_folder(root)
+        if release_folder.exists() or work_folder != root:
+            return release_folder
     return work_folder
 
 
@@ -943,7 +945,7 @@ def _resolve_module_selection(
         if auto_from_selector:
             auto_mode_updated = True
 
-    if auto_mode_updated and not auto_mode:
+    if auto_mode_updated:
         selected_modules = _try_interactive_preset_selection(
             selected_modules, pipeline_preset, preset_config
         )

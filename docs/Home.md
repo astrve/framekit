@@ -55,6 +55,7 @@ fk pipeline /path/to/release --auto --pipeline-preset multi_fr
 | Upload to trackers | `fk upload` | Beta |
 | Stream extraction | `fk extract` | Beta |
 | Folder watcher | `fk watch` | Beta |
+| Seedbox transfer | `fk seedbox` | Beta |
 
 ---
 
@@ -67,6 +68,7 @@ Framekit shells out to these — install them and keep them on `PATH`:
 | `mkvmerge`, `mkvextract`, `mkvpropedit` | MKVToolNix | CleanMKV, Extract |
 | `mediainfo` | MediaInfo | NFO, Prez |
 | `ffmpeg`, `ffprobe` | FFmpeg | Encode, Screenshot, Extract |
+| `rclone` | rclone | Seedbox |
 
 ---
 

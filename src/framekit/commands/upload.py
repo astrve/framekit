@@ -31,10 +31,17 @@ from framekit.ui.unified_selector import (
 # ── Known tracker profiles ───────────────────────────────────────────────────
 
 KNOWN_TRACKERS: dict[str, dict] = {
-    "Custom JSON API": {"url": "", "type": "custom_json_api_v1"},
-    "UNIT3D": {"url": "", "type": "unit3d"},
-    "Gazelle": {"url": "", "type": "gazelle"},
-    "Custom / Other": {"url": "", "type": "custom"},
+    "C411": {"url": "https://c411.org", "type": "custom_json_api_v1"},
+    "BeyondHD (BHD)": {"url": "https://beyond-hd.me", "type": "unit3d"},
+    "Blutopia (BLU)": {"url": "https://blutopia.cc", "type": "unit3d"},
+    "Aither (ATH)": {"url": "https://aither.cc", "type": "unit3d"},
+    "ReelFliX (RFX)": {"url": "https://reelflix.xyz", "type": "unit3d"},
+    "SkipTheTrailers (STT)": {"url": "https://skipthetrailers.xyz", "type": "unit3d"},
+    "Hawke-One (HWK)": {"url": "https://hawke.uno", "type": "unit3d"},
+    "OldToons World (OTW)": {"url": "https://oldtoons.world", "type": "unit3d"},
+    "Orpheus Network (OPS)": {"url": "https://orpheus.network", "type": "gazelle"},
+    "Redacted (RED)": {"url": "https://redacted.ch", "type": "gazelle"},
+    "Custom / Other": {"url": "", "type": "custom_json_api_v1"},
 }
 
 CUSTOM_API_CATEGORIES: dict[int, str] = {

@@ -1,56 +1,80 @@
-# Renamer Module
+# Renamer
 
-The Renamer module normalizes filenames by detecting release tags, removing unwanted terms, and inserting standardized language codes.
+Renames release files and folders to a structured, consistent format. Works on MKV files, subtitles, and the release folder itself.
 
 ---
 
-## Basic usage
+## Usage
 
 ```bash
-fk renamer /path/to/release
-fk renamer /path/to/release --apply
-fk renamer /path/to/release --lang MULTI.VFF --apply
+fk renamer /path/to/release [OPTIONS]
+fk renamer /path/to/release --auto
+fk renamer /path/to/release --dry-run
 ```
+
+---
 
 ## Options
 
-| Option | Default | Purpose |
-|--------|---------|---------|
-| `--lang STR` | — | Language tag to insert (e.g., `MULTI.VFF`, `FRENCH`) |
-| `--apply / -a` | off | Apply renames immediately |
-| `--dry-run` | off | Preview only |
-| `--force-lang` | off | Override detected language |
-| `--remove-term STR` | — | Terms to strip from filenames (repeatable) |
-| `--select-terms` | off | Interactive term picker |
-| `--profile STR` | — | Named renamer profile |
+| Option | Description |
+|--------|-------------|
+| `--auto` | Apply proposed names without confirmation |
+| `--dry-run` | Show proposed names without renaming |
+| `--json` | Emit proposed renames as JSON |
 
 ---
 
-## What it does
+## What it renames
 
-1. Scans the release folder for `.mkv` files
-2. Detects existing tags: resolution, source, codec, audio, language, HDR, release group
-3. Normalizes tag capitalization and ordering
-4. Removes configured unwanted terms
-5. Inserts or replaces the language code
-6. Presents a before/after preview
+- Main MKV files → structured filename with title, year, quality, codec, group
+- Subtitle files → matched to their MKV with language suffix
+- Release folder → matches the main MKV stem
+
+### Example
+
+Before:
+```
+Movie.2024.1080p.WEB-DL.DD5.1.H.264-GROUP/
+  Movie.2024.1080p.WEB-DL.DD5.1.H.264-GROUP.mkv
+  Movie.2024.1080p.WEB-DL.DD5.1.H.264-GROUP.fra.srt
+```
+
+After (with metadata fetched):
+```
+The.Movie.2024.1080p.WEB-DL.DD5.1.H264-GROUP/
+  The.Movie.2024.1080p.WEB-DL.DD5.1.H264-GROUP.mkv
+  The.Movie.2024.1080p.WEB-DL.DD5.1.H264-GROUP.fra.srt
+```
 
 ---
 
 ## Interactive term picker
 
-```bash
-fk renamer /release --select-terms
-```
+In interactive mode, Renamer shows the parsed components of the detected filename and lets you correct individual terms:
 
-Shows all detected terms and lets you mark which to remove.
+```
+Detected:
+  Title   : Movie
+  Year    : 2024
+  Quality : 1080p
+  Source  : WEB-DL
+  Codec   : H264
+  Group   : GROUP
+
+Accept? [Y/n]
+```
 
 ---
 
 ## Configuration
 
-```yaml
-modules:
-  renamer:
-    default_language_tag: "MULTI.VFF"
-```
+No dedicated config section. Renamer uses:
+
+- `metadata.language` for title lookup
+- `paths.start_folder` as fallback root
+
+---
+
+## In the pipeline
+
+The `renamer` step runs first, before CleanMKV. The renamed paths are passed to subsequent steps via `PipelineContext.release`.

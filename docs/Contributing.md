@@ -1,17 +1,15 @@
 # Contributing
 
-Thank you for contributing to Framekit. This guide covers the development workflow, quality gates, and conventions.
-
 ---
 
-## Development setup
+## Dev setup
 
 ```bash
 git clone https://github.com/astrve/framekit.git
 cd framekit
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev,docs,build-binary]"
+pip install -e ".[dev]"
 pre-commit install
 ```
 
@@ -21,108 +19,95 @@ pre-commit install
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Tagged release tip — protected |
-| `develop` | Integration branch — all PRs target this |
-| `feat/*` | New features |
+| `main` | Stable, always deployable |
+| `feature/*` | New features |
 | `fix/*` | Bug fixes |
-| `chore/*` | Maintenance, dependency bumps |
-| `sec/*` | Security fixes |
+| `docs/*` | Documentation only |
+| `feature/banners` | Banner image assets (kept separate) |
+
+Open a PR against `main`. Squash-merge is preferred.
 
 ---
 
 ## Commit convention
 
 ```
-<type>(<scope>): <summary>
+type(scope): short description
+
+body (optional)
 ```
 
-Types: `feat`, `fix`, `sec`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`
 
 Examples:
-
 ```
-feat(prez): add glassmorphism HTML template family
-fix(cleanmkv): handle MKVs with no audio tracks
-chore(deps): bump jinja2 to 3.1.6
+feat(prez): add default_textual parameter to banner selector
+fix(bbcode): add blank line before info_fields loop to fix trim_blocks output
+docs(wiki): add module reference pages
 ```
 
 ---
 
 ## Quality gates
 
-All gates must pass before a PR can be merged:
+All PRs must pass:
 
-| Gate | Command | Threshold |
-|------|---------|-----------|
-| Lint | `ruff check src tests` | zero findings |
-| Format | `ruff format --check src tests` | zero diffs |
-| Type check | `pyright` | zero errors (strict mode) |
-| Tests | `pytest -n auto` | all pass |
-| Coverage | `coverage report --fail-under=80` | >= 80% (target: 90%) |
-| Security lint | `bandit -r src -ll` | no Medium/High |
-| Dependency audit | `pip-audit` | no Critical/High |
-| SAST | `semgrep scan --config auto` | no blocking |
-| Docstring coverage | `interrogate src --fail-under=80` | >= 80% |
-| Spelling | `codespell src tests docs` | zero |
+| Check | Command |
+|-------|---------|
+| Unit tests | `pytest` |
+| Lint | `ruff check .` |
+| Format | `ruff format --check .` |
+| Type check | `mypy src/` |
 
-Run all checks locally:
+Run all locally:
 
 ```bash
-ruff check src tests
-ruff format --check src tests
-pyright
-pytest -n auto
+pre-commit run --all-files
+pytest
 ```
 
 ---
 
-## Security rules for contributors
+## Adding a new module
 
-- **Never log raw tokens or secrets.** Use `mask_secret()` from `framekit.modules.metadata.config`.
-- **Never call subprocess directly.** Use `run_safe()` / `popen_safe()` from `framekit.core.subprocess_safe`. This is enforced by a ruff `TID251` lint rule.
-- **Never set `autoescape=False`** in a Jinja2 `Environment` without a comment explaining why.
-- **Vault schema changes** require a migration test in `tests/test_settings_migration.py`.
-- **New HTTP calls** must use the `framekit.core.http` wrapper for uniform timeouts, retries, and TLS settings.
-
----
-
-## Adding a module
-
-1. Create `src/framekit/modules/<name>/` with `models.py`, `service.py`, `scanner.py` (if needed)
-2. Add a command file `src/framekit/commands/<name>.py` with Click group
+1. Create `src/framekit/modules/<name>/` with `__init__.py`, `config.py`, `service.py`
+2. Create `src/framekit/commands/<name>.py` with a Click command
 3. Register the command in `src/framekit/commands/main.py`
-4. Add locale keys to `src/framekit/locales/*.json`
-5. Add tests in `tests/test_<name>*.py`
-6. Add module documentation in `docs/modules/<Name>.md`
+4. Add a pipeline step in `src/framekit/commands/pipeline_steps.py`
+5. Add documentation in `docs/modules/<Name>.md`
+6. Update `docs/Home.md` module table
 7. Update `mkdocs.yml` nav
 
 ---
 
-## Adding an NFO template
+## Adding a new BBCode template
 
-```bash
-fk nfo --import-template /path/to/my.jinja2 \
-       --import-name "My Template" \
-       --import-scope movie
-```
-
-For bundled templates, add files to `src/framekit/templates/nfo/` following the naming convention `{scope}_{style}.{locale}.jinja2` and register them in `NfoTemplateRegistry`.
-
----
-
-## Adding a CleanMKV preset
-
-Add a YAML file to `Presets/CleanMKV/` following the format described in [Presets](Presets.md).
+1. Create `src/framekit/templates/prez/bbcode/<name>.en.jinja2`
+2. Optionally add `<name>.fr.jinja2` and `<name>.es.jinja2`
+3. Use the banner pattern for each section header:
+   ```jinja2
+   {% if data.banner_audio %}{{ bbcode_banner(data.banner_audio) }}{% else %}[size=14][b]{{ tr('prez.section.audio', default='Audio') }}[/b][/size]{% endif %}
+   ```
+4. Add a blank line after each `{% endif %}` that precedes a `{% for %}` loop (required for `trim_blocks=True`)
 
 ---
 
-## Documentation
+## Security rules
 
-Docs live in `docs/` and are built with MkDocs + Material theme.
+- Never commit secrets, tokens, or API keys
+- Never pass secrets as CLI arguments to subprocesses — use env vars or temp files
+- All user-facing output of secret-like values must go through `mask_secret()`
+- New network calls must go through `httpx` with a timeout, never raw `urllib`
+- Subprocess calls must use `run_safe()` from `core/subprocess_safe.py`
 
-```bash
-pip install -e ".[docs]"
-mkdocs serve             # local preview at http://127.0.0.1:8000
-```
+---
 
-Docs are deployed automatically to GitHub Pages on every push to `main`.
+## Reporting issues
+
+[GitHub Issues](https://github.com/astrve/framekit/issues)
+
+Include:
+- Framekit version (`fk --version`)
+- OS and Python version
+- Full command run
+- Complete error output (or `fk logs --last`)
