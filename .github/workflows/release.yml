@@ -201,7 +201,7 @@ jobs:
           pip install -e ".[build-binary]"
 
       - name: Build standalone binary
-        run: pyinstaller --onefile --name framekit src/framekit/__main__.py
+        run: pyinstaller --onefile --name framekit --collect-data framekit src/framekit/__main__.py
 
       - name: Smoke-test binary
         shell: bash

@@ -32,6 +32,31 @@ def _normalize_video_extension(extension: object) -> str:
     return ".mp4"
 
 
+def _audio_extension_for_track(
+    extractor: AudioExtractor,
+    track: AudioTrack,
+    output_format: AudioFormat,
+) -> str:
+    if output_format != AudioFormat.ORIGINAL:
+        return output_format.value
+
+    source_format = extractor.detect_audio_format(track.codec)
+    return {
+        AudioFormat.AAC: "aac",
+        AudioFormat.MP3: "mp3",
+        AudioFormat.FLAC: "flac",
+        AudioFormat.ALAC: "m4a",
+        AudioFormat.WAV: "wav",
+        AudioFormat.OPUS: "opus",
+        AudioFormat.VORBIS: "ogg",
+        AudioFormat.AC3: "ac3",
+        AudioFormat.EAC3: "eac3",
+        AudioFormat.DTS: "dts",
+        AudioFormat.DTS_HD: "dts",
+        AudioFormat.TRUEHD: "thd",
+    }.get(source_format, "aac")
+
+
 class ExtractionService:
     """Service for orchestrating media extraction operations.
 
@@ -330,10 +355,10 @@ class ExtractionService:
                     continue
 
                 for track in selected_audio_tracks:
-                    output_suffix = (
-                        options.output_format.value
-                        if options.output_format != AudioFormat.ORIGINAL
-                        else "audio"
+                    output_suffix = _audio_extension_for_track(
+                        extractor,
+                        track,
+                        options.output_format,
                     )
                     output_dir = options.output_dir or file_path.parent
                     output_path = output_dir / f"{file_path.stem}.a{track.track_id}.{output_suffix}"

@@ -54,6 +54,12 @@ BUILTIN_COMMANDS = {
     "encode",
     "upload",
     "watch",
+    "seedbox",
+    "config",
+    "validate",
+    "profile",
+    "browse",
+    "sort",
 }
 
 
@@ -127,6 +133,24 @@ class AliasManager:
         """Save the aliases configuration to settings."""
         self._settings["aliases"] = config
         self.settings_store.save(self._settings)
+        self._settings = self.settings_store.load()
+
+    def _removed_aliases(self, config: dict[str, Any] | None = None) -> set[str]:
+        aliases = config if config is not None else self._get_aliases_config()
+        raw_removed = aliases.get("removed", [])
+        if not isinstance(raw_removed, list):
+            return set()
+        return {str(item).strip() for item in raw_removed if str(item).strip()}
+
+    def _mark_removed(self, name: str, config: dict[str, Any]) -> None:
+        removed = self._removed_aliases(config)
+        removed.add(name)
+        config["removed"] = sorted(removed)
+
+    def _unmark_removed(self, name: str, config: dict[str, Any]) -> None:
+        removed = self._removed_aliases(config)
+        removed.discard(name)
+        config["removed"] = sorted(removed)
 
     def _is_valid_alias_name(self, name: str) -> bool:
         """Check if an alias name is valid.
@@ -169,6 +193,7 @@ class AliasManager:
         """
         config = self._get_aliases_config()
         result: dict[str, AliasDefinition] = {}
+        removed = self._removed_aliases(config)
 
         if not builtin_only:
             result.update(
@@ -180,6 +205,8 @@ class AliasManager:
                 self._collect_alias_group(config.get("builtin", {}), enabled_only=enabled_only)
             )
 
+        for alias_name in removed:
+            result.pop(alias_name, None)
         return result
 
     def _collect_alias_group(
@@ -213,6 +240,8 @@ class AliasManager:
             The alias definition, or None if not found
         """
         config = self._get_aliases_config()
+        if name in self._removed_aliases(config):
+            return None
 
         # Check user aliases first
         user_aliases = config.get("user", {})
@@ -265,6 +294,7 @@ class AliasManager:
         self._check_conflict_with_builtin(name)
 
         config = self._get_aliases_config()
+        self._unmark_removed(name, config)
         user_aliases = config.setdefault("user", {})
 
         user_aliases[name] = {
@@ -283,21 +313,26 @@ class AliasManager:
             name: The alias name
 
         Raises:
-            AliasError: If trying to remove a built-in alias or alias not found
+            AliasError: If alias not found
         """
         config = self._get_aliases_config()
-
-        # Check if it's a builtin alias
-        builtin_aliases = config.get("builtin", {})
-        if name in builtin_aliases:
-            raise AliasError(f"Cannot remove built-in alias: '{name}'")
-
-        # Remove from user aliases
-        user_aliases = config.get("user", {})
-        if name not in user_aliases:
+        removed = self._removed_aliases(config)
+        if name in removed:
             raise AliasError(f"Alias not found: '{name}'")
 
-        del user_aliases[name]
+        builtin_aliases = config.get("builtin", {})
+        user_aliases = config.get("user", {})
+        found_user = isinstance(user_aliases, dict) and name in user_aliases
+        found_builtin = isinstance(builtin_aliases, dict) and name in builtin_aliases
+
+        if not found_user and not found_builtin:
+            raise AliasError(f"Alias not found: '{name}'")
+
+        if found_user:
+            del user_aliases[name]
+        if found_builtin:
+            del builtin_aliases[name]
+        self._mark_removed(name, config)
         self._save_aliases_config(config)
         logger.debug(f"Removed alias: {name}")
 
@@ -311,6 +346,11 @@ class AliasManager:
             AliasError: If alias not found
         """
         config = self._get_aliases_config()
+        if name in self._removed_aliases(config):
+            self._unmark_removed(name, config)
+            self._save_aliases_config(config)
+            logger.debug(f"Enabled alias: {name}")
+            return
 
         # Check user aliases
         user_aliases = config.get("user", {})

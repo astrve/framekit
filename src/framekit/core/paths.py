@@ -11,21 +11,37 @@ APP_AUTHOR = "framekit"
 
 SETTINGS_FILENAME = "framekit.yaml"
 LEGACY_SETTINGS_FILENAME = "settings.json"
+SETTINGS_POINTER_FILENAME = "settings-path.txt"
 ENV_CONFIG_PATH = "FRAMEKIT_CONFIG"
+ENV_CONFIG_DIR = "FRAMEKIT_CONFIG_DIR"
+ENV_CACHE_DIR = "FRAMEKIT_CACHE_DIR"
+
+
+def _env_path(name: str) -> Path | None:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    return Path(value).expanduser()
 
 
 def get_config_dir() -> Path:
     """User-level config directory (platformdirs).
 
     Retained for resources that should remain user-scoped (templates, vault,
-    cache locks). The active settings file itself lives next to the project,
-    not here — see :func:`get_settings_path`.
+    cache locks). The active settings file is resolved by
+    :func:`get_settings_path`.
     """
+    override = _env_path(ENV_CONFIG_DIR)
+    if override is not None:
+        return override
     return Path(user_config_dir(APP_NAME, APP_AUTHOR))
 
 
 def get_cache_dir() -> Path:
     """Return the cache dir."""
+    override = _env_path(ENV_CACHE_DIR)
+    if override is not None:
+        return override
     return Path(user_cache_dir(APP_NAME, APP_AUTHOR))
 
 
@@ -40,17 +56,87 @@ def get_settings_path() -> Path:
     Resolution order:
 
     1. ``FRAMEKIT_CONFIG`` environment variable, when set and non-empty.
-    2. ``framekit.yaml`` in the current working directory (created on first
-       run if absent).
+    2. Nearest existing ``framekit.yaml`` from the current directory upward,
+       stopping before the user home directory or filesystem root.
+    3. Configured global settings path stored in ``settings-path.txt``.
+    4. User-level ``framekit.yaml`` in the platform config directory.
 
-    The file is intentionally project-local so configuration travels with the
-    media workspace. Sensitive tokens should either be stored in the vault
-    (``security.enabled: true``) or supplied via environment variables.
+    This prevents a plain ``cd`` into a media folder from creating project
+    settings implicitly. Project-local settings are opt-in via ``framekit init``
+    or by placing a ``framekit.yaml`` in the workspace tree.
     """
-    override = os.environ.get(ENV_CONFIG_PATH, "").strip()
-    if override:
-        return Path(override).expanduser()
-    return Path.cwd() / SETTINGS_FILENAME
+    override = _env_path(ENV_CONFIG_PATH)
+    if override is not None:
+        return override
+
+    project_settings = find_project_settings_path()
+    if project_settings is not None:
+        return project_settings
+
+    configured_global_settings = get_configured_global_settings_path()
+    if configured_global_settings is not None:
+        return configured_global_settings
+
+    return get_config_dir() / SETTINGS_FILENAME
+
+
+def get_settings_pointer_path() -> Path:
+    """Return path to the user-level settings location pointer."""
+    return get_config_dir() / SETTINGS_POINTER_FILENAME
+
+
+def coerce_settings_file_path(path: str | Path) -> Path:
+    """Return a settings file path from a folder or explicit YAML path."""
+    candidate = Path(path).expanduser()
+    if candidate.suffix.lower() in {".yaml", ".yml"}:
+        return candidate
+    return candidate / SETTINGS_FILENAME
+
+
+def get_configured_global_settings_path() -> Path | None:
+    """Return custom global settings path from pointer file, if configured."""
+    pointer = get_settings_pointer_path()
+    try:
+        raw = pointer.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+    if not raw:
+        return None
+    return coerce_settings_file_path(raw)
+
+
+def set_configured_global_settings_path(path: str | Path) -> Path:
+    """Persist custom global settings path and return resolved file path."""
+    settings_path = coerce_settings_file_path(path).resolve()
+    pointer = get_settings_pointer_path()
+    pointer.parent.mkdir(parents=True, exist_ok=True)
+    pointer.write_text(str(settings_path), encoding="utf-8")
+    return settings_path
+
+
+def clear_configured_global_settings_path() -> None:
+    """Remove custom global settings path pointer, if present."""
+    try:
+        get_settings_pointer_path().unlink()
+    except FileNotFoundError:
+        return
+
+
+def find_project_settings_path(start: Path | None = None) -> Path | None:
+    """Return nearest existing project settings file, if any."""
+    current = (start or Path.cwd()).expanduser().resolve()
+    if current.is_file():
+        current = current.parent
+
+    home = Path.home().resolve()
+    for directory in (current, *current.parents):
+        if directory == home or directory.parent == directory:
+            break
+        candidate = directory / SETTINGS_FILENAME
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def get_legacy_settings_path() -> Path:

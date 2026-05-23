@@ -1,6 +1,8 @@
 """Upload command for managing torrent uploads to trackers."""
 
 import json
+import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,11 +10,14 @@ from typing import Any
 from urllib.parse import urlparse
 
 import click
+import yaml
 from rich import box
 from rich.panel import Panel
 from rich.table import Table
 
 from framekit.core.cli_helpers import print_fatal
+from framekit.core.paths import get_config_dir
+from framekit.core.settings import SettingsStore, redact_settings
 from framekit.modules.upload import DiscoveryService, TorrentMetadata, UploadService
 from framekit.ui.console import console
 from framekit.ui.timeline import reset_timeline, show_step
@@ -26,20 +31,13 @@ from framekit.ui.unified_selector import (
 # ── Known tracker profiles ───────────────────────────────────────────────────
 
 KNOWN_TRACKERS: dict[str, dict] = {
-    "C411": {"url": "https://c411.org", "type": "c411"},
-    "BeyondHD (BHD)": {"url": "https://beyond-hd.me", "type": "unit3d"},
-    "Blutopia (BLU)": {"url": "https://blutopia.cc", "type": "unit3d"},
-    "Aither (ATH)": {"url": "https://aither.cc", "type": "unit3d"},
-    "ReelFliX (RFX)": {"url": "https://reelflix.xyz", "type": "unit3d"},
-    "SkipTheTrailers (STT)": {"url": "https://skipthetrailers.xyz", "type": "unit3d"},
-    "Hawke-One (HWK)": {"url": "https://hawke.uno", "type": "unit3d"},
-    "OldToons World (OTW)": {"url": "https://oldtoons.world", "type": "unit3d"},
-    "Orpheus Network (OPS)": {"url": "https://orpheus.network", "type": "gazelle"},
-    "Redacted (RED)": {"url": "https://redacted.ch", "type": "gazelle"},
-    "Custom / Other": {"url": "", "type": "unit3d"},
+    "Custom JSON API": {"url": "", "type": "custom_json_api_v1"},
+    "UNIT3D": {"url": "", "type": "unit3d"},
+    "Gazelle": {"url": "", "type": "gazelle"},
+    "Custom / Other": {"url": "", "type": "custom"},
 }
 
-C411_CATEGORIES: dict[int, str] = {
+CUSTOM_API_CATEGORIES: dict[int, str] = {
     1: "Films & Videos",
     2: "Ebook",
     3: "Audio",
@@ -52,7 +50,7 @@ C411_CATEGORIES: dict[int, str] = {
     10: "Imprimante 3D",
 }
 
-C411_SUBCATEGORIES: dict[int, dict[int, str]] = {
+CUSTOM_API_SUBCATEGORIES: dict[int, dict[int, str]] = {
     1: {
         1: "Animation",
         2: "Animation Serie",
@@ -94,7 +92,7 @@ C411_SUBCATEGORIES: dict[int, dict[int, str]] = {
     10: {51: "Objets", 52: "Personnages", 53: "Pack"},
 }
 
-C411_LANGUAGE_VALUES: dict[int, str] = {
+CUSTOM_API_LANGUAGE_VALUES: dict[int, str] = {
     1: "Anglais",
     2: "Francais (VFF)",
     3: "Muet",
@@ -106,7 +104,7 @@ C411_LANGUAGE_VALUES: dict[int, str] = {
     422: "Multi VF2 (FR+QC)",
 }
 
-C411_QUALITY_VALUES: dict[int, str] = {
+CUSTOM_API_QUALITY_VALUES: dict[int, str] = {
     10: "BluRay 4K",
     11: "BluRay Full",
     12: "BluRay Remux",
@@ -117,14 +115,14 @@ C411_QUALITY_VALUES: dict[int, str] = {
     413: "Bluray.HDLight 1080",
 }
 
-C411_SEASON_VALUES: dict[int, str] = {
+CUSTOM_API_SEASON_VALUES: dict[int, str] = {
     118: "Serie integrale",
     119: "Hors saison",
     120: "Non communique",
     **{index: f"Saison {index - 120:02d}" for index in range(121, 151)},
 }
 
-C411_EPISODE_VALUES: dict[int, str] = {
+CUSTOM_API_EPISODE_VALUES: dict[int, str] = {
     96: "Saison complete",
     117: "Non communique",
     97: "Episode 01",
@@ -143,7 +141,176 @@ _show_step = show_step
 
 @click.group(name="upload")
 def upload_group():
-    """Beta commands for tracker uploads."""
+    """-[BETA]- Commands for tracker uploads."""
+
+
+def _slugify_tracker_name(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", value.strip().lower()).strip("-")
+    return slug or "tracker"
+
+
+def _trackers_dir() -> Path:
+    return SettingsStore().path.parent / "trackers"
+
+
+def _tracker_yaml_path(name: str) -> Path:
+    return _trackers_dir() / f"{_slugify_tracker_name(name)}.yaml"
+
+
+def _load_tracker_yaml(name: str) -> dict[str, Any] | None:
+    path = _tracker_yaml_path(name)
+    if not path.exists():
+        return None
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return data if isinstance(data, dict) else None
+
+
+def _configured_tracker_names() -> list[str]:
+    store = SettingsStore()
+    settings = store.load()
+    names = [
+        str(tracker.get("name", "")).strip()
+        for tracker in settings.get("upload", {}).get("trackers", [])
+        if isinstance(tracker, dict) and str(tracker.get("name", "")).strip()
+    ]
+    if _trackers_dir().exists():
+        for path in sorted(_trackers_dir().glob("*.yaml")):
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            if isinstance(data, dict):
+                names.append(str(data.get("name", path.stem)).strip() or path.stem)
+    return sorted(dict.fromkeys(names))
+
+
+def _build_tracker_yaml(
+    *,
+    name: str,
+    base_url: str,
+    engine: str,
+    token_env: str,
+    category_id: int | None,
+    anonymous: bool,
+) -> dict[str, Any]:
+    defaults: dict[str, Any] = {"anonymous": anonymous}
+    if category_id is not None:
+        defaults["category_id"] = category_id
+    return {
+        "name": name,
+        "engine": engine,
+        "base_url": base_url,
+        "auth": {"type": "bearer", "token_env": token_env},
+        "upload": {
+            "endpoint": "/api/torrents",
+            "method": "POST",
+            "fields": {
+                "torrent": "torrent",
+                "name": "name",
+                "description": "description",
+                "category_id": "categoryId",
+            },
+        },
+        "defaults": defaults,
+    }
+
+
+@upload_group.command(name="assistant")
+@click.option("--name", "tracker_name", default=None, help="Tracker profile name.")
+@click.option("--base-url", default=None, help="Tracker base URL.")
+@click.option(
+    "--engine",
+    default="custom_json_api_v1",
+    type=click.Choice(["custom_json_api_v1", "unit3d", "gazelle", "custom"]),
+)
+@click.option("--token-env", default=None, help="Environment variable containing API token.")
+@click.option("--category-id", type=int, default=None, help="Default category id.")
+@click.option("--anonymous/--no-anonymous", default=False, help="Default anonymous upload flag.")
+@click.option("--yes", is_flag=True, help="Save without final confirmation.")
+def assistant_command(
+    tracker_name: str | None,
+    base_url: str | None,
+    engine: str,
+    token_env: str | None,
+    category_id: int | None,
+    anonymous: bool,
+    yes: bool,
+) -> None:
+    """Guided tracker YAML setup. Secrets are referenced by env var only."""
+    name = tracker_name or text_input(title="Tracker name", default="my-tracker")
+    url = base_url or text_input(title="Tracker base URL", default="https://tracker.example")
+    env_name = token_env or text_input(
+        title="Token environment variable",
+        default=f"FRAMEKIT_TRACKER_{_slugify_tracker_name(name).upper().replace('-', '_')}_TOKEN",
+    )
+    data = _build_tracker_yaml(
+        name=name,
+        base_url=url,
+        engine=engine,
+        token_env=env_name,
+        category_id=category_id,
+        anonymous=anonymous,
+    )
+    path = _tracker_yaml_path(name)
+    console.print_json(json.dumps(redact_settings(data), indent=2, ensure_ascii=False))
+    if not yes and not confirm_choice(title=f"Save tracker profile to {path}?", default=True):
+        console.print("[yellow]Cancelled.[/yellow]")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    console.print(f"[green]Saved[/green] {path}")
+
+
+@upload_group.command(name="explain")
+@click.argument("tracker", required=False)
+def explain_command(tracker: str | None) -> None:
+    """Explain upload configuration and tracker profile."""
+    names = _configured_tracker_names()
+    selected = tracker or (names[0] if len(names) == 1 else None)
+    table = Table(title="Upload configuration", box=box.HEAVY, expand=True)
+    table.add_column("Field", width=22, no_wrap=True)
+    table.add_column("Value", ratio=1, overflow="fold")
+    table.add_row("config_dir", str(get_config_dir()))
+    table.add_row("trackers_dir", str(_trackers_dir()))
+    table.add_row("trackers", ", ".join(names) or "-")
+    if selected:
+        data = _load_tracker_yaml(selected) or UploadService.get_tracker_info(selected) or {}
+        table.add_row("selected", selected)
+        table.add_row("engine", str(data.get("engine", data.get("type", "-"))))
+        table.add_row("base_url", str(data.get("base_url", data.get("url", "-"))))
+        table.add_row("auth", json.dumps(redact_settings(data.get("auth", {})), ensure_ascii=False))
+    console.print(table)
+
+
+@upload_group.command(name="doctor")
+@click.argument("tracker", required=False)
+def doctor_command(tracker: str | None) -> None:
+    """Validate upload config without publishing."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    names = _configured_tracker_names()
+    selected_names = [tracker] if tracker else names
+    if not selected_names:
+        warnings.append("No trackers configured.")
+    for name in selected_names:
+        data = _load_tracker_yaml(name) or UploadService.get_tracker_info(name) or {}
+        if not data:
+            errors.append(f"Tracker not found: {name}")
+            continue
+        engine = str(data.get("engine", data.get("type", "")) or "")
+        base_url = str(data.get("base_url", data.get("url", "")) or "")
+        auth = data.get("auth", {}) if isinstance(data.get("auth", {}), dict) else {}
+        token_env = str(auth.get("token_env", data.get("token_env", "")) or "")
+        if engine not in {"custom_json_api_v1", "unit3d", "gazelle", "custom"}:
+            errors.append(f"{name}: unsupported engine {engine!r}")
+        if not base_url.startswith(("http://", "https://")):
+            errors.append(f"{name}: base_url must start with http:// or https://")
+        if token_env and not os.environ.get(token_env):
+            warnings.append(f"{name}: env var not set: {token_env}")
+    if errors:
+        for error in errors:
+            console.print(f"[red]ERR[/red] {error}")
+        raise click.ClickException("Upload config invalid.")
+    for warning in warnings:
+        console.print(f"[yellow]WARN[/yellow] {warning}")
+    console.print("[green]OK[/green] Upload config valid.")
 
 
 def _select_label(
@@ -389,14 +556,13 @@ def _parse_options_json(value: str | None) -> dict[str, Any]:
     return parsed
 
 
-def _looks_like_c411_tracker(tracker_info: dict[str, Any] | None) -> bool:
+def _looks_like_custom_api_tracker(tracker_info: dict[str, Any] | None) -> bool:
     if not tracker_info:
         return False
     tracker_type = str(tracker_info.get("type", "") or "").lower()
-    if tracker_type == "c411":
+    if tracker_type == "custom_json_api_v1":
         return True
-    tracker_url = str(tracker_info.get("url", "") or "").lower()
-    return "c411.org" in tracker_url
+    return False
 
 
 def _select_int_value(title: str, values: dict[int, str]) -> int | None:
@@ -411,7 +577,7 @@ def _select_int_value(title: str, values: dict[int, str]) -> int | None:
     return int(selected) if selected and selected.isdigit() else None
 
 
-def _resolve_c411_category_id(
+def _resolve_custom_api_category_id(
     *,
     tracker_info: dict[str, Any] | None,
     provided_category_id: int | None,
@@ -420,15 +586,15 @@ def _resolve_c411_category_id(
     if provided_category_id is not None:
         return provided_category_id
     defaults = tracker_info.get("defaults", {}) if tracker_info else {}
-    default_category = defaults.get("c411_category_id")
+    default_category = defaults.get("custom_api_category_id")
     if isinstance(default_category, int):
         return default_category
     if not is_tty:
         return None
-    return _select_int_value("Select c411 category", C411_CATEGORIES)
+    return _select_int_value("Select custom API category", CUSTOM_API_CATEGORIES)
 
 
-def _resolve_c411_subcategory_id(
+def _resolve_custom_api_subcategory_id(
     *,
     category_id: int | None,
     tracker_info: dict[str, Any] | None,
@@ -438,18 +604,18 @@ def _resolve_c411_subcategory_id(
     if provided_subcategory_id is not None:
         return provided_subcategory_id
     defaults = tracker_info.get("defaults", {}) if tracker_info else {}
-    default_subcategory = defaults.get("c411_subcategory_id")
+    default_subcategory = defaults.get("custom_api_subcategory_id")
     if isinstance(default_subcategory, int):
         return default_subcategory
     if not is_tty or category_id is None:
         return None
-    choices = C411_SUBCATEGORIES.get(category_id, {})
+    choices = CUSTOM_API_SUBCATEGORIES.get(category_id, {})
     if not choices:
         return None
-    return _select_int_value("Select c411 subcategory", choices)
+    return _select_int_value("Select custom API subcategory", choices)
 
 
-def _resolve_c411_options(
+def _resolve_custom_api_options(
     *,
     subcategory_id: int | None,
     tracker_info: dict[str, Any] | None,
@@ -460,39 +626,39 @@ def _resolve_c411_options(
     if parsed:
         return parsed
     defaults = tracker_info.get("defaults", {}) if tracker_info else {}
-    default_options = defaults.get("c411_options")
+    default_options = defaults.get("custom_api_options")
     if isinstance(default_options, dict):
         return default_options
     if not is_tty:
         return {}
     if subcategory_id not in {6, 7}:
         raw = text_input(
-            title="c411 options JSON (optional, empty for none)",
+            title="custom API options JSON (optional, empty for none)",
             mandatory=False,
         ).strip()
         return _parse_options_json(raw) if raw else {}
 
     options: dict[str, Any] = {}
-    language_id = _select_int_value("Select c411 language option", C411_LANGUAGE_VALUES)
+    language_id = _select_int_value("Select custom API language option", CUSTOM_API_LANGUAGE_VALUES)
     if language_id is not None:
         options["1"] = [language_id]
 
-    quality_id = _select_int_value("Select c411 quality option", C411_QUALITY_VALUES)
+    quality_id = _select_int_value("Select custom API quality option", CUSTOM_API_QUALITY_VALUES)
     if quality_id is not None:
         options["2"] = quality_id
 
     if subcategory_id == 7:
-        season_id = _select_int_value("Select c411 season option", C411_SEASON_VALUES)
+        season_id = _select_int_value("Select custom API season option", CUSTOM_API_SEASON_VALUES)
         if season_id is not None:
             options["7"] = season_id
-        episode_id = _select_int_value("Select c411 episode option", C411_EPISODE_VALUES)
+        episode_id = _select_int_value("Select custom API episode option", CUSTOM_API_EPISODE_VALUES)
         if episode_id is not None:
             options["6"] = episode_id
 
     return options
 
 
-def _resolve_c411_nfo_path(
+def _resolve_custom_api_nfo_path(
     *,
     torrent_file: Path,
     provided_nfo: Path | None,
@@ -510,7 +676,7 @@ def _resolve_c411_nfo_path(
         return sibling_nfo[0]
     if len(sibling_nfo) > 1 and is_tty:
         selected = _select_label(
-            title="Select NFO file for c411",
+            title="Select NFO file for custom API",
             items=[
                 SelectionItem(
                     value=str(candidate),
@@ -526,7 +692,7 @@ def _resolve_c411_nfo_path(
     if not is_tty:
         return None
     raw = text_input(
-        title="NFO file path for c411 (required if not next to .torrent)",
+        title="NFO file path for custom API (required if not next to .torrent)",
         mandatory=False,
     ).strip()
     if not raw:
@@ -605,8 +771,8 @@ def _render_upload_preview(
     table.add_row("Tracker", tracker)
     table.add_row("Tracker URL", tracker_url)
     table.add_row("Name", metadata.name)
-    is_c411 = metadata.c411_category_id is not None or metadata.c411_subcategory_id is not None
-    if is_c411:
+    is_custom_api = metadata.custom_api_category_id is not None or metadata.custom_api_subcategory_id is not None
+    if is_custom_api:
         table.add_row("Category", metadata.category)
         table.add_row("Type", metadata.type)
         table.add_row("Resolution", metadata.resolution)
@@ -614,16 +780,16 @@ def _render_upload_preview(
         table.add_row("Category", f"{metadata.category} (ID: {category_id})")
         table.add_row("Type", f"{metadata.type} (ID: {type_id})")
         table.add_row("Resolution", f"{metadata.resolution} (ID: {resolution_id})")
-    if metadata.c411_category_id is not None:
-        table.add_row("c411 categoryId", str(metadata.c411_category_id))
-    if metadata.c411_subcategory_id is not None:
-        table.add_row("c411 subcategoryId", str(metadata.c411_subcategory_id))
-    if metadata.c411_options:
-        table.add_row("c411 options", json.dumps(metadata.c411_options, ensure_ascii=False))
+    if metadata.custom_api_category_id is not None:
+        table.add_row("custom API categoryId", str(metadata.custom_api_category_id))
+    if metadata.custom_api_subcategory_id is not None:
+        table.add_row("custom API subcategoryId", str(metadata.custom_api_subcategory_id))
+    if metadata.custom_api_options:
+        table.add_row("custom API options", json.dumps(metadata.custom_api_options, ensure_ascii=False))
     if metadata.nfo_path:
         table.add_row("NFO file", metadata.nfo_path)
-    if metadata.c411_draft:
-        table.add_row("Mode", "[yellow]DRAFT[/yellow] — will POST to /api/user/drafts")
+    if metadata.custom_api_draft:
+        table.add_row("Mode", "[yellow]DRAFT[/yellow] where supported")
 
     if metadata.tmdb_id:
         table.add_row("TMDB ID", str(metadata.tmdb_id))
@@ -719,9 +885,9 @@ def _setup_select_tracker(steps: list[str]) -> _SetupTrackerSelection | None:
             title="Tracker engine type",
             items=[
                 SelectionItem(
-                    value="c411",
-                    label="C411 API",
-                    description="c411.org dedicated upload API",
+                    value="custom_json_api_v1",
+                    label="Custom JSON API",
+                    description="Bearer token JSON upload API",
                 ),
                 SelectionItem(
                     value="unit3d",
@@ -1102,44 +1268,44 @@ def _resolve_run_metadata(
         return None
     resolved_name, resolved_description = text_fields
 
-    is_c411 = _looks_like_c411_tracker(ctx.tracker_info)
-    if is_c411:
-        resolved_category_id = _resolve_c411_category_id(
+    is_custom_api = _looks_like_custom_api_tracker(ctx.tracker_info)
+    if is_custom_api:
+        resolved_category_id = _resolve_custom_api_category_id(
             tracker_info=ctx.tracker_info,
             provided_category_id=category_id,
             is_tty=ctx.is_tty,
         )
         if resolved_category_id is None:
-            print_fatal("c411 categoryId is required (flag or interactive selection)")
+            print_fatal("custom API categoryId is required (flag or interactive selection)")
             return None
-        resolved_subcategory_id = _resolve_c411_subcategory_id(
+        resolved_subcategory_id = _resolve_custom_api_subcategory_id(
             category_id=resolved_category_id,
             tracker_info=ctx.tracker_info,
             provided_subcategory_id=subcategory_id,
             is_tty=ctx.is_tty,
         )
         if resolved_subcategory_id is None:
-            print_fatal("c411 subcategoryId is required (flag or interactive selection)")
+            print_fatal("custom API subcategoryId is required (flag or interactive selection)")
             return None
-        resolved_options = _resolve_c411_options(
+        resolved_options = _resolve_custom_api_options(
             subcategory_id=resolved_subcategory_id,
             tracker_info=ctx.tracker_info,
             options_json=options_json,
             is_tty=ctx.is_tty,
         )
-        resolved_nfo = _resolve_c411_nfo_path(
+        resolved_nfo = _resolve_custom_api_nfo_path(
             torrent_file=torrent_file,
             provided_nfo=nfo,
             is_tty=ctx.is_tty,
         )
         if resolved_nfo is None:
-            print_fatal("c411 requires an NFO file (--nfo or <torrent>.nfo)")
+            print_fatal("custom API requires an NFO file (--nfo or <torrent>.nfo)")
             return None
-        resolved_category = C411_CATEGORIES.get(
+        resolved_category = CUSTOM_API_CATEGORIES.get(
             resolved_category_id, f"Category {resolved_category_id}"
         )
-        resolved_type = "c411"
-        resolved_resolution = "c411"
+        resolved_type = "custom_json_api_v1"
+        resolved_resolution = "custom_json_api_v1"
     else:
         resolved_category, resolved_type, resolved_resolution = _resolve_metadata_choices(
             ctx=ctx,
@@ -1171,12 +1337,12 @@ def _resolve_run_metadata(
         anonymous=anonymous,
         stream=stream,
         nfo_path=str(resolved_nfo) if resolved_nfo else None,
-        c411_category_id=resolved_category_id,
-        c411_subcategory_id=resolved_subcategory_id,
-        c411_options=resolved_options,
-        c411_description_format=description_format,
-        c411_uploader_note=uploader_note,
-        c411_draft=draft,
+        custom_api_category_id=resolved_category_id,
+        custom_api_subcategory_id=resolved_subcategory_id,
+        custom_api_options=resolved_options,
+        custom_api_description_format=description_format,
+        custom_api_uploader_note=uploader_note,
+        custom_api_draft=draft,
     )
     return _apply_upload_preset(metadata, preset, preset_obj=ctx.preset_obj)
 
@@ -1449,7 +1615,7 @@ def test_command(tracker: str | None):
 @click.option(
     "--type",
     "tracker_type",
-    type=click.Choice(["c411", "unit3d", "gazelle", "custom"]),
+    type=click.Choice(["custom_json_api_v1", "unit3d", "gazelle", "custom"]),
     help="Tracker type (auto-detected if not specified)",
 )
 @click.option("--save/--no-save", default=True, help="Save to framekit.yaml")
@@ -1521,21 +1687,21 @@ def discover_command(url: str, api_key: str, name: str, tracker_type: str | None
     "nfo_path",
     type=click.Path(exists=True, path_type=Path),
     default=None,
-    help="NFO file path (required for c411)",
+    help="NFO file path (required by some custom JSON API trackers)",
 )
 @click.option("--category", default=None, help="Category name")
 @click.option("--type", default=None, help="Type (e.g. 1080p, 2160p)")
 @click.option("--resolution", default=None, help="Resolution (e.g. 1920x1080)")
-@click.option("--category-id", type=int, default=None, help="c411 categoryId")
-@click.option("--subcategory-id", type=int, default=None, help="c411 subcategoryId")
-@click.option("--options-json", default=None, help='c411 options JSON (e.g. \'{"1":[4],"2":10}\')')
+@click.option("--category-id", type=int, default=None, help="custom API categoryId")
+@click.option("--subcategory-id", type=int, default=None, help="custom API subcategoryId")
+@click.option("--options-json", default=None, help='custom API options JSON (e.g. \'{"1":[4],"2":10}\')')
 @click.option(
     "--description-format",
     type=click.Choice(["standard", "html"]),
     default=None,
-    help="c411 description format",
+    help="custom API description format",
 )
-@click.option("--uploader-note", default=None, help="c411 uploader note")
+@click.option("--uploader-note", default=None, help="custom API uploader note")
 @click.option("--tmdb-id", type=int, default=None, help="TMDB ID")
 @click.option(
     "--auto-tmdb/--no-auto-tmdb", default=False, help="Auto-resolve TMDB ID from release name"
@@ -1547,7 +1713,7 @@ def discover_command(url: str, api_key: str, name: str, tracker_type: str | None
 @click.option(
     "--draft",
     is_flag=True,
-    help="Save as draft (c411 only) — uses /api/user/drafts, no live publish",
+    help="Save as draft where the selected custom API supports it.",
 )
 @click.option("--dry-run", is_flag=True, help="Preview upload without sending")
 @click.option("--preset", default=None, help="Apply a saved preset")
@@ -1586,7 +1752,7 @@ def run_command(
           --description "..." --category Films --type 1080p --resolution 1920x1080 --tmdb-id 12345
 
       framekit upload run movie.torrent   # fully interactive
-      framekit upload run "E:\\Release\\MyFolder" --tracker C411 --dry-run
+      framekit upload run "E:\\Release\\MyFolder" --tracker my-tracker --dry-run
     """
     try:
         ctx = _resolve_run_context(tracker, preset)

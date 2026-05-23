@@ -1,7 +1,7 @@
 """Tracker adapters for upload module.
 
 Provides adapters for different tracker types:
-- UNIT3D: c411, BeyondHD, Blutopia, etc.
+- UNIT3D: BeyondHD, Blutopia, etc.
 - Gazelle: RED, OPS, etc.
 - Custom: Template for custom trackers
 """
@@ -14,15 +14,15 @@ from .base import (
     UploadError,
     ValidationError,
 )
-from .c411 import C411Adapter
 from .custom import CustomAdapter
+from .custom_json_api_v1 import CustomJsonApiAdapter
 from .gazelle import GazelleAdapter
 from .unit3d import UNIT3DAdapter
 
 __all__ = [
     "AdapterError",
     "AuthenticationError",
-    "C411Adapter",
+    "CustomJsonApiAdapter",
     "CustomAdapter",
     "DiscoveryError",
     "GazelleAdapter",

@@ -10,7 +10,7 @@ from loguru import logger
 
 from framekit.core.http import HttpClient
 
-from .adapters import C411Adapter, CustomAdapter, GazelleAdapter, UNIT3DAdapter
+from .adapters import CustomAdapter, CustomJsonApiAdapter, GazelleAdapter, UNIT3DAdapter
 from .models import DiscoveryResult, TrackerConfig
 from .tracker_profiles import get_profile, merge_profile_with_discovered
 
@@ -100,9 +100,9 @@ class DiscoveryService:
         Returns:
             Detected tracker type or None
         """
-        # Test UNIT3D
-        if self._test_c411(url, api_key):
-            return "c411"
+        # Test custom JSON API
+        if self._test_custom_json_api(url, api_key):
+            return "custom_json_api_v1"
 
         # Test UNIT3D
         if self._test_unit3d(url, api_key):
@@ -115,8 +115,8 @@ class DiscoveryService:
         # Unknown type
         return None
 
-    def _test_c411(self, url: str, api_key: str) -> bool:
-        """Test if tracker follows c411 API contract."""
+    def _test_custom_json_api(self, url: str, api_key: str) -> bool:
+        """Test if tracker follows the custom JSON API contract."""
         try:
             headers = {
                 "Authorization": f"Bearer {api_key}",
@@ -136,7 +136,7 @@ class DiscoveryService:
             finally:
                 client.close()
         except Exception as e:
-            self.logger.debug(f"C411 test failed: {e}")
+            self.logger.debug(f"Custom JSON API test failed: {e}")
         return False
 
     def _test_unit3d(self, url: str, api_key: str) -> bool:
@@ -220,8 +220,8 @@ class DiscoveryService:
             return UNIT3DAdapter(config)
         elif config.type == "gazelle":
             return GazelleAdapter(config)
-        elif config.type == "c411":
-            return C411Adapter(config)
+        elif config.type == "custom_json_api_v1":
+            return CustomJsonApiAdapter(config)
         elif config.type == "custom":
             return CustomAdapter(config)
         else:

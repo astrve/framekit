@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -296,6 +296,7 @@ def _execute_per_file_nfo_mode(
     *,
     service: NfoService,
     work_folder: Path,
+    output_folder: Path | None,
     release: ReleaseNfoData,
     template_name: str,
     logo_path: str,
@@ -310,6 +311,7 @@ def _execute_per_file_nfo_mode(
         template_locale=resolved_locale,
         extra_context=metadata_context,
     )
+    target_dir = output_folder or work_folder
     if dry_run:
         print_info(
             tr(
@@ -319,12 +321,7 @@ def _execute_per_file_nfo_mode(
             )
         )
         return []
-    _per_report, written_per_file = service.write_per_file(
-        work_folder,
-        results=per_file_results,
-        template_name=template_name,
-        template_locale=resolved_locale,
-    )
+    written_per_file = _write_pipeline_per_file_nfos(per_file_results, target_dir)
     for path in written_per_file:
         print_info(tr("nfo.success.written", default="NFO written: {path}", path=path))
     return written_per_file
@@ -340,12 +337,14 @@ def _write_pipeline_sidecar_nfo(
     *,
     release: ReleaseNfoData,
     rendered: str,
+    output_folder: Path | None,
     dry_run: bool,
 ) -> Path | None:
     if not release.episodes:
         return None
     source_file = release.episodes[0].file_path
-    target = source_file.with_suffix(".nfo")
+    target_dir = output_folder or source_file.parent
+    target = target_dir / source_file.with_suffix(".nfo").name
     if dry_run:
         print_info(
             tr(
@@ -355,9 +354,22 @@ def _write_pipeline_sidecar_nfo(
             )
         )
         return None
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(rendered, encoding="utf-8")
     print_info(tr("nfo.success.written", default="NFO written: {path}", path=target))
     return target
+
+
+def _write_pipeline_per_file_nfos(
+    results: Sequence[tuple[object, ReleaseNfoData, str, Path]], output_folder: Path
+) -> list[Path]:
+    output_folder.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for _report, _release, rendered, source_path in results:
+        target = output_folder / source_path.with_suffix(".nfo").name
+        target.write_text(rendered, encoding="utf-8")
+        written.append(target)
+    return written
 
 
 def _nfo_step(
@@ -452,6 +464,7 @@ def _nfo_step(
         written_sidecar = _write_pipeline_sidecar_nfo(
             release=built_release,
             rendered=rendered,
+            output_folder=output_folder,
             dry_run=dry_run,
         )
         context.nfo_path = written_global or written_sidecar
@@ -472,6 +485,7 @@ def _nfo_step(
         written_per_file = _execute_per_file_nfo_mode(
             service=service,
             work_folder=work_folder,
+            output_folder=output_folder,
             release=release,
             template_name=template_name,
             logo_path=logo_path,
@@ -501,6 +515,7 @@ def _nfo_step(
         _execute_per_file_nfo_mode(
             service=service,
             work_folder=work_folder,
+            output_folder=output_folder,
             release=release,
             template_name=template_name,
             logo_path=logo_path,
@@ -780,7 +795,7 @@ def _resolve_pipeline_banner_design(
     banner_design: str | None = prez_settings.get("banner_design")
     can_select = not auto_mode and sys.stdin.isatty() and "bbcode" in formats_tuple and not preset
     if can_select:
-        chosen = select_banner_design(language=banner_language, current_design=banner_design)
+        chosen = select_banner_design(language=banner_language, current_design=banner_design, default_textual=True)
         banner_design = _persist_pipeline_banner_design(
             chosen=chosen,
             current_design=banner_design,
@@ -1231,7 +1246,7 @@ def _pipeline_upload_tags(parsed) -> list[str]:
     return [tag for tag in [parsed.codec, parsed.audio, parsed.hdr] if tag]
 
 
-def _has_c411_tracker(settings: dict, tracker_names: list[str]) -> bool:
+def _has_custom_api_tracker(settings: dict, tracker_names: list[str]) -> bool:
     trackers = settings.get("upload", {}).get("trackers", [])
     by_name = {
         str(tracker.get("name", "")): tracker for tracker in trackers if isinstance(tracker, dict)
@@ -1239,12 +1254,12 @@ def _has_c411_tracker(settings: dict, tracker_names: list[str]) -> bool:
     for tracker_name in tracker_names:
         tracker = by_name.get(tracker_name, {})
         tracker_type = str(tracker.get("type", "") or "").lower()
-        if tracker_type == "c411":
+        if tracker_type == "custom_json_api_v1":
             return True
     return False
 
 
-def _first_c411_defaults(settings: dict, tracker_names: list[str]) -> dict:
+def _first_custom_api_defaults(settings: dict, tracker_names: list[str]) -> dict:
     trackers = settings.get("upload", {}).get("trackers", [])
     by_name = {
         str(tracker.get("name", "")): tracker for tracker in trackers if isinstance(tracker, dict)
@@ -1252,7 +1267,7 @@ def _first_c411_defaults(settings: dict, tracker_names: list[str]) -> dict:
     for tracker_name in tracker_names:
         tracker = by_name.get(tracker_name, {})
         tracker_type = str(tracker.get("type", "") or "").lower()
-        if tracker_type != "c411":
+        if tracker_type != "custom_json_api_v1":
             continue
         defaults = tracker.get("defaults", {})
         if isinstance(defaults, dict):
@@ -1300,13 +1315,13 @@ def _looks_like_animation(context: PipelineContext | None, parsed, nfo_data) -> 
     return any(marker in title for marker in ("anime", "animation"))
 
 
-def _c411_subcategory_id(media_kind: str, is_animation: bool) -> int:
+def _custom_api_subcategory_id(media_kind: str, is_animation: bool) -> int:
     if media_kind in {"tv", "single_episode", "season_pack", "special_pack"}:
         return 2 if is_animation else 7
     return 1 if is_animation else 6
 
 
-def _c411_quality_option(parsed) -> int | None:
+def _custom_api_quality_option(parsed) -> int | None:
     source = str(getattr(parsed, "source", "") or "").lower()
     resolution = str(getattr(parsed, "resolution", "") or "").lower()
     if source == "remux":
@@ -1324,7 +1339,7 @@ def _c411_quality_option(parsed) -> int | None:
     return None
 
 
-def _c411_language_option(context: PipelineContext | None) -> int | None:
+def _custom_api_language_option(context: PipelineContext | None) -> int | None:
     if context is None or context.release is None:
         return None
     blob = " ".join(
@@ -1348,7 +1363,7 @@ def _c411_language_option(context: PipelineContext | None) -> int | None:
     return None
 
 
-def _c411_season_episode_options(
+def _custom_api_season_episode_options(
     context: PipelineContext | None, parsed
 ) -> tuple[int | None, int | None]:
     media_kind = _pipeline_upload_media_kind(context)
@@ -1370,7 +1385,7 @@ def _c411_season_episode_options(
     return None, None
 
 
-def _apply_c411_metadata_mapping(
+def _apply_custom_api_metadata_mapping(
     *,
     settings: dict,
     tracker_names: list[str],
@@ -1379,56 +1394,56 @@ def _apply_c411_metadata_mapping(
     nfo_data,
     metadata: TorrentMetadata,
 ) -> TorrentMetadata:
-    if not _has_c411_tracker(settings, tracker_names):
+    if not _has_custom_api_tracker(settings, tracker_names):
         return metadata
 
-    defaults = _first_c411_defaults(settings, tracker_names)
+    defaults = _first_custom_api_defaults(settings, tracker_names)
     media_kind = _pipeline_upload_media_kind(context)
     is_animation = _looks_like_animation(context, parsed, nfo_data)
 
     options: dict[str, object] = {}
-    raw_default_options = defaults.get("c411_options", {})
+    raw_default_options = defaults.get("custom_api_options", {})
     if isinstance(raw_default_options, dict):
         options.update(raw_default_options)
 
-    language_id = _c411_language_option(context)
+    language_id = _custom_api_language_option(context)
     if language_id is not None and "1" not in options:
         options["1"] = [language_id]
 
-    quality_id = _c411_quality_option(parsed)
+    quality_id = _custom_api_quality_option(parsed)
     if quality_id is not None and "2" not in options:
         options["2"] = quality_id
 
-    season_option, episode_option = _c411_season_episode_options(context, parsed)
+    season_option, episode_option = _custom_api_season_episode_options(context, parsed)
     if season_option is not None and "7" not in options:
         options["7"] = season_option
     if episode_option is not None and "6" not in options:
         options["6"] = episode_option
 
-    default_category_id = defaults.get("c411_category_id")
+    default_category_id = defaults.get("custom_api_category_id")
     category_id = default_category_id if isinstance(default_category_id, int) else 1
 
-    default_subcategory_id = defaults.get("c411_subcategory_id")
-    inferred_subcategory_id = _c411_subcategory_id(media_kind, is_animation)
+    default_subcategory_id = defaults.get("custom_api_subcategory_id")
+    inferred_subcategory_id = _custom_api_subcategory_id(media_kind, is_animation)
     subcategory_id = (
         default_subcategory_id
         if isinstance(default_subcategory_id, int)
         else inferred_subcategory_id
     )
 
-    description_format = str(defaults.get("c411_description_format", "standard")).lower()
+    description_format = str(defaults.get("custom_api_description_format", "standard")).lower()
     if description_format not in {"standard", "html"}:
         description_format = "standard"
 
     return metadata.model_copy(
         update={
-            "c411_category_id": category_id,
-            "c411_subcategory_id": subcategory_id,
-            "c411_options": options,
-            "c411_description_format": description_format,
+            "custom_api_category_id": category_id,
+            "custom_api_subcategory_id": subcategory_id,
+            "custom_api_options": options,
+            "custom_api_description_format": description_format,
             "category": "Films & Videos",
-            "type": "c411",
-            "resolution": "c411",
+            "type": "custom_json_api_v1",
+            "resolution": "custom_json_api_v1",
         }
     )
 
@@ -1624,7 +1639,7 @@ def _upload_step(
     tracker_names = _resolve_upload_tracker_names(settings)
     if not tracker_names:
         return 0
-    metadata = _apply_c411_metadata_mapping(
+    metadata = _apply_custom_api_metadata_mapping(
         settings=settings,
         tracker_names=tracker_names,
         context=context,

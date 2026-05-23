@@ -40,41 +40,42 @@ SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "es", "fr")
 
 # Fallback when GitHub is unreachable and no cache exists.
 FALLBACK_DESIGNS: tuple[str, ...] = (
-    "astro-gradient_blue",
-    "astro-gradient_purple",
-    "astro-gradient_orange",
-    "black-and-white_classic",
-    "black-and-white_inverted",
-    "cyberpunk_yellow",
-    "cyberpunk_pink",
-    "cyberpunk_blue",
-    "cyberpunk_green",
-    "dark-fantasy_red",
-    "dark-fantasy_gold",
-    "dark-fantasy_purple",
-    "digital-blue_cyan",
-    "digital-blue_electric",
-    "digital-blue_navy",
-    "military-green_olive",
-    "military-green_forest",
-    "minimal-blue_ice",
-    "minimal-blue_steel",
-    "minimal-blue_midnight",
-    "minimal-blue_slate",
-    "robotic_chrome",
-    "robotic_rust",
-    "robotic_graphite",
-    "neon_green",
-    "neon_pink",
-    "sunset_warm",
-    "sunset_cold",
-    "vintage_sepia",
-    "vintage_noir",
+    "abstract_red",
+    "astro_gradient",
+    "cinema_pink",
+    "cinema_purple",
+    "cyberpunk",
+    "dark-fantasy_blue",
+    "diagonal_blue",
+    "digital_blue",
+    "folder_beige_and_blue",
+    "gold-frame_black",
+    "gold-frame_green",
+    "iron-man_red_and_yellow",
+    "large-basic_blue",
+    "leaf_green",
+    "linear_beige",
+    "metal-frame_blue",
+    "military_green",
+    "minimal_blue",
+    "mojave_orange",
+    "movie-custom_red",
+    "old-label_black",
+    "ores_blue_and_yellow",
+    "oval_pastel_green",
+    "palace_green_and_gold",
+    "patterns_green",
+    "robotic_grey",
+    "robotic_purple",
+    "spectral_blue_and_purple",
+    "wavy_blue",
+    "white-steel_blue",
 )
 
 # Cache lifetime in seconds (24h).
 CACHE_TTL_SECONDS = 24 * 60 * 60
 CACHE_FILE_NAME = "prez_banners_index.json"
+CACHE_SCHEMA_VERSION = 2
 HTTP_TIMEOUT = 6.0
 
 
@@ -92,6 +93,10 @@ def _load_cache() -> dict[str, Any] | None:
         return None
     if not isinstance(data, dict):
         return None
+    if data.get("schema_version") != CACHE_SCHEMA_VERSION:
+        return None
+    if data.get("branch") != BANNERS_BRANCH:
+        return None
     fetched_at = data.get("fetched_at")
     if not isinstance(fetched_at, (int, float)):
         return None
@@ -100,6 +105,8 @@ def _load_cache() -> dict[str, Any] | None:
     designs = data.get("designs")
     if not isinstance(designs, dict):
         return None
+    if len(designs) < len(FALLBACK_DESIGNS):
+        return None
     return data
 
 
@@ -107,7 +114,12 @@ def _save_cache(designs: dict[str, dict[str, list[str]]]) -> None:
     path = _cache_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"fetched_at": time.time(), "designs": designs}
+        payload = {
+            "schema_version": CACHE_SCHEMA_VERSION,
+            "branch": BANNERS_BRANCH,
+            "fetched_at": time.time(),
+            "designs": designs,
+        }
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     except OSError:
         pass
@@ -164,7 +176,7 @@ def _iter_design_names(entries: list[dict[str, Any]]) -> list[str]:
         if entry.get("type") != "dir":
             continue
         name = entry.get("name")
-        if isinstance(name, str) and not name.startswith("."):
+        if isinstance(name, str) and not name.startswith((".", "_")):
             names.append(name)
     return names
 
@@ -291,6 +303,7 @@ def select_banner_design(
     language: str,
     current_design: str | None = None,
     banners_path: Path | None = None,  # legacy, unused — kept for compat
+    default_textual: bool = False,
 ) -> str | None:
     """Interactive banner design selector.
 
@@ -312,7 +325,7 @@ def select_banner_design(
             "prez.banner.fetch_prompt",
             default="Do you want to fetch banner images from the online catalog?",
         ),
-        default=True,
+        default=not default_textual,
         yes_label=tr("common.yes", default="Yes"),
         no_label=tr("prez.banner.no_use_textual", default="No (Use text-only)"),
     )

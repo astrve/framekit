@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import sys
 from copy import deepcopy
@@ -10,7 +11,14 @@ from rich.panel import Panel
 from rich.table import Table
 
 from framekit.core.i18n import set_locale, tr
-from framekit.core.paths import get_config_dir
+from framekit.core.paths import (
+    ENV_CONFIG_PATH,
+    SETTINGS_FILENAME,
+    clear_configured_global_settings_path,
+    coerce_settings_file_path,
+    get_config_dir,
+    set_configured_global_settings_path,
+)
 from framekit.core.settings import DEFAULT_SETTINGS, SettingsStore, normalize_ui_locale
 from framekit.modules.metadata.config import (
     looks_like_tmdb_read_access_token,
@@ -189,6 +197,7 @@ def _ensure_setup_shape(settings: dict) -> dict:
     settings["metadata"].setdefault("language", "en-US")
     settings["metadata"].setdefault("tmdb_read_access_token", "")
     settings["metadata"].setdefault("enabled_by_default", True)
+    settings["metadata"].setdefault("prompt_missing_token_in_pipeline", True)
 
     settings.setdefault("setup", {})
     settings["setup"].setdefault("completed", False)
@@ -218,6 +227,7 @@ def _ensure_setup_shape(settings: dict) -> dict:
     settings["modules"]["torrent"].setdefault("announce", "")
     settings["modules"]["torrent"].setdefault("announce_urls", [])
     settings["modules"]["torrent"].setdefault("selected_announce", "")
+    settings["modules"]["torrent"].setdefault("prompt_save_announce", True)
 
     return settings
 
@@ -916,6 +926,7 @@ def _ensure_default_folders_exist(settings: dict) -> None:
 
 
 SETUP_STEPS = [
+    "Storage",
     "Language",
     "Security",
     "Folders",
@@ -952,6 +963,94 @@ def _ask_optional_step(prompt: str, *, default_yes: bool) -> bool:
     if selection is None:
         raise SetupCancelled
     return bool(selection)
+
+
+def _default_global_settings_path() -> Path:
+    return (get_config_dir() / SETTINGS_FILENAME).resolve()
+
+
+def _choose_settings_storage_path(current_path: Path) -> Path:
+    _show_step(
+        tr("setup.storage_title", default="Framekit settings storage"),
+        tr(
+            "setup.storage_body",
+            default=(
+                "Choose where Framekit should save its global configuration.\n\n"
+                "Recommended: the OS user config directory.\n"
+                "Custom folder: useful for a dedicated disk or portable setup.\n\n"
+                "Project configs still stay opt-in with 'framekit init'."
+            ),
+        ),
+        current_step="Storage",
+        all_steps=SETUP_STEPS,
+    )
+
+    default_path = _default_global_settings_path()
+    while True:
+        selected = choose_option(
+            title=tr("setup.storage_choose_title", default="Choose settings storage"),
+            options=[
+                ChoiceOption(
+                    "default",
+                    tr("setup.storage.default", default="Recommended OS location"),
+                    str(default_path),
+                ),
+                ChoiceOption(
+                    "custom",
+                    tr("setup.storage.custom", default="Custom folder"),
+                    str(current_path.parent),
+                ),
+            ],
+            preferred_value="default" if current_path.resolve() == default_path else "custom",
+        )
+        if selected is None:
+            raise SetupCancelled
+        if selected == "default":
+            return default_path
+
+        custom = _prompt_custom_path(
+            tr("setup.storage.custom_label", default="Framekit config folder"),
+            current=str(current_path.parent),
+        )
+        if custom is None:
+            continue
+        return coerce_settings_file_path(custom).resolve()
+
+
+def _run_storage_step() -> SettingsStore:
+    store = SettingsStore()
+    _show_step_timeline("Storage", SETUP_STEPS)
+
+    if not _ask_optional_step("setup.confirm.configure_storage", default_yes=False):
+        return store
+
+    if os.environ.get(ENV_CONFIG_PATH, "").strip():
+        print_warning(
+            tr(
+                "setup.storage.env_override",
+                default=(
+                    "FRAMEKIT_CONFIG is set. It overrides setup storage choices. "
+                    "Unset it to use a custom global config folder."
+                ),
+            )
+        )
+        return store
+
+    selected_path = _choose_settings_storage_path(store.path)
+    default_path = _default_global_settings_path()
+    if selected_path == default_path:
+        clear_configured_global_settings_path()
+    else:
+        selected_path = set_configured_global_settings_path(selected_path)
+
+    print_success(
+        tr(
+            "setup.storage.saved",
+            default="Framekit settings path configured: {path}",
+            path=str(selected_path),
+        )
+    )
+    return SettingsStore(selected_path)
 
 
 def _run_language_step(settings: dict) -> None:
@@ -1179,13 +1278,13 @@ def _save_setup(settings: dict, store: SettingsStore, mark_completed: bool) -> i
 
 def run_guided_setup(*, mark_completed: bool = True) -> int:
     """Run guided setup."""
-    store = SettingsStore()
-    settings = _load_settings_with_defaults(store)
-    project_root = Path.cwd()
     print_module_banner("Setup")
     _show_setup_welcome()
 
     try:
+        store = _run_storage_step()
+        settings = _load_settings_with_defaults(store)
+        project_root = Path.cwd()
         _run_language_step(settings)
         _run_security_step(settings)
         _run_folders_step(settings, project_root)

@@ -216,6 +216,10 @@ def _generate_yaml_with_comments(data: dict[str, Any]) -> str:  # pyright: ignor
     _append_tmdb_warning(lines, tmdb_token)
     lines.append(f"  tmdb_read_access_token: {_yaml_quote(tmdb_token)}")
     lines.append(f"  enabled_by_default: {str(data['metadata']['enabled_by_default']).lower()}")
+    lines.append(
+        "  prompt_missing_token_in_pipeline: "
+        f"{str(data['metadata']['prompt_missing_token_in_pipeline']).lower()}"
+    )
     lines.append("")
 
     # Cache section
@@ -287,6 +291,10 @@ def _generate_yaml_with_comments(data: dict[str, Any]) -> str:  # pyright: ignor
     )
     lines.append(f"    private: {str(data['modules']['torrent']['private']).lower()}")
     lines.append(f"    piece_length: {data['modules']['torrent']['piece_length']}")
+    lines.append(
+        "    prompt_save_announce: "
+        f"{str(data['modules']['torrent']['prompt_save_announce']).lower()}"
+    )
     lines.append("")
 
     # Prez module
@@ -361,8 +369,12 @@ def _generate_yaml_with_comments(data: dict[str, Any]) -> str:  # pyright: ignor
     seedbox_data = data.get("seedbox", {})
     lines.append(f"  default: {_yaml_quote(seedbox_data.get('default', ''))}")
     lines.append(f"  history_enabled: {str(seedbox_data.get('history_enabled', True)).lower()}")
-    lines.append("  seedboxes:")
-    for sb in seedbox_data.get("seedboxes", []):
+    seedboxes = seedbox_data.get("seedboxes", [])
+    if seedboxes:
+        lines.append("  seedboxes:")
+    else:
+        lines.append("  seedboxes: []")
+    for sb in seedboxes:
         lines.append(f"    - name: {_yaml_quote(sb.get('name', ''))}")
         lines.append(f"      rclone_remote: {_yaml_quote(sb.get('rclone_remote', ''))}")
         lines.append(f"      remote_base_path: {_yaml_quote(sb.get('remote_base_path', '/'))}")
