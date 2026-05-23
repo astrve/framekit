@@ -504,7 +504,13 @@ def test_upload_run_tracker_name_case_insensitive(monkeypatch, tmp_path):
     class _UploadService:
         @staticmethod
         def list_trackers():
-            return [{"name": "Custom JSON API", "url": "https://tracker.example", "type": "custom_json_api_v1"}]
+            return [
+                {
+                    "name": "Custom JSON API",
+                    "url": "https://tracker.example",
+                    "type": "custom_json_api_v1",
+                }
+            ]
 
         @staticmethod
         def get_tracker_info(tracker_name: str):

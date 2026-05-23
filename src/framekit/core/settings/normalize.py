@@ -217,7 +217,11 @@ def _normalize_renamer_module(modules: dict[str, Any]) -> None:
     renamer["profile"] = str(renamer.get("profile", "fr_tracker") or "fr_tracker").strip()
     for key in ("junk_terms",):
         raw = renamer.get(key, [])
-        renamer[key] = [str(item).strip() for item in raw if str(item).strip()] if isinstance(raw, list) else []
+        renamer[key] = (
+            [str(item).strip() for item in raw if str(item).strip()]
+            if isinstance(raw, list)
+            else []
+        )
     for key in ("language_aliases", "quality_aliases", "source_aliases"):
         raw_map = renamer.get(key, {})
         renamer[key] = (
@@ -225,12 +229,9 @@ def _normalize_renamer_module(modules: dict[str, Any]) -> None:
             if isinstance(raw_map, dict)
             else {}
         )
-    renamer["insert_missing_resolution"] = _as_bool(
-        renamer.get("insert_missing_resolution"), True
-    )
+    renamer["insert_missing_resolution"] = _as_bool(renamer.get("insert_missing_resolution"), True)
     renamer["language_insertion"] = str(
-        renamer.get("language_insertion", "after_episode_or_start")
-        or "after_episode_or_start"
+        renamer.get("language_insertion", "after_episode_or_start") or "after_episode_or_start"
     ).strip()
 
 

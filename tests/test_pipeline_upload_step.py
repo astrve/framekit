@@ -176,7 +176,13 @@ def test_apply_custom_api_metadata_mapping_infers_film_animation(monkeypatch, tm
         description="[b]desc[/b]",
     )
     mapped = pipeline_steps._apply_custom_api_metadata_mapping(
-        settings={"upload": {"trackers": [{"name": "custom_json_api_v1", "type": "custom_json_api_v1", "defaults": {}}]}},
+        settings={
+            "upload": {
+                "trackers": [
+                    {"name": "custom_json_api_v1", "type": "custom_json_api_v1", "defaults": {}}
+                ]
+            }
+        },
         tracker_names=["custom_json_api_v1"],
         context=context,
         parsed=parsed,
@@ -222,7 +228,13 @@ def test_apply_custom_api_metadata_mapping_infers_tv_episode(monkeypatch, tmp_pa
         description="[b]desc[/b]",
     )
     mapped = pipeline_steps._apply_custom_api_metadata_mapping(
-        settings={"upload": {"trackers": [{"name": "custom_json_api_v1", "type": "custom_json_api_v1", "defaults": {}}]}},
+        settings={
+            "upload": {
+                "trackers": [
+                    {"name": "custom_json_api_v1", "type": "custom_json_api_v1", "defaults": {}}
+                ]
+            }
+        },
         tracker_names=["custom_json_api_v1"],
         context=context,
         parsed=parsed,

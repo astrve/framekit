@@ -268,8 +268,8 @@ class TestSettingsStorageSelection:
         workspace.mkdir()
         monkeypatch.chdir(workspace)
         monkeypatch.delenv("FRAMEKIT_CONFIG", raising=False)
-        monkeypatch.setattr(paths, "user_config_dir", lambda app, author: str(config_dir))
-        monkeypatch.setattr(paths, "user_cache_dir", lambda app, author: str(cache_dir))
+        monkeypatch.setattr(paths, "user_config_dir", lambda *_args: str(config_dir))
+        monkeypatch.setattr(paths, "user_cache_dir", lambda *_args: str(cache_dir))
         mock_yes_no.return_value = True
         mock_choose.return_value = "custom"
         mock_console.input.return_value = str(custom_dir)

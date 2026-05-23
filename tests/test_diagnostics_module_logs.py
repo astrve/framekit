@@ -17,8 +17,8 @@ def test_log_event_writes_per_module_session_log(tmp_path, monkeypatch) -> None:
     workspace.mkdir()
     monkeypatch.chdir(workspace)
     monkeypatch.delenv("FRAMEKIT_CONFIG", raising=False)
-    monkeypatch.setattr(paths, "user_cache_dir", lambda app, author: str(cache_dir))
-    monkeypatch.setattr(paths, "user_config_dir", lambda app, author: str(config_dir))
+    monkeypatch.setattr(paths, "user_cache_dir", lambda *_args: str(cache_dir))
+    monkeypatch.setattr(paths, "user_config_dir", lambda *_args: str(config_dir))
     configure_diagnostics(log_file=cache_dir / "framekit.log")
 
     try:

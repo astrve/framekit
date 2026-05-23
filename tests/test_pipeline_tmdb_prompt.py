@@ -42,7 +42,9 @@ def test_pipeline_tmdb_prompt_can_store_token(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.delenv("FRAMEKIT_TMDB_READ_ACCESS_TOKEN", raising=False)
     monkeypatch.setattr(pipeline_module.sys, "stdin", _TtyStdin())
     monkeypatch.setattr(pipeline_module, "select_one", lambda **_kwargs: "add")
-    monkeypatch.setattr(pipeline_module.click, "prompt", lambda *_args, **_kwargs: _valid_tmdb_token())
+    monkeypatch.setattr(
+        pipeline_module.click, "prompt", lambda *_args, **_kwargs: _valid_tmdb_token()
+    )
 
     def _store_token(fake_store: _FakeStore, token: str) -> dict:
         assert token == _valid_tmdb_token()

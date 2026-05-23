@@ -16,9 +16,7 @@ def test_rename_parent_derives_library_name_from_nested_release(tmp_path, monkey
     container = tmp_path / "Dirty.Parent"
     final = container / "Release" / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER"
     final.mkdir(parents=True)
-    (final / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER.mkv").write_bytes(
-        b"mkv"
-    )
+    (final / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER.mkv").write_bytes(b"mkv")
     (final / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER.nfo").write_text(
         "nfo",
         encoding="utf-8",
@@ -67,9 +65,7 @@ def test_rename_parent_dry_run_keeps_folder_unchanged(tmp_path, monkeypatch) -> 
     container = tmp_path / "Dirty.Parent"
     final = container / "Release" / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER"
     final.mkdir(parents=True)
-    (final / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER.mkv").write_bytes(
-        b"mkv"
-    )
+    (final / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER.mkv").write_bytes(b"mkv")
     (final / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER.nfo").write_text(
         "nfo",
         encoding="utf-8",

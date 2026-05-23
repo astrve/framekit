@@ -11,6 +11,7 @@ from framekit.core.paths import get_config_dir
 @dataclass(frozen=True, slots=True)
 class RenamerProfile:
     """Configurable renamer behavior profile."""
+
     name: str
     default_language_tag: str = "MULTI.VFF"
     language_aliases: dict[str, str] = field(default_factory=dict)
@@ -68,7 +69,9 @@ def _profile_from_dict(name: str, data: dict[str, Any]) -> RenamerProfile:
             str(key).strip().upper(): str(value).strip()
             for key, value in dict(data.get("language_aliases", {})).items()
         },
-        junk_terms=tuple(str(item).strip() for item in data.get("junk_terms", []) if str(item).strip()),
+        junk_terms=tuple(
+            str(item).strip() for item in data.get("junk_terms", []) if str(item).strip()
+        ),
         quality_aliases={
             str(key).strip().upper(): str(value).strip()
             for key, value in dict(data.get("quality_aliases", {})).items()

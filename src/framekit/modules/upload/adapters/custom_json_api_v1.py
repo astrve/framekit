@@ -170,7 +170,9 @@ class CustomJsonApiAdapter(TrackerAdapter):
         candidate = (metadata.custom_api_description_format or "").strip().lower()
         if candidate in {"standard", "html"}:
             return candidate
-        default_value = str(self.config.defaults.get("custom_api_description_format", "standard")).lower()
+        default_value = str(
+            self.config.defaults.get("custom_api_description_format", "standard")
+        ).lower()
         return default_value if default_value in {"standard", "html"} else "standard"
 
     def _build_upload_data(self, metadata: TorrentMetadata) -> tuple[dict[str, Any], list[str]]:

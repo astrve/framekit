@@ -265,9 +265,7 @@ def _disable_save_announce_prompt(store: SettingsStore, settings: dict) -> None:
     store.save(settings)
 
 
-def _maybe_save_prompted_announce(
-    *, store: SettingsStore, settings: dict, url: str
-) -> None:
+def _maybe_save_prompted_announce(*, store: SettingsStore, settings: dict, url: str) -> None:
     if not _prompt_save_announce_enabled(settings):
         return
 

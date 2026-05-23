@@ -6,8 +6,8 @@ from pathlib import Path
 def _patch_platform_dirs(monkeypatch, *, config_dir: Path, cache_dir: Path) -> None:
     from framekit.core import paths
 
-    monkeypatch.setattr(paths, "user_config_dir", lambda app, author: str(config_dir))
-    monkeypatch.setattr(paths, "user_cache_dir", lambda app, author: str(cache_dir))
+    monkeypatch.setattr(paths, "user_config_dir", lambda *_args: str(config_dir))
+    monkeypatch.setattr(paths, "user_cache_dir", lambda *_args: str(cache_dir))
 
 
 def test_settings_store_uses_user_config_when_no_project_file(tmp_path, monkeypatch) -> None:
