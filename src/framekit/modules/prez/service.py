@@ -1013,7 +1013,14 @@ def _tmdb_web_url(path: str) -> str:
 
 
 def _is_tmdb_url(value: Any) -> bool:
-    return isinstance(value, str) and "themoviedb.org" in value
+    if not isinstance(value, str):
+        return False
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(value).hostname or ""
+    except Exception:
+        return False
+    return host in ("www.themoviedb.org", "themoviedb.org")
 
 
 def _tmdb_movie_url(metadata: Any | None) -> str | None:
