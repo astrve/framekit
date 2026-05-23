@@ -56,6 +56,8 @@ framekit.yaml
 settings.json
 *.local.json
 *.local.yaml
+**/_preview/
+**/_previews/
 
 # Logs and reports
 *.log

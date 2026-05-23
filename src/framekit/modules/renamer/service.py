@@ -10,6 +10,7 @@ from framekit.core.models.renamer import RenamePlanItem
 from framekit.core.reporting import OperationReport
 from framekit.core.runs.ledger import new_run_id, record_move
 from framekit.modules.renamer.planner import build_rename_plan
+from framekit.modules.renamer.profiles import RenamerProfile
 
 
 class RenamerService:
@@ -23,6 +24,7 @@ class RenamerService:
         force_lang: bool,
         remove_terms: tuple[str, ...] = (),
         insert_after_pairs: tuple[tuple[str, str], ...] = (),
+        profile: RenamerProfile | None = None,
     ) -> list[RenamePlanItem]:
         """Build plan."""
         return build_rename_plan(
@@ -31,6 +33,7 @@ class RenamerService:
             force_lang=force_lang,
             remove_terms=remove_terms,
             insert_after_pairs=insert_after_pairs,
+            profile=profile,
         )
 
     def _apply_case_only_rename(self, source: Path, target: Path) -> None:
@@ -172,6 +175,7 @@ class RenamerService:
         force_lang: bool,
         remove_terms: tuple[str, ...] = (),
         insert_after_pairs: tuple[tuple[str, str], ...] = (),
+        profile: RenamerProfile | None = None,
     ) -> OperationReport:
         """Handle run."""
         run_id = new_run_id("renamer")
@@ -181,6 +185,7 @@ class RenamerService:
             force_lang=force_lang,
             remove_terms=remove_terms,
             insert_after_pairs=insert_after_pairs,
+            profile=profile,
         )
         report = OperationReport(tool="renamer")
         report.scanned = len(plan)

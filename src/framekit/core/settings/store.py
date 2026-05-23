@@ -27,6 +27,12 @@ from .yaml_io import (
     update_preserving_comments,
 )
 
+MODULE_FILE_TARGETS: dict[str, tuple[str, ...]] = {
+    "upload": ("upload",),
+    "seedbox": ("seedbox",),
+    "batch": ("modules", "batch"),
+}
+
 
 class SettingsStore:
     """Low-level persistence for ``framekit.yaml``.
@@ -93,7 +99,7 @@ class SettingsStore:
         if not isinstance(data, dict):
             raise SettingsError("Settings file must contain a YAML object.")
 
-        migrated = _migrate_legacy_settings(data)
+        migrated = self._merge_module_files(_migrate_legacy_settings(data))
         normalized = normalize_settings(_deep_merge(DEFAULT_SETTINGS, migrated))
         validate_settings(normalized)
         return normalized
@@ -140,3 +146,42 @@ class SettingsStore:
         _set_nested(data, path, deepcopy(default_value))
         self.save(data)
         return data
+
+    def module_config_dir(self) -> Path:
+        """Return optional per-module config directory for the active settings file."""
+        return self.path.parent / "modules"
+
+    def _merge_module_files(self, data: dict[str, Any]) -> dict[str, Any]:
+        modules_dir = self.module_config_dir()
+        if not modules_dir.exists():
+            return data
+
+        merged = deepcopy(data)
+        for module_file in sorted(modules_dir.glob("*.yaml")):
+            module_name = module_file.stem
+            try:
+                loaded = yaml.safe_load(module_file.read_text(encoding="utf-8"))
+            except yaml.YAMLError as exc:
+                raise SettingsError(f"Invalid YAML in module config: {module_file}") from exc
+            except OSError as exc:
+                raise SettingsError(f"Cannot read module config: {module_file}") from exc
+
+            if loaded is None:
+                loaded = {}
+            if not isinstance(loaded, dict):
+                raise SettingsError(f"Module config must contain a YAML object: {module_file}")
+
+            target_path = MODULE_FILE_TARGETS.get(module_name, ("modules", module_name))
+            current: dict[str, Any] = merged
+            for key in target_path[:-1]:
+                node = current.setdefault(key, {})
+                if not isinstance(node, dict):
+                    node = {}
+                    current[key] = node
+                current = node
+            leaf = target_path[-1]
+            existing = current.get(leaf, {})
+            if not isinstance(existing, dict):
+                existing = {}
+            current[leaf] = _deep_merge(existing, loaded)
+        return merged

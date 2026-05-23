@@ -26,7 +26,7 @@ from framekit.ui.console import console, print_error, print_info, print_success,
 
 @click.group("extract", context_settings={"help_option_names": ["-h", "--help"]})
 def extract_command():
-    """Beta commands for extracting and converting media streams.
+    """-[BETA]- Commands for extracting and converting media streams.
 
     Supports extraction of subtitles, audio, and video streams with format conversion.
     """

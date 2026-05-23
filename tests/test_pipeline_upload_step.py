@@ -144,7 +144,7 @@ def test_upload_pipeline_screenshots_discovers_from_work_folder(tmp_path):
     ]
 
 
-def test_apply_c411_metadata_mapping_infers_film_animation(monkeypatch, tmp_path):
+def test_apply_custom_api_metadata_mapping_infers_film_animation(monkeypatch, tmp_path):
     torrent_path = tmp_path / "release.torrent"
     torrent_path.write_bytes(b"torrent")
     context = _make_context(torrent_path)
@@ -175,22 +175,22 @@ def test_apply_c411_metadata_mapping_infers_film_animation(monkeypatch, tmp_path
         nfo_data=nfo_data,
         description="[b]desc[/b]",
     )
-    mapped = pipeline_steps._apply_c411_metadata_mapping(
-        settings={"upload": {"trackers": [{"name": "c411", "type": "c411", "defaults": {}}]}},
-        tracker_names=["c411"],
+    mapped = pipeline_steps._apply_custom_api_metadata_mapping(
+        settings={"upload": {"trackers": [{"name": "custom_json_api_v1", "type": "custom_json_api_v1", "defaults": {}}]}},
+        tracker_names=["custom_json_api_v1"],
         context=context,
         parsed=parsed,
         nfo_data=nfo_data,
         metadata=metadata,
     )
 
-    assert mapped.c411_category_id == 1
-    assert mapped.c411_subcategory_id == 1
-    assert mapped.c411_options["2"] == 26
-    assert mapped.c411_options["1"] == [4]
+    assert mapped.custom_api_category_id == 1
+    assert mapped.custom_api_subcategory_id == 1
+    assert mapped.custom_api_options["2"] == 26
+    assert mapped.custom_api_options["1"] == [4]
 
 
-def test_apply_c411_metadata_mapping_infers_tv_episode(monkeypatch, tmp_path):
+def test_apply_custom_api_metadata_mapping_infers_tv_episode(monkeypatch, tmp_path):
     torrent_path = tmp_path / "release.torrent"
     torrent_path.write_bytes(b"torrent")
     context = _make_context(torrent_path)
@@ -221,21 +221,21 @@ def test_apply_c411_metadata_mapping_infers_tv_episode(monkeypatch, tmp_path):
         nfo_data=nfo_data,
         description="[b]desc[/b]",
     )
-    mapped = pipeline_steps._apply_c411_metadata_mapping(
-        settings={"upload": {"trackers": [{"name": "c411", "type": "c411", "defaults": {}}]}},
-        tracker_names=["c411"],
+    mapped = pipeline_steps._apply_custom_api_metadata_mapping(
+        settings={"upload": {"trackers": [{"name": "custom_json_api_v1", "type": "custom_json_api_v1", "defaults": {}}]}},
+        tracker_names=["custom_json_api_v1"],
         context=context,
         parsed=parsed,
         nfo_data=nfo_data,
         metadata=metadata,
     )
 
-    assert mapped.c411_category_id == 1
-    assert mapped.c411_subcategory_id == 7
-    assert mapped.c411_options["2"] == 25
-    assert mapped.c411_options["1"] == [8]
-    assert mapped.c411_options["7"] == 121
-    assert mapped.c411_options["6"] == 98
+    assert mapped.custom_api_category_id == 1
+    assert mapped.custom_api_subcategory_id == 7
+    assert mapped.custom_api_options["2"] == 25
+    assert mapped.custom_api_options["1"] == [8]
+    assert mapped.custom_api_options["7"] == 121
+    assert mapped.custom_api_options["6"] == 98
 
 
 def test_torrent_step_uses_folder_mode_for_pipeline_upload(tmp_path, monkeypatch):

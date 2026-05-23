@@ -16,6 +16,7 @@
 [center][img]{{ bb(data.poster_url) }}[/img][/center]
 {% endif %}
 {% if data.banner_information %}{{ bbcode_banner(data.banner_information) }}{% else %}[size=16][b]{{ tr("prez.section.infos", default='Information') }}[/b][/size]{% endif %}
+
 {% for field in data.info_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
 {% endfor %}
 {% if data.overview != '-' %}
@@ -29,6 +30,7 @@
 [hr]
 
 {% if data.banner_metadata %}{{ bbcode_banner(data.banner_metadata) }}{% else %}[size=16][b]{{ tr("prez.section.metadata", default='Metadata') }}[/b][/size]{% endif %}
+
 {% for field in data.metadata_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
 {% endfor %}{% if data.cast != '-' %}[b]{{ tr('prez.label.cast', default='Cast') }} :[/b] {{ bb(data.cast) }}
 {% endif %}{% if data.crew != '-' %}[b]{{ tr('prez.label.crew', default='Crew') }} :[/b] {{ bb(data.crew) }}
@@ -36,6 +38,7 @@
 [hr]
 
 {% if data.banner_release %}{{ bbcode_banner(data.banner_release) }}{% else %}[size=16][b]{{ tr("prez.section.release", default='Release') }}[/b][/size]{% endif %}
+
 {% for field in data.release_fields %}[b]{{ field.label }} :[/b] {{ field_url_bbcode(field) }}
 {% endfor %}
 [hr]

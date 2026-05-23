@@ -18,7 +18,7 @@ class TrackerConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 
     name: str
-    type: str  # "unit3d", "gazelle", "custom", "c411"
+    type: str  # "unit3d", "gazelle", "custom", "custom_json_api_v1"
     url: str
     api_key: str
     categories: dict[str, int] = Field(default_factory=dict)
@@ -34,7 +34,7 @@ class TrackerConfig(BaseModel):
     @field_validator("type")
     @classmethod
     def _check_type(cls, v: str) -> str:
-        if v not in ("unit3d", "gazelle", "custom", "c411"):
+        if v not in ("unit3d", "gazelle", "custom", "custom_json_api_v1"):
             raise ValueError(f"Invalid tracker type: {v}")
         return v
 
@@ -94,13 +94,13 @@ class TorrentMetadata(BaseModel):
     # Optional file attachment for trackers requiring an NFO upload.
     nfo_path: str | None = None
 
-    # C411-specific payload fields.
-    c411_category_id: int | None = None
-    c411_subcategory_id: int | None = None
-    c411_options: dict[str, Any] = Field(default_factory=dict)
-    c411_description_format: str | None = None
-    c411_uploader_note: str | None = None
-    c411_draft: bool = False
+    # Custom JSON API payload fields.
+    custom_api_category_id: int | None = None
+    custom_api_subcategory_id: int | None = None
+    custom_api_options: dict[str, Any] = Field(default_factory=dict)
+    custom_api_description_format: str | None = None
+    custom_api_uploader_note: str | None = None
+    custom_api_draft: bool = False
     tmdb_data: dict[str, Any] | None = None
     rawg_data: dict[str, Any] | None = None
 

@@ -348,7 +348,7 @@ def _run_watch_service(
 
 @click.group(name="watch")
 def watch_group():
-    """Beta folder watcher for automatic video processing."""
+    """-[BETA]- Folder watcher for automatic video processing."""
 
 
 # ── setup ───────────────────────────────────────────────────────────────────

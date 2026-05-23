@@ -1,6 +1,7 @@
 """Tests for renamer rules - normalization and transformation logic."""
 
 from framekit.modules.renamer.detector import hdr_display_label, hdr_release_label
+from framekit.modules.renamer.profiles import load_renamer_profile
 from framekit.modules.renamer.rules import (
     ensure_language_tag,
     extract_episode_code,
@@ -127,3 +128,36 @@ def test_remove_terms_from_normalized_name_removes_reintroduced_tokens():
     from framekit.modules.renamer.planner import _remove_terms_from_normalized_name
 
     assert _remove_terms_from_normalized_name("MOVIE.2024.DSNP.WEB", ("DSNP",)) == "MOVIE.2024.WEB"
+
+
+def test_fr_tracker_profile_cleans_dirty_french_terms():
+    profile = load_renamer_profile("fr_tracker")
+
+    result, existing_lang, resulting_lang, *_ = normalize_name_part(
+        "LENFANT.QUE.JE.NATTENDAIS.PAS.TRUEFRENCH.HD.WEB-DL.DUAL.DDP.2.0.H.264",
+        preferred_resolution="1080P",
+        preferred_audio_tag="EAC3.2.0",
+        preferred_video_tag="H264",
+        default_lang=profile.default_language_tag,
+        profile=profile,
+    )
+
+    assert result == "LENFANT.QUE.JE.NATTENDAIS.PAS.VFF.1080P.WEB.EAC3.2.0.H264"
+    assert existing_lang == "VFF"
+    assert resulting_lang == "VFF"
+
+
+def test_international_profile_uses_neutral_multi_tag():
+    profile = load_renamer_profile("international")
+
+    result, _existing_lang, resulting_lang, *_ = normalize_name_part(
+        "Show.S01E01.HD.WEB-DL.DDP.5.1.H.265",
+        preferred_resolution="1080P",
+        preferred_audio_tag="EAC3.5.1",
+        preferred_video_tag="H265",
+        default_lang=profile.default_language_tag,
+        profile=profile,
+    )
+
+    assert result == "SHOW.S01E01.MULTI.1080P.WEB.EAC3.5.1.H265"
+    assert resulting_lang == "MULTI"

@@ -89,6 +89,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "trakt_client_secret": "",  # nosec B105
         "trakt_access_token": "",  # nosec B105
         "enabled_by_default": True,
+        "prompt_missing_token_in_pipeline": True,
         "content_type_hints": {
             "anime": ["anilist", "tmdb"],
             "tv": ["tvdb", "tmdb"],
@@ -158,6 +159,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "selected_announce": "",
             "private": True,
             "piece_length": "auto",
+            "prompt_save_announce": True,
         },
         "prez": {
             "default_folder": "",
@@ -225,6 +227,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "aliases": {
         "enabled": True,
         "max_chain_depth": 5,
+        "removed": [],
         "user": {},
         "builtin": {
             "ren": {"command": "renamer", "description": "Shortcut for renamer", "enabled": True},
@@ -243,6 +246,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
                 "enabled": True,
             },
             "bat": {"command": "batch", "description": "Shortcut for batch", "enabled": True},
+            "seed": {"command": "seedbox", "description": "Shortcut for seedbox", "enabled": True},
+            "pull": {"command": "seedbox pull", "description": "Shortcut for seedbox pull", "enabled": True},
         },
     },
 }

@@ -1,73 +1,75 @@
 # Framekit
 
-Framekit is a CLI-first toolkit for preparing media releases from local folders.
+**Framekit** is a CLI-first toolkit for preparing and publishing media releases from local folders. It automates the full release workflow — renaming, MKV track cleaning, metadata fetching, NFO generation, BBCode/HTML presentations, torrent creation, and tracker uploads — with a composable pipeline that can run fully unattended.
 
-Core workflow:
+---
 
-- inspect release folders
-- rename files
-- clean MKV tracks
-- fetch metadata
-- build NFO files
-- build BBCode and HTML presentation files
-- create torrents
-- validate releases
-- run pipelines and batches
+## Core workflow
 
-Beta modules:
-
-- `upload`
-- `extract`
-- `watch`
-
-## Install
-
-From source:
-
-```bash
-python -m venv .venv
-pip install -e .
-fk doctor
+```
+folder → renamer → cleanmkv → metadata → nfo → prez → torrent → upload
 ```
 
-From GitHub Release:
+Run the full pipeline interactively or in a single command:
 
 ```bash
-framekit --version
-framekit doctor
+fk pipeline /path/to/release
+fk pipeline /path/to/release --auto --pipeline-preset multi_fr
 ```
 
-GitHub Release binaries include Framekit itself. External media tools remain separate system dependencies.
+---
 
-## External Tools
+## Quick links
 
-Install these and keep them on `PATH`:
+| Topic | Page |
+|-------|------|
+| Install Framekit | [Installation](Installation.md) |
+| First-run walkthrough | [Quick Start](Quick-Start.md) |
+| All config keys | [Configuration](Configuration.md) |
+| All CLI commands | [CLI Reference](CLI-Reference.md) |
+| Pipeline deep-dive | [Pipeline](Pipeline.md) |
+| Presets system | [Presets](Presets.md) |
+| Template system | [Templates](Templates.md) |
+| Encrypted vault / security | [Security](Security.md) |
+| Module reference | [Modules →](modules/NFO.md) |
+| Contributing | [Contributing](Contributing.md) |
+| Architecture internals | [Architecture](Architecture.md) |
 
-- `ffmpeg`
-- `ffprobe`
-- `mkvmerge`
-- `mkvextract`
-- `mkvpropedit`
-- `mediainfo`
+---
 
-## Configuration
+## Modules at a glance
 
-```bash
-fk setup
-```
+| Module | Command | Status |
+|--------|---------|--------|
+| Inspect release | `fk inspect` | Stable |
+| Rename files | `fk renamer` | Stable |
+| Clean MKV tracks | `fk cleanmkv` | Stable |
+| Fetch metadata | `fk metadata` | Stable |
+| Generate NFO | `fk nfo` | Stable |
+| Build presentation | `fk prez` | Stable |
+| Create torrent | `fk torrent` | Stable |
+| Validate release | `fk validate` | Stable |
+| Screenshot extraction | `fk screenshot` | Stable |
+| Video encoding | `fk encode` | Stable |
+| Batch processing | `fk batch` | Stable |
+| Upload to trackers | `fk upload` | Beta |
+| Stream extraction | `fk extract` | Beta |
+| Folder watcher | `fk watch` | Beta |
 
-Or copy `framekit.example.yaml` to `framekit.yaml`.
+---
 
-`framekit.yaml` is ignored by Git because it may contain local paths or secrets.
+## External tools
 
-## Security
+Framekit shells out to these — install them and keep them on `PATH`:
 
-Keep `security.enabled: true` to store sensitive values in the encrypted vault.
+| Tool | Package | Used by |
+|------|---------|---------|
+| `mkvmerge`, `mkvextract`, `mkvpropedit` | MKVToolNix | CleanMKV, Extract |
+| `mediainfo` | MediaInfo | NFO, Prez |
+| `ffmpeg`, `ffprobe` | FFmpeg | Encode, Screenshot, Extract |
 
-Run:
+---
 
-```bash
-fk doctor
-```
+## Supported platforms
 
-before release work or automation runs.
+Python **3.12+** on Linux, macOS, and Windows. Pre-built standalone binaries for `linux-x86_64`, `macos-arm64`, and `windows-x86_64` are published on the [Releases page](https://github.com/astrve/framekit/releases).

@@ -1,6 +1,6 @@
 """UNIT3D tracker adapter.
 
-Supports UNIT3D-based trackers like c411.org, BeyondHD, Blutopia, etc.
+Supports UNIT3D-based trackers like BeyondHD, Blutopia, etc.
 """
 
 from collections.abc import Callable

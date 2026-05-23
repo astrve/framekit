@@ -1,4 +1,4 @@
-"""C411 tracker adapter."""
+"""Custom JSON API tracker adapter."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from ..models import DiscoveryResult, TorrentFile, TorrentMetadata, TrackerConfi
 from .base import AuthenticationError, TrackerAdapter
 
 
-class C411Adapter(TrackerAdapter):
-    """Adapter for c411.org tracker API."""
+class CustomJsonApiAdapter(TrackerAdapter):
+    """Adapter for a bearer-token JSON tracker API."""
 
     def __init__(self, config: TrackerConfig):
         super().__init__(config)
@@ -68,7 +68,7 @@ class C411Adapter(TrackerAdapter):
                 raise AuthenticationError("Invalid API key")
             if scope_probe.status_code == 403:
                 payload = self._parse_response_payload(scope_probe)
-                message = self._extract_api_message(payload) or "Missing c411 upload scope"
+                message = self._extract_api_message(payload) or "Missing upload scope"
                 raise AuthenticationError(message)
             return True
         except HttpAuthError as exc:
@@ -78,14 +78,14 @@ class C411Adapter(TrackerAdapter):
             return False
 
     def discover_api(self) -> DiscoveryResult:
-        result = DiscoveryResult(tracker_type="c411", tracker_url=self.config.url)
+        result = DiscoveryResult(tracker_type="custom_json_api_v1", tracker_url=self.config.url)
         try:
             categories = self._fetch_categories()
             if categories:
                 result.categories = categories
             else:
                 result.add_error("Failed to fetch categories")
-            # c411 does not use UNIT3D "types/resolutions" taxonomy.
+            # This API does not use UNIT3D "types/resolutions" taxonomy.
             result.types = {}
             result.resolutions = {}
             result.required_fields = [
@@ -149,28 +149,28 @@ class C411Adapter(TrackerAdapter):
         return None
 
     def _resolve_category_id(self, metadata: TorrentMetadata) -> int | None:
-        if metadata.c411_category_id is not None:
-            return metadata.c411_category_id
-        value = self.config.defaults.get("c411_category_id")
+        if metadata.custom_api_category_id is not None:
+            return metadata.custom_api_category_id
+        value = self.config.defaults.get("custom_api_category_id")
         return int(value) if isinstance(value, int | str) and str(value).isdigit() else None
 
     def _resolve_subcategory_id(self, metadata: TorrentMetadata) -> int | None:
-        if metadata.c411_subcategory_id is not None:
-            return metadata.c411_subcategory_id
-        value = self.config.defaults.get("c411_subcategory_id")
+        if metadata.custom_api_subcategory_id is not None:
+            return metadata.custom_api_subcategory_id
+        value = self.config.defaults.get("custom_api_subcategory_id")
         return int(value) if isinstance(value, int | str) and str(value).isdigit() else None
 
     def _resolve_options(self, metadata: TorrentMetadata) -> dict[str, Any]:
-        if metadata.c411_options:
-            return metadata.c411_options
-        defaults = self.config.defaults.get("c411_options", {})
+        if metadata.custom_api_options:
+            return metadata.custom_api_options
+        defaults = self.config.defaults.get("custom_api_options", {})
         return defaults if isinstance(defaults, dict) else {}
 
     def _resolve_description_format(self, metadata: TorrentMetadata) -> str:
-        candidate = (metadata.c411_description_format or "").strip().lower()
+        candidate = (metadata.custom_api_description_format or "").strip().lower()
         if candidate in {"standard", "html"}:
             return candidate
-        default_value = str(self.config.defaults.get("c411_description_format", "standard")).lower()
+        default_value = str(self.config.defaults.get("custom_api_description_format", "standard")).lower()
         return default_value if default_value in {"standard", "html"} else "standard"
 
     def _build_upload_data(self, metadata: TorrentMetadata) -> tuple[dict[str, Any], list[str]]:
@@ -185,13 +185,13 @@ class C411Adapter(TrackerAdapter):
 
         category_id = self._resolve_category_id(metadata)
         if category_id is None:
-            errors.append("Missing c411 categoryId (metadata or tracker defaults)")
+            errors.append("Missing categoryId (metadata or tracker defaults)")
         else:
             data["categoryId"] = category_id
 
         subcategory_id = self._resolve_subcategory_id(metadata)
         if subcategory_id is None:
-            errors.append("Missing c411 subcategoryId (metadata or tracker defaults)")
+            errors.append("Missing subcategoryId (metadata or tracker defaults)")
         else:
             data["subcategoryId"] = subcategory_id
 
@@ -199,7 +199,7 @@ class C411Adapter(TrackerAdapter):
         if options:
             data["options"] = json.dumps(options, ensure_ascii=False)
 
-        uploader_note = (metadata.c411_uploader_note or "").strip()
+        uploader_note = (metadata.custom_api_uploader_note or "").strip()
         if uploader_note:
             data["uploaderNote"] = uploader_note
 
@@ -228,7 +228,7 @@ class C411Adapter(TrackerAdapter):
                 return
             result.add_error(str(payload))
             return
-        result.add_error("Upload rejected by c411 API")
+        result.add_error("Upload rejected by tracker API")
 
     def upload_torrent(
         self,
@@ -257,7 +257,7 @@ class C411Adapter(TrackerAdapter):
             nfo_path = self._resolve_nfo_path(torrent_file, metadata)
             if nfo_path is None:
                 result.add_error(
-                    "Missing NFO file for c411 upload (expected --nfo or <torrent>.nfo)"
+                    "Missing NFO file for custom JSON API upload (expected --nfo or <torrent>.nfo)"
                 )
                 return result
 
@@ -267,7 +267,7 @@ class C411Adapter(TrackerAdapter):
                     result.add_error(error)
                 return result
 
-            is_draft = getattr(metadata, "c411_draft", False)
+            is_draft = getattr(metadata, "custom_api_draft", False)
             endpoint = f"{self.api_base}/user/drafts" if is_draft else f"{self.api_base}/torrents"
 
             file_size = torrent_file.path.stat().st_size

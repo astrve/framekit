@@ -9,6 +9,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from framekit.core.paths import get_cache_dir
 from framekit.modules.batch.models import BatchItem, BatchQueueStats
 
 
@@ -24,9 +25,13 @@ class BatchQueue:
             queue_file: Optional path to queue persistence file
         """
         self._items: list[BatchItem] = []
-        self._queue_file = queue_file or Path.cwd() / self.QUEUE_FILE_NAME
+        self._queue_file = queue_file or get_cache_dir() / "batch" / self.QUEUE_FILE_NAME
         self._version = "1.0"
         self._lock = threading.Lock()  # Thread-safe operations
+
+    @property
+    def queue_file(self) -> Path:
+        return self._queue_file
 
     def add(self, item: BatchItem) -> None:
         """Add an item to the queue.
