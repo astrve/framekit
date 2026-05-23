@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -67,7 +68,11 @@ from framekit.core.i18n import tr
 from framekit.core.models.nfo import ReleaseNfoData
 from framekit.core.naming import release_name_from_mkv_paths
 from framekit.core.paths import PathResolver
-from framekit.core.settings import SettingsStore
+from framekit.core.settings import Settings, SettingsStore
+from framekit.modules.metadata.config import (
+    looks_like_tmdb_read_access_token,
+    normalize_secret_input,
+)
 from framekit.ui.branding import print_module_banner
 from framekit.ui.console import (
     console,
@@ -86,11 +91,15 @@ from framekit.ui.unified_selector import (
 from framekit.ui.unified_selector import (
     select_many as _select_many,
 )
+from framekit.ui.unified_selector import (
+    select_one as _select_one,
+)
 
 PIPELINE_MODULES = ("renamer", "cleanmkv", "nfo", "prez", "torrent", "upload", "encoder")
 # Module execution order: renamer → cleanmkv → nfo → prez → torrent → upload → encoder
 # Encoder is opt-in (heavy operation) — excluded from the default set
 PIPELINE_MODULES_DEFAULT = ("renamer", "cleanmkv", "nfo", "torrent", "prez", "upload")
+PIPELINE_METADATA_MODULES = frozenset({"nfo", "prez", "upload"})
 PipelineStep = tuple[str, str, Callable[[], int]]
 _PIPELINE_NFO_OUTPUT_MODES = frozenset({"global", "per_file", "both"})
 _PIPELINE_NFO_TEMPLATE_ALIASES = {
@@ -260,6 +269,191 @@ def _maybe_select_modules(
     return modules, show_preview, auto_mode, use_metadata
 
 
+def _pipeline_has_tmdb_token(settings: dict, store: SettingsStore) -> bool:
+    if os.environ.get("FRAMEKIT_TMDB_READ_ACCESS_TOKEN", "").strip():
+        return True
+
+    token = str(settings.get("metadata", {}).get("tmdb_read_access_token", "") or "").strip()
+    if token and token != Settings.ENCRYPTED_PLACEHOLDER:
+        return True
+    if token == Settings.ENCRYPTED_PLACEHOLDER:
+        return bool(Settings(store).get_tmdb_token())
+    return False
+
+
+def _should_prompt_missing_tmdb_token(
+    *,
+    settings: dict,
+    selected_modules: set[str],
+    metadata_enabled: bool,
+    auto_mode: bool,
+    store: SettingsStore,
+) -> bool:
+    if not metadata_enabled or auto_mode or not sys.stdin.isatty():
+        return False
+    if not (selected_modules & PIPELINE_METADATA_MODULES):
+        return False
+    if not bool(settings.get("metadata", {}).get("prompt_missing_token_in_pipeline", True)):
+        return False
+    return not _pipeline_has_tmdb_token(settings, store)
+
+
+def _select_missing_tmdb_token_action() -> str | None:
+    try:
+        selected = select_one(
+            title=tr(
+                "pipeline.prompt.tmdb_missing",
+                default="Aucun token TMDb configuré. Voulez-vous en ajouter un maintenant ?",
+            ),
+            entries=[
+                SelectorOption(
+                    value="add",
+                    label=tr("pipeline.prompt.tmdb_missing.add", default="Oui"),
+                    hint=tr(
+                        "pipeline.prompt.tmdb_missing.add_hint",
+                        default="Ajouter un token TMDb dans le vault puis continuer avec les metadata.",
+                    ),
+                    selected=True,
+                ),
+                SelectorOption(
+                    value="skip",
+                    label=tr("pipeline.prompt.tmdb_missing.skip", default="Non"),
+                    hint=tr(
+                        "pipeline.prompt.tmdb_missing.skip_hint",
+                        default="Continuer cette pipeline sans metadata TMDb.",
+                    ),
+                ),
+                SelectorOption(
+                    value="never",
+                    label=tr(
+                        "pipeline.prompt.tmdb_missing.never",
+                        default="Non, ne plus me le rappeler",
+                    ),
+                    hint=tr(
+                        "pipeline.prompt.tmdb_missing.never_hint",
+                        default="Désactiver ce rappel dans framekit.yaml.",
+                    ),
+                ),
+            ],
+            page_size=6,
+            default="skip" if not sys.stdin.isatty() else None,
+        )
+    except (KeyboardInterrupt, EOFError):
+        return None
+    return str(selected) if selected else None
+
+
+def _prompt_pipeline_tmdb_token() -> str | None:
+    while True:
+        raw = click.prompt(
+            tr(
+                "pipeline.prompt.tmdb_token",
+                default="TMDb Read Access Token (vide pour annuler)",
+            ),
+            default="",
+            show_default=False,
+            hide_input=True,
+        )
+        token = normalize_secret_input(str(raw or ""))
+        if not token:
+            return None
+        if looks_like_tmdb_read_access_token(token):
+            return token
+        print_error(
+            tr(
+                "metadata.error.invalid_token",
+                default="That does not look like a valid TMDb read access token.",
+            )
+        )
+
+
+def _store_pipeline_tmdb_token(store: SettingsStore, token: str) -> dict:
+    settings_obj = Settings(store)
+    settings_obj.set_tmdb_token(token)
+    return store.load()
+
+
+def _disable_pipeline_tmdb_reminder(settings: dict, store: SettingsStore) -> dict:
+    settings.setdefault("metadata", {})["prompt_missing_token_in_pipeline"] = False
+    store.save(settings)
+    return store.load()
+
+
+def _maybe_prompt_missing_tmdb_token(
+    *,
+    settings: dict,
+    store: SettingsStore,
+    selected_modules: set[str],
+    metadata_enabled: bool,
+    auto_mode: bool,
+) -> tuple[dict, bool]:
+    if not _should_prompt_missing_tmdb_token(
+        settings=settings,
+        selected_modules=selected_modules,
+        metadata_enabled=metadata_enabled,
+        auto_mode=auto_mode,
+        store=store,
+    ):
+        return settings, metadata_enabled
+
+    action = _select_missing_tmdb_token_action()
+    if action == "add":
+        token = _prompt_pipeline_tmdb_token()
+        if not token:
+            print_warning(
+                tr(
+                    "pipeline.warning.tmdb_token_skipped",
+                    default="Pipeline sans metadata TMDb pour cette exécution.",
+                )
+            )
+            return settings, False
+        try:
+            refreshed = _store_pipeline_tmdb_token(store, token)
+        except Exception as exc:
+            print_error(
+                tr(
+                    "pipeline.error.tmdb_token_save_failed",
+                    default="Impossible d'enregistrer le token TMDb: {error}",
+                    error=str(exc),
+                )
+            )
+            return settings, False
+        print_success(
+            tr(
+                "pipeline.success.tmdb_token_saved",
+                default="Token TMDb enregistré. Les metadata restent activées.",
+            )
+        )
+        return refreshed, metadata_enabled
+
+    if action == "never":
+        try:
+            settings = _disable_pipeline_tmdb_reminder(settings, store)
+        except Exception as exc:
+            print_error(
+                tr(
+                    "pipeline.error.tmdb_reminder_save_failed",
+                    default="Impossible d'enregistrer la préférence TMDb: {error}",
+                    error=str(exc),
+                )
+            )
+        print_warning(
+            tr(
+                "pipeline.warning.tmdb_reminder_disabled",
+                default="Rappel TMDb désactivé. Pipeline sans metadata TMDb.",
+            )
+        )
+        return settings, False
+
+    print_warning(
+        tr(
+            "pipeline.warning.tmdb_token_skipped",
+            default="Pipeline sans metadata TMDb pour cette exécution.",
+        )
+    )
+    return settings, False
+
+
 def release_artifacts_folder(root: Path) -> Path:
     """Get the Release artifacts folder for a given root directory.
 
@@ -309,9 +503,7 @@ def _pipeline_output_folder(work_folder: Path, root: Path | None = None) -> Path
     if work_folder.parent.name == "Release":
         return work_folder.parent
     if root is not None:
-        release_folder = _release_artifacts_folder(root)
-        if release_folder.exists() or work_folder != root:
-            return release_folder
+        return _release_artifacts_folder(root)
     return work_folder
 
 
@@ -1103,6 +1295,14 @@ def run_pipeline_command(
         metadata_enabled,
     )
 
+    settings, metadata_enabled = _maybe_prompt_missing_tmdb_token(
+        settings=settings,
+        store=store,
+        selected_modules=selected_modules,
+        metadata_enabled=metadata_enabled,
+        auto_mode=auto_mode,
+    )
+
     # Handle preview and confirmation
     work_folder = _next_work_folder(root, settings)
     output_folder = _pipeline_output_folder(work_folder, root)
@@ -1422,3 +1622,4 @@ def pipeline_command(
 
 
 select_many = _select_many  # backwards-compatible patch target for tests
+select_one = _select_one  # backwards-compatible patch target for tests

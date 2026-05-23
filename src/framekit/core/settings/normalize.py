@@ -148,6 +148,9 @@ def _normalize_metadata(normalized: dict[str, Any]) -> None:
         metadata.get("tmdb_read_access_token", "") or ""
     ).strip()
     metadata["enabled_by_default"] = _as_bool(metadata.get("enabled_by_default"), True)
+    metadata["prompt_missing_token_in_pipeline"] = _as_bool(
+        metadata.get("prompt_missing_token_in_pipeline"), True
+    )
 
 
 def _normalize_setup(normalized: dict[str, Any]) -> None:
@@ -203,6 +206,35 @@ def _normalize_cleanmkv_module(modules: dict[str, Any]) -> None:
     cleanmkv["output_dir_name"] = output_dir_name
 
 
+def _normalize_renamer_module(modules: dict[str, Any]) -> None:
+    renamer = modules.setdefault("renamer", {})
+    if not isinstance(renamer, dict):
+        return
+    renamer["default_folder"] = str(renamer.get("default_folder", "") or "").strip()
+    renamer["default_language_tag"] = str(
+        renamer.get("default_language_tag", "MULTI.VFF") or ""
+    ).strip()
+    renamer["profile"] = str(renamer.get("profile", "fr_tracker") or "fr_tracker").strip()
+    for key in ("junk_terms",):
+        raw = renamer.get(key, [])
+        renamer[key] = (
+            [str(item).strip() for item in raw if str(item).strip()]
+            if isinstance(raw, list)
+            else []
+        )
+    for key in ("language_aliases", "quality_aliases", "source_aliases"):
+        raw_map = renamer.get(key, {})
+        renamer[key] = (
+            {str(k).strip().upper(): str(v).strip() for k, v in raw_map.items() if str(k).strip()}
+            if isinstance(raw_map, dict)
+            else {}
+        )
+    renamer["insert_missing_resolution"] = _as_bool(renamer.get("insert_missing_resolution"), True)
+    renamer["language_insertion"] = str(
+        renamer.get("language_insertion", "after_episode_or_start") or "after_episode_or_start"
+    ).strip()
+
+
 def _normalize_nfo_module(modules: dict[str, Any]) -> None:
     nfo = modules.setdefault("nfo", {})
     if not isinstance(nfo, dict):
@@ -232,6 +264,7 @@ def _normalize_torrent_module(modules: dict[str, Any]) -> None:
     torrent["private"] = _as_bool(torrent.get("private"), True)
     piece_length = str(torrent.get("piece_length", "auto") or "auto").strip()
     torrent["piece_length"] = piece_length or "auto"
+    torrent["prompt_save_announce"] = _as_bool(torrent.get("prompt_save_announce"), True)
 
 
 def _normalized_announce_urls(raw_announces: Any, legacy_announce: str) -> list[str]:
@@ -309,11 +342,36 @@ def _normalize_modules(normalized: dict[str, Any]) -> None:
     modules = normalized.setdefault("modules", {})
     if not isinstance(modules, dict):
         return
+    _normalize_renamer_module(modules)
     _normalize_cleanmkv_module(modules)
     _normalize_nfo_module(modules)
     _normalize_torrent_module(modules)
     _normalize_pipeline_module(modules)
     _normalize_prez_module(modules)
+
+
+def _normalize_upload(normalized: dict[str, Any]) -> None:
+    upload = normalized.setdefault("upload", {})
+    if not isinstance(upload, dict):
+        normalized["upload"] = deepcopy(DEFAULT_SETTINGS["upload"])
+        return
+    upload["enabled"] = _as_bool(upload.get("enabled"), False)
+    upload["auto_upload"] = _as_bool(upload.get("auto_upload"), False)
+    upload["max_parallel_uploads"] = _as_int(upload.get("max_parallel_uploads"), 3, minimum=1)
+    for key in ("trackers", "presets"):
+        raw = upload.get(key, [])
+        upload[key] = raw if isinstance(raw, list) else []
+
+
+def _normalize_seedbox(normalized: dict[str, Any]) -> None:
+    seedbox = normalized.setdefault("seedbox", {})
+    if not isinstance(seedbox, dict):
+        normalized["seedbox"] = deepcopy(DEFAULT_SETTINGS["seedbox"])
+        return
+    seedbox["default"] = str(seedbox.get("default", "") or "").strip()
+    seedbox["history_enabled"] = _as_bool(seedbox.get("history_enabled"), True)
+    raw_seedboxes = seedbox.get("seedboxes", [])
+    seedbox["seedboxes"] = raw_seedboxes if isinstance(raw_seedboxes, list) else []
 
 
 def _normalize_plugins(normalized: dict[str, Any]) -> None:
@@ -345,13 +403,23 @@ def _normalize_aliases(normalized: dict[str, Any]) -> None:
         return
     aliases["enabled"] = _as_bool(aliases.get("enabled"), True)
     aliases["max_chain_depth"] = _as_int(aliases.get("max_chain_depth"), 5, minimum=1)
+    raw_removed = aliases.get("removed", [])
+    if isinstance(raw_removed, list):
+        removed = sorted({str(item).strip() for item in raw_removed if str(item).strip()})
+    else:
+        removed = []
+    aliases["removed"] = removed
     aliases.setdefault("user", {})
     aliases.setdefault("builtin", {})
     for alias_type in ["user", "builtin"]:
         alias_dict = aliases.get(alias_type, {})
         if not isinstance(alias_dict, dict):
+            aliases[alias_type] = {}
             continue
         for name, definition in list(alias_dict.items()):
+            if name in removed:
+                del alias_dict[name]
+                continue
             if isinstance(definition, dict):
                 definition.setdefault("command", "")
                 definition.setdefault("description", "")
@@ -372,6 +440,8 @@ def normalize_settings(data: dict[str, Any]) -> dict[str, Any]:
     _normalize_security(normalized)
     _normalize_cache(normalized)
     _normalize_modules(normalized)
+    _normalize_upload(normalized)
+    _normalize_seedbox(normalized)
     _normalize_plugins(normalized)
     _normalize_aliases(normalized)
 

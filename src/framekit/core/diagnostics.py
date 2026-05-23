@@ -216,8 +216,8 @@ def default_log_file() -> Path:
 
 
 def default_module_logs_dir() -> Path:
-    """Return working-directory folder for per-module logs."""
-    return Path.cwd() / "logs"
+    """Return user-cache folder for per-module logs."""
+    return get_cache_dir() / "logs" / "modules"
 
 
 def _coerce_log_file(value: str | Path | None) -> Path | None:

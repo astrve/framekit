@@ -236,6 +236,30 @@ class TestExtractionService:
             assert results[0].success
             mock_audio_extractor.extract_audio.assert_called_once()
 
+    def test_extract_audio_original_uses_source_codec_extension(
+        self, mock_registry, mock_audio_extractor, tmp_path
+    ):
+        """Original/copy audio extraction must not emit invalid '.audio' files."""
+        from framekit.modules.extract.models import AudioExtractionOptions
+        from framekit.modules.extract.service import ExtractionService
+
+        test_file = tmp_path / "movie.mkv"
+        test_file.touch()
+        mock_audio_extractor.detect_audio_format.return_value = AudioFormat.AAC
+
+        with patch(
+            "framekit.modules.extract.service.AudioExtractor",
+            return_value=mock_audio_extractor,
+        ):
+            service = ExtractionService(mock_registry)
+            options = AudioExtractionOptions(output_format=AudioFormat.ORIGINAL)
+
+            _report, _results = service.extract_audio(files=[test_file], options=options)
+
+            call = mock_audio_extractor.extract_audio.call_args
+            assert call is not None
+            assert call.kwargs["output_path"].name == "movie.a0.aac"
+
     def test_extract_video_single_file(self, mock_registry, mock_video_extractor, tmp_path):
         """Test extracting video from a single file."""
         from framekit.modules.extract.models import VideoExtractionOptions

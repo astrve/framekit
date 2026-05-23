@@ -15,6 +15,7 @@ from framekit.modules.renamer.detector import (
     hdr_display_label,
     hdr_release_label,
 )
+from framekit.modules.renamer.profiles import RenamerProfile
 from framekit.modules.renamer.rules import (
     DEFAULT_LANG,
     SINGLE_LANG_TAGS,
@@ -149,6 +150,7 @@ def _build_rename_context(
     force_lang: bool,
     remove_terms: tuple[str, ...],
     info: MediaInfoSource,
+    profile: RenamerProfile | None,
 ) -> _RenameContext:
     inferred_video_tag = get_preferred_video_tag(info)
     inferred_audio_tag = get_preferred_audio_tag(info)
@@ -172,6 +174,7 @@ def _build_rename_context(
         preferred_hdr=hdr_release,
         default_lang=default_lang,
         force_lang=force_lang,
+        profile=profile,
     )
 
     normalized = _remove_terms_from_normalized_name(normalized, remove_terms)
@@ -248,28 +251,32 @@ def build_rename_plan(
     force_lang: bool = False,
     remove_terms: tuple[str, ...] = (),
     insert_after_pairs: tuple[tuple[str, str], ...] = (),
+    profile: RenamerProfile | None = None,
 ) -> list[RenamePlanItem]:
     """Build rename plan."""
     plan: list[RenamePlanItem] = []
     reserved_targets: dict[str, Path] = {}
     missing_tokens: set[str] = set()
+    profile_terms = profile.junk_terms if profile else ()
+    effective_remove_terms = tuple(dict.fromkeys((*profile_terms, *remove_terms)))
     media_files = _collect_media_files(folder)
 
     for file_path in media_files:
         info = probe_media_file(file_path)
         original_stem = _resolve_original_stem(file_path, insert_after_pairs, missing_tokens)
-        stem, team = split_team(_remove_terms_from_stem(original_stem, remove_terms))
+        stem, team = split_team(_remove_terms_from_stem(original_stem, effective_remove_terms))
         context = _build_rename_context(
             stem,
             default_lang=default_lang,
             force_lang=force_lang,
-            remove_terms=remove_terms,
+            remove_terms=effective_remove_terms,
             info=info,
+            profile=profile,
         )
         normalized = _build_target_name(
             context.normalized_name,
             team,
-            remove_terms=remove_terms,
+            remove_terms=effective_remove_terms,
         )
         target = file_path.with_name(f"{normalized}{file_path.suffix}")
 

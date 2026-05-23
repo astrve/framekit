@@ -2,12 +2,28 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from framekit.modules.renamer.profiles import RenamerProfile
 
 VIDEO_EXTENSIONS = {".mkv"}
 
 REMOVE_TOKENS = {"PMTP", "CP", "CR", "AMZN"}
 
-LANGUAGE_TAGS = {"MULTI.VFF", "MULTI.VF2", "VFF", "VFI", "VFQ", "VF2", "VOSTFR"}
+LANGUAGE_TAGS = {
+    "MULTI",
+    "MULTI.VFF",
+    "MULTI.VF2",
+    "VFF",
+    "VFI",
+    "VFQ",
+    "VF2",
+    "VOSTFR",
+    "FR",
+    "EN",
+    "ES",
+}
 
 # Tags that indicate a single-language track; if multiple audio tracks are
 # detected in the media file, these should be upgraded to MULTI.<tag>.
@@ -157,7 +173,11 @@ def ensure_language_tag(parts: list[str], default_lang: str) -> list[str]:
 
 
 def _language_prefers_french_title(lang_tag: str | None) -> bool:
-    return bool(lang_tag and lang_tag.upper() in LANGUAGE_TAGS)
+    return bool(
+        lang_tag
+        and lang_tag.upper()
+        in {"MULTI.VFF", "MULTI.VF2", "VFF", "VFI", "VFQ", "VF2", "VOSTFR", "FR"}
+    )
 
 
 def _apply_localized_title_alias(text: str, lang_tag: str | None) -> str:
@@ -255,7 +275,27 @@ def _remove_tokens(parts: list[str]) -> list[str]:
     return [part for part in parts if part.upper() not in REMOVE_TOKENS]
 
 
-def _merge_multi_language_tokens(parts: list[str]) -> list[str]:
+def _apply_profile_aliases(parts: list[str], profile: RenamerProfile | None) -> list[str]:
+    if profile is None:
+        return parts
+    aliases = {key.upper(): value for key, value in profile.language_aliases.items()}
+    if not aliases:
+        return parts
+    return [aliases.get(part.upper(), part) for part in parts]
+
+
+def _apply_profile_junk_terms(parts: list[str], profile: RenamerProfile | None) -> list[str]:
+    if profile is None:
+        return parts
+    junk = {term.upper() for term in profile.junk_terms}
+    if not junk:
+        return parts
+    return [part for part in parts if part.upper() not in junk]
+
+
+def _merge_multi_language_tokens(
+    parts: list[str], profile: RenamerProfile | None = None
+) -> list[str]:
     merged: list[str] = []
     index = 0
     while index < len(parts):
@@ -270,7 +310,10 @@ def _merge_multi_language_tokens(parts: list[str]) -> list[str]:
             merged.append(f"MULTI.{next_token}")
             index += 2
             continue
-        merged.append("MULTI.VFF")
+        if profile is not None and profile.default_language_tag == "MULTI":
+            merged.append("MULTI")
+        else:
+            merged.append("MULTI.VFF")
         index += 1
     return merged
 
@@ -310,6 +353,51 @@ def _apply_preferred_resolution(parts: list[str], preferred_resolution: str) -> 
         lambda part: part.upper() in resolution_tokens,
         preferred_resolution,
     )
+
+
+def _apply_quality_aliases(
+    parts: list[str],
+    *,
+    preferred_resolution: str,
+    profile: RenamerProfile | None,
+) -> list[str]:
+    if profile is None or not profile.quality_aliases:
+        return parts
+    result: list[str] = []
+    for part in parts:
+        value = profile.quality_aliases.get(part.upper())
+        if value == "auto_resolution" and preferred_resolution:
+            result.append(preferred_resolution)
+        elif value:
+            result.append(value)
+        else:
+            result.append(part)
+    return result
+
+
+def _insert_missing_resolution(
+    parts: list[str],
+    *,
+    preferred_resolution: str,
+    profile: RenamerProfile | None,
+) -> list[str]:
+    if not preferred_resolution:
+        return parts
+    if profile is not None and not profile.insert_missing_resolution:
+        return parts
+    resolution_tokens = {"2160P", "1440P", "1080P", "720P", "480P"}
+    if any(part.upper() in resolution_tokens for part in parts):
+        return parts
+
+    language_index = next((i for i, part in enumerate(parts) if part in LANGUAGE_TAGS), None)
+    if language_index is not None:
+        return [*parts[: language_index + 1], preferred_resolution, *parts[language_index + 1 :]]
+
+    for index, part in enumerate(parts):
+        if part.upper() in {"WEB", "WEBRIP", "BLURAY", "HDTV"}:
+            return [*parts[:index], preferred_resolution, *parts[index:]]
+
+    return [*parts, preferred_resolution]
 
 
 def _apply_preferred_audio(parts: list[str], preferred_audio_tag: str) -> list[str]:
@@ -365,6 +453,7 @@ def normalize_name_part(
     preferred_hdr: str = "",
     default_lang: str = DEFAULT_LANG,
     force_lang: bool = False,
+    profile: RenamerProfile | None = None,
 ) -> tuple[str, str | None, str | None, str | None, str | None]:
     """Normalise name part."""
     original_for_metadata = base
@@ -372,13 +461,25 @@ def normalize_name_part(
     transformed = _protect_compound_tokens(transformed)
 
     parts = _split_restored_parts(transformed)
+    parts = _apply_profile_aliases(parts, profile)
     parts = _remove_tokens(parts)
-    parts = _merge_multi_language_tokens(parts)
+    parts = _apply_profile_junk_terms(parts, profile)
+    parts = _merge_multi_language_tokens(parts, profile)
+    parts = _apply_quality_aliases(
+        parts,
+        preferred_resolution=preferred_resolution,
+        profile=profile,
+    )
 
     parts, existing_language_tag, resulting_language_tag = _apply_language_rules(
         parts, default_lang=default_lang, force_lang=force_lang
     )
     parts = _apply_preferred_resolution(parts, preferred_resolution)
+    parts = _insert_missing_resolution(
+        parts,
+        preferred_resolution=preferred_resolution,
+        profile=profile,
+    )
     parts = _apply_preferred_audio(parts, preferred_audio_tag)
     parts = _apply_preferred_video(parts, preferred_video_tag)
     parts = _apply_preferred_hdr(parts, preferred_hdr)

@@ -9,8 +9,17 @@ from framekit.core.diagnostics import (
 
 
 def test_log_event_writes_per_module_session_log(tmp_path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    configure_diagnostics(log_file=tmp_path / "framekit.log")
+    from framekit.core import paths
+
+    workspace = tmp_path / "workspace"
+    cache_dir = tmp_path / "cache"
+    config_dir = tmp_path / "config"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+    monkeypatch.delenv("FRAMEKIT_CONFIG", raising=False)
+    monkeypatch.setattr(paths, "user_cache_dir", lambda *_args: str(cache_dir))
+    monkeypatch.setattr(paths, "user_config_dir", lambda *_args: str(config_dir))
+    configure_diagnostics(log_file=cache_dir / "framekit.log")
 
     try:
         log_event("INFO", "hello module log", module="prez", release="demo")
@@ -19,6 +28,7 @@ def test_log_event_writes_per_module_session_log(tmp_path, monkeypatch) -> None:
         assert module_log.exists()
         content = module_log.read_text(encoding="utf-8")
         assert "hello module log" in content
-        assert (tmp_path / "logs").is_dir()
+        assert module_log.parent == cache_dir / "logs" / "modules"
+        assert not (workspace / "logs").exists()
     finally:
         reset_diagnostics()

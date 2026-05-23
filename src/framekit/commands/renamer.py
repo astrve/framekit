@@ -10,6 +10,11 @@ from framekit.core.cli_helpers import join_path_parts
 from framekit.core.i18n import tr
 from framekit.core.paths import PathResolver
 from framekit.core.settings import SettingsStore
+from framekit.modules.renamer.profiles import (
+    RenamerProfile,
+    list_renamer_profiles,
+    load_renamer_profile,
+)
 from framekit.modules.renamer.service import RenamerService
 from framekit.modules.renamer.term_selector import (
     TermInventory,
@@ -136,8 +141,8 @@ def _print_rename_preview(report, *, details: bool = False, applied: bool = Fals
 
 
 def _resolve_renamer_context(
-    path: str | None, lang: str | None
-) -> tuple[Path, RenamerService, str] | None:
+    path: str | None, lang: str | None, profile_name: str | None
+) -> tuple[Path, RenamerService, str, RenamerProfile] | None:
     store = SettingsStore()
     settings = store.load()
     resolver = PathResolver(settings)
@@ -153,8 +158,11 @@ def _resolve_renamer_context(
         )
         return None
     service = RenamerService()
-    default_lang = _default_language(settings, lang)
-    return folder, service, default_lang
+    profile = load_renamer_profile(
+        profile_name or str(settings["modules"]["renamer"].get("profile", "fr_tracker"))
+    )
+    default_lang = _default_language(settings, lang, profile)
+    return folder, service, default_lang, profile
 
 
 def _run_renamer_preview_then_confirm(
@@ -168,6 +176,7 @@ def _run_renamer_preview_then_confirm(
     insert_after_pairs: tuple[tuple[str, str], ...],
     show_details: bool,
     apply_changes: bool,
+    profile: RenamerProfile,
 ) -> int | None:
     first_error, _first_report = _run_renamer_once(
         service=service,
@@ -178,6 +187,7 @@ def _run_renamer_preview_then_confirm(
         remove_terms=remove_terms,
         insert_after_pairs=insert_after_pairs,
         show_details=show_details,
+        profile=profile,
     )
     if first_error is not None:
         return first_error
@@ -208,6 +218,7 @@ def _run_renamer_preview_then_confirm(
         remove_terms=remove_terms,
         insert_after_pairs=insert_after_pairs,
         show_details=show_details,
+        profile=profile,
     )
     return second_error
 
@@ -413,8 +424,9 @@ def _resolve_renamer_folder(path: str | None) -> tuple[PathResolver, Path] | tup
     return None, None
 
 
-def _default_language(settings: dict, lang: str | None) -> str:
-    return str(lang or settings["modules"]["renamer"]["default_language_tag"] or "")
+def _default_language(settings: dict, lang: str | None, profile: RenamerProfile) -> str:
+    configured = str(settings["modules"]["renamer"].get("default_language_tag", "") or "")
+    return str(lang or profile.default_language_tag or configured or "")
 
 
 def _should_run_picker(
@@ -580,6 +592,7 @@ def _run_renamer_once(
     remove_terms: tuple[str, ...],
     insert_after_pairs: tuple[tuple[str, str], ...],
     show_details: bool,
+    profile: RenamerProfile,
 ) -> tuple[int | None, object]:
     # When applying in interactive mode, build the plan first so we can prompt
     # the user to resolve ambiguous single-language tags before committing.
@@ -590,6 +603,7 @@ def _run_renamer_once(
             force_lang=force_lang,
             remove_terms=remove_terms,
             insert_after_pairs=insert_after_pairs,
+            profile=profile,
         )
         plan = _resolve_multi_language_tags_interactive(plan, service=service)
         report = service.run_plan(plan, apply_changes=apply_changes)
@@ -601,6 +615,7 @@ def _run_renamer_once(
             force_lang=force_lang,
             remove_terms=remove_terms,
             insert_after_pairs=insert_after_pairs,
+            profile=profile,
         )
     _print_rename_preview(report, details=show_details, applied=apply_changes)
     _print_renamer_run_summary(report, folder=folder, apply_changes=apply_changes)
@@ -676,6 +691,7 @@ def run_renamer_command(
     insert_after_pairs: tuple[tuple[str, str], ...] = (),
     select_terms: bool | None = None,
     rename_parent: bool = False,
+    profile_name: str | None = None,
 ) -> int:
     """Run renamer command."""
     flags_error = _validate_renamer_flags(apply_changes=apply_changes, dry_run=dry_run)
@@ -683,10 +699,10 @@ def run_renamer_command(
         return flags_error
 
     print_module_banner("Renamer")
-    context = _resolve_renamer_context(path, lang)
+    context = _resolve_renamer_context(path, lang, profile_name)
     if context is None:
         return 1
-    folder, service, default_lang = context
+    folder, service, default_lang, profile = context
 
     if lang and not force_lang:
         print_warning(
@@ -716,6 +732,7 @@ def run_renamer_command(
         remove_terms=effective_remove_terms,
         insert_after_pairs=insert_after_pairs,
         show_details=show_details,
+        profile=profile,
     )
     if run_error is not None:
         return run_error
@@ -729,6 +746,7 @@ def run_renamer_command(
             force_lang=force_lang,
             remove_terms=effective_remove_terms,
             insert_after_pairs=insert_after_pairs,
+            profile=profile,
         )
         parent_name = _derive_parent_name_from_report(preview_report)
         if parent_name:
@@ -741,6 +759,39 @@ def run_renamer_command(
         print_success(tr("common.dry_run_completed", default="Dry-run completed."))
 
     return 0
+
+
+def _print_renamer_profiles() -> None:
+    table = Table(title="Renamer profiles", box=box.HEAVY, expand=True)
+    table.add_column("Profile", width=18, no_wrap=True)
+    table.add_column("Default language", width=18)
+    table.add_column("Junk terms", ratio=1)
+    for profile in list_renamer_profiles():
+        table.add_row(
+            profile.name,
+            profile.default_language_tag or "-",
+            ", ".join(profile.junk_terms) or "-",
+        )
+    console.print(table)
+
+
+def _print_renamer_explain(profile_name: str) -> None:
+    profile = load_renamer_profile(profile_name)
+    table = Table(title=f"Renamer profile: {profile.name}", box=box.HEAVY, expand=True)
+    table.add_column("Field", width=24, no_wrap=True)
+    table.add_column("Value", ratio=1, overflow="fold")
+    table.add_row("default_language_tag", profile.default_language_tag or "-")
+    table.add_row(
+        "language_aliases",
+        ", ".join(f"{k}->{v}" for k, v in profile.language_aliases.items()) or "-",
+    )
+    table.add_row("junk_terms", ", ".join(profile.junk_terms) or "-")
+    table.add_row(
+        "quality_aliases",
+        ", ".join(f"{k}->{v}" for k, v in profile.quality_aliases.items()) or "-",
+    )
+    table.add_row("insert_missing_resolution", str(profile.insert_missing_resolution))
+    console.print(table)
 
 
 @click.command(
@@ -848,7 +899,14 @@ def run_renamer_command(
         default="Also rename the parent release folder to match the normalized name.",
     ),
 )
+@click.option(
+    "--profile",
+    "profile_name",
+    help="Renamer profile: fr_tracker, international, no_language, or custom.",
+)
+@click.pass_context
 def renamer_command(
+    ctx: click.Context,
     path_parts: tuple[str, ...],
     lang: str | None,
     apply_changes: bool,
@@ -859,19 +917,29 @@ def renamer_command(
     insert_after_pairs: tuple[tuple[str, str], ...],
     select_terms: bool | None,
     rename_parent: bool,
-) -> int:
+    profile_name: str | None,
+) -> None:
     """Handle renamer command."""
-    return run_renamer_command(
-        path=join_path_parts(path_parts) or None,
-        lang=lang,
-        apply_changes=apply_changes,
-        dry_run=dry_run,
-        force_lang=force_lang,
-        show_details=show_details,
-        remove_terms=remove_terms,
-        insert_after_pairs=insert_after_pairs,
-        select_terms=select_terms,
-        rename_parent=rename_parent,
+    if path_parts and path_parts[0] == "profiles":
+        _print_renamer_profiles()
+        return
+    if path_parts and path_parts[0] == "explain":
+        _print_renamer_explain(profile_name or "fr_tracker")
+        return
+    ctx.exit(
+        run_renamer_command(
+            path=join_path_parts(path_parts) or None,
+            lang=lang,
+            apply_changes=apply_changes,
+            dry_run=dry_run,
+            force_lang=force_lang,
+            show_details=show_details,
+            remove_terms=remove_terms,
+            insert_after_pairs=insert_after_pairs,
+            select_terms=select_terms,
+            rename_parent=rename_parent,
+            profile_name=profile_name,
+        )
     )
 
 

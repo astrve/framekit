@@ -8,6 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from framekit.commands.alias import alias_command
+from framekit.commands.main import cli
 from framekit.core.settings import SettingsStore
 
 
@@ -160,6 +161,20 @@ class TestAliasAddCommand:
         assert result.exit_code != 0
         assert "conflict" in result.output.lower()
 
+    def test_user_alias_routes_from_top_level_cli(self, cli_runner, tmp_path, monkeypatch):
+        """User aliases must dispatch from the root CLI, not only appear in alias list."""
+        settings_file = tmp_path / "framekit.yaml"
+        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+
+        add_result = cli_runner.invoke(alias_command, ["add", "box", "seedbox"])
+        assert add_result.exit_code == 0
+
+        result = cli_runner.invoke(cli, ["box", "--help"])
+
+        assert result.exit_code == 0
+        assert "push" in result.output
+        assert "pull" in result.output
+
 
 class TestAliasRemoveCommand:
     """Test 'fk alias remove' command."""
@@ -173,15 +188,34 @@ class TestAliasRemoveCommand:
         assert result.exit_code == 0
         assert "removed" in result.output.lower()
 
-    def test_remove_builtin_alias_fails(self, cli_runner, tmp_path, monkeypatch):
-        """Test removing a builtin alias fails."""
+    def test_remove_builtin_alias_hides_from_list_and_dispatch(
+        self, cli_runner, tmp_path, monkeypatch
+    ):
+        """Test removing a builtin alias hides it from list and root dispatch."""
         settings_file = tmp_path / "framekit.yaml"
         monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["remove", "ren", "--force"])
 
-        assert result.exit_code != 0
-        assert "built-in" in result.output.lower() or "builtin" in result.output.lower()
+        assert result.exit_code == 0
+
+        list_result = cli_runner.invoke(alias_command, ["list", "--json"])
+        assert list_result.exit_code == 0
+        assert "ren" not in json.loads(list_result.output)
+
+        dispatch_result = cli_runner.invoke(cli, ["ren", "--help"])
+        assert dispatch_result.exit_code != 0
+        assert "no such command" in dispatch_result.output.lower()
+
+    def test_pull_builtin_alias_routes_to_seedbox_pull(self, cli_runner, tmp_path, monkeypatch):
+        """Test the built-in pull alias routes to seedbox pull."""
+        settings_file = tmp_path / "framekit.yaml"
+        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+
+        result = cli_runner.invoke(cli, ["pull", "--help"])
+
+        assert result.exit_code == 0
+        assert "Download files from the seedbox" in result.output
 
     def test_remove_nonexistent_alias(self, cli_runner, tmp_path, monkeypatch):
         """Test removing a nonexistent alias."""

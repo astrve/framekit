@@ -12,24 +12,6 @@ from loguru import logger
 
 # Pre-configured tracker profiles
 TRACKER_PROFILES: dict[str, dict[str, Any]] = {
-    "c411.org": {
-        "name": "C411",
-        "type": "c411",
-        "categories": {
-            "Films & Videos": 1,
-            "Ebook": 2,
-            "Audio": 3,
-            "Applications": 4,
-            "Jeux Video": 5,
-            "Emulation": 6,
-            "GPS": 7,
-            "XXX": 8,
-            "Nulled": 9,
-            "Imprimante 3D": 10,
-        },
-        "types": {},
-        "resolutions": {},
-    },
     "beyond-hd.me": {
         "name": "Beyond-HD",
         "type": "unit3d",

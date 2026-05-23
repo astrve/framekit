@@ -137,7 +137,7 @@ def test_upload_run_uses_preset_defaults_in_non_interactive_mode(monkeypatch, tm
     assert metadata.resolution == "2160p"
 
 
-def test_upload_run_c411_requires_nfo_in_non_interactive_mode(monkeypatch, tmp_path):
+def test_upload_run_custom_json_api_v1_requires_nfo_in_non_interactive_mode(monkeypatch, tmp_path):
     torrent_file = tmp_path / "sample.torrent"
     torrent_file.write_bytes(b"torrent")
 
@@ -151,17 +151,17 @@ def test_upload_run_c411_requires_nfo_in_non_interactive_mode(monkeypatch, tmp_p
     class _UploadService:
         @staticmethod
         def list_trackers():
-            return [{"name": "c411", "url": "https://c411.org"}]
+            return [{"name": "custom_json_api_v1", "url": "https://tracker.example"}]
 
         @staticmethod
         def get_tracker_info(_tracker_name: str):
             return {
-                "name": "c411",
-                "type": "c411",
-                "url": "https://c411.org",
+                "name": "custom_json_api_v1",
+                "type": "custom_json_api_v1",
+                "url": "https://tracker.example",
                 "defaults": {
-                    "c411_category_id": 1,
-                    "c411_subcategory_id": 6,
+                    "custom_api_category_id": 1,
+                    "custom_api_subcategory_id": 6,
                 },
                 "categories": {},
                 "types": {},
@@ -181,7 +181,7 @@ def test_upload_run_c411_requires_nfo_in_non_interactive_mode(monkeypatch, tmp_p
 
     upload_command.run_command.callback(
         torrent_file=torrent_file,
-        tracker="c411",
+        tracker="custom_json_api_v1",
         name="Release.Name",
         description="[b]desc long enough for tests[/b]",
         category=None,
@@ -196,10 +196,10 @@ def test_upload_run_c411_requires_nfo_in_non_interactive_mode(monkeypatch, tmp_p
         preset=None,
     )
 
-    assert captured["message"] == "c411 requires an NFO file (--nfo or <torrent>.nfo)"
+    assert captured["message"] == "custom API requires an NFO file (--nfo or <torrent>.nfo)"
 
 
-def test_upload_run_c411_maps_fields_in_dry_run(monkeypatch, tmp_path):
+def test_upload_run_custom_json_api_v1_maps_fields_in_dry_run(monkeypatch, tmp_path):
     torrent_file = tmp_path / "sample.torrent"
     torrent_file.write_bytes(b"torrent")
     nfo_file = tmp_path / "sample.nfo"
@@ -215,14 +215,14 @@ def test_upload_run_c411_maps_fields_in_dry_run(monkeypatch, tmp_path):
     class _UploadService:
         @staticmethod
         def list_trackers():
-            return [{"name": "c411", "url": "https://c411.org"}]
+            return [{"name": "custom_json_api_v1", "url": "https://tracker.example"}]
 
         @staticmethod
         def get_tracker_info(_tracker_name: str):
             return {
-                "name": "c411",
-                "type": "c411",
-                "url": "https://c411.org",
+                "name": "custom_json_api_v1",
+                "type": "custom_json_api_v1",
+                "url": "https://tracker.example",
                 "defaults": {},
                 "categories": {},
                 "types": {},
@@ -244,7 +244,7 @@ def test_upload_run_c411_maps_fields_in_dry_run(monkeypatch, tmp_path):
 
     upload_command.run_command.callback(
         torrent_file=torrent_file,
-        tracker="c411",
+        tracker="custom_json_api_v1",
         name="Release.Name",
         description="[b]desc long enough for tests[/b]",
         nfo_path=nfo_file,
@@ -267,9 +267,9 @@ def test_upload_run_c411_maps_fields_in_dry_run(monkeypatch, tmp_path):
 
     metadata = captured["metadata"]
     assert metadata.nfo_path == str(nfo_file)
-    assert metadata.c411_category_id == 1
-    assert metadata.c411_subcategory_id == 6
-    assert metadata.c411_options == {"1": [4], "2": 10}
+    assert metadata.custom_api_category_id == 1
+    assert metadata.custom_api_subcategory_id == 6
+    assert metadata.custom_api_options == {"1": [4], "2": 10}
 
 
 def test_upload_run_accepts_description_file_in_non_interactive_mode(monkeypatch, tmp_path):
@@ -360,18 +360,18 @@ def test_upload_run_accepts_release_folder_and_infers_bbcode(monkeypatch, tmp_pa
     class _UploadService:
         @staticmethod
         def list_trackers():
-            return [{"name": "c411", "url": "https://c411.org"}]
+            return [{"name": "custom_json_api_v1", "url": "https://tracker.example"}]
 
         @staticmethod
         def get_tracker_info(_tracker_name: str):
             return {
-                "name": "c411",
-                "type": "c411",
-                "url": "https://c411.org",
+                "name": "custom_json_api_v1",
+                "type": "custom_json_api_v1",
+                "url": "https://tracker.example",
                 "defaults": {
-                    "c411_category_id": 1,
-                    "c411_subcategory_id": 6,
-                    "c411_options": {"1": [4], "2": 25},
+                    "custom_api_category_id": 1,
+                    "custom_api_subcategory_id": 6,
+                    "custom_api_options": {"1": [4], "2": 25},
                 },
                 "categories": {},
                 "types": {},
@@ -393,7 +393,7 @@ def test_upload_run_accepts_release_folder_and_infers_bbcode(monkeypatch, tmp_pa
 
     upload_command.run_command.callback(
         torrent_file=release,
-        tracker="c411",
+        tracker="custom_json_api_v1",
         name=None,
         description=None,
         description_file=None,
@@ -436,15 +436,15 @@ def test_upload_run_release_folder_multiple_torrents_fails_non_interactive(monke
     class _UploadService:
         @staticmethod
         def list_trackers():
-            return [{"name": "c411", "url": "https://c411.org"}]
+            return [{"name": "custom_json_api_v1", "url": "https://tracker.example"}]
 
         @staticmethod
         def get_tracker_info(_tracker_name: str):
             return {
-                "name": "c411",
-                "type": "c411",
-                "url": "https://c411.org",
-                "defaults": {"c411_category_id": 1, "c411_subcategory_id": 6},
+                "name": "custom_json_api_v1",
+                "type": "custom_json_api_v1",
+                "url": "https://tracker.example",
+                "defaults": {"custom_api_category_id": 1, "custom_api_subcategory_id": 6},
                 "categories": {},
                 "types": {},
                 "resolutions": {},
@@ -463,7 +463,7 @@ def test_upload_run_release_folder_multiple_torrents_fails_non_interactive(monke
 
     upload_command.run_command.callback(
         torrent_file=release,
-        tracker="c411",
+        tracker="custom_json_api_v1",
         name=None,
         description=None,
         description_file=None,
@@ -504,17 +504,23 @@ def test_upload_run_tracker_name_case_insensitive(monkeypatch, tmp_path):
     class _UploadService:
         @staticmethod
         def list_trackers():
-            return [{"name": "C411", "url": "https://c411.org", "type": "c411"}]
+            return [
+                {
+                    "name": "Custom JSON API",
+                    "url": "https://tracker.example",
+                    "type": "custom_json_api_v1",
+                }
+            ]
 
         @staticmethod
         def get_tracker_info(tracker_name: str):
-            if tracker_name != "C411":
+            if tracker_name != "Custom JSON API":
                 return None
             return {
-                "name": "C411",
-                "type": "c411",
-                "url": "https://c411.org",
-                "defaults": {"c411_category_id": 1, "c411_subcategory_id": 6},
+                "name": "Custom JSON API",
+                "type": "custom_json_api_v1",
+                "url": "https://tracker.example",
+                "defaults": {"custom_api_category_id": 1, "custom_api_subcategory_id": 6},
                 "categories": {},
                 "types": {},
                 "resolutions": {},
@@ -535,7 +541,7 @@ def test_upload_run_tracker_name_case_insensitive(monkeypatch, tmp_path):
 
     upload_command.run_command.callback(
         torrent_file=torrent_file,
-        tracker="c411",
+        tracker="custom_json_api_v1",
         name="Release.Name",
         description="[b]desc long enough for tests[/b]",
         description_file=None,
@@ -558,8 +564,8 @@ def test_upload_run_tracker_name_case_insensitive(monkeypatch, tmp_path):
         preset=None,
     )
 
-    assert captured["tracker"] == "C411"
-    assert captured["tracker_url"] == "https://c411.org"
+    assert captured["tracker"] == "Custom JSON API"
+    assert captured["tracker_url"] == "https://tracker.example"
 
 
 def test_upload_run_auto_tmdb_populates_metadata(monkeypatch, tmp_path):

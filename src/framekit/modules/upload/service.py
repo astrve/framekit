@@ -4,10 +4,12 @@ Provides high-level interface for uploading torrents with retry logic,
 validation, and multi-tracker support.
 """
 
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+import yaml
 from loguru import logger
 from pydantic import ValidationError
 from rich.progress import (
@@ -20,7 +22,7 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 
-from .adapters import C411Adapter, CustomAdapter, GazelleAdapter, UNIT3DAdapter
+from .adapters import CustomAdapter, CustomJsonApiAdapter, GazelleAdapter, UNIT3DAdapter
 from .models import TorrentFile, TorrentMetadata, TrackerConfig, UploadResult
 from .rate_limiter import TrackerRateLimiterRegistry
 
@@ -46,8 +48,8 @@ class UploadService:
             return UNIT3DAdapter(config)
         elif config.type == "gazelle":
             return GazelleAdapter(config)
-        elif config.type == "c411":
-            return C411Adapter(config)
+        elif config.type == "custom_json_api_v1":
+            return CustomJsonApiAdapter(config)
         elif config.type == "custom":
             return CustomAdapter(config)
         else:
@@ -474,10 +476,15 @@ class UploadService:
                 break
 
         if not tracker_data:
+            tracker_data = self._load_tracker_file(tracker_name)
+        if not tracker_data:
             raise ValueError(f"Tracker not found: {tracker_name}")
 
         # Get API key (decrypt if needed)
         api_key = tracker_data.get("api_key", "")
+        token_env = str(tracker_data.get("token_env", "") or "")
+        if not api_key and token_env:
+            api_key = os.environ.get(token_env, "")
         if api_key == settings.ENCRYPTED_PLACEHOLDER:
             vault = settings.get_vault()
             if vault:
@@ -491,8 +498,8 @@ class UploadService:
         try:
             return TrackerConfig(
                 name=tracker_data.get("name", tracker_name),
-                type=tracker_data.get("type", "custom"),
-                url=tracker_data.get("url", ""),
+                type=tracker_data.get("engine", tracker_data.get("type", "custom")),
+                url=tracker_data.get("base_url", tracker_data.get("url", "")),
                 api_key=api_key,
                 categories=tracker_data.get("categories", {}),
                 types=tracker_data.get("types", {}),
@@ -504,6 +511,32 @@ class UploadService:
             )
         except ValidationError as e:
             raise ValueError(f"Invalid tracker configuration for '{tracker_name}': {e}") from e
+
+    @staticmethod
+    def _load_tracker_file(tracker_name: str) -> dict[str, Any] | None:
+        from framekit.core.settings import SettingsStore
+
+        path = SettingsStore().path.parent / "trackers" / f"{tracker_name}.yaml"
+        if not path.exists():
+            return None
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if not isinstance(data, dict):
+            raise ValueError(f"Tracker file must contain a YAML object: {path}")
+
+        auth = data.get("auth", {})
+        token_env = auth.get("token_env", "") if isinstance(auth, dict) else ""
+        defaults = data.get("defaults", {})
+        return {
+            "name": data.get("name", tracker_name),
+            "engine": data.get("engine", "custom_json_api_v1"),
+            "base_url": data.get("base_url", data.get("url", "")),
+            "api_key": "",
+            "token_env": token_env,
+            "defaults": defaults if isinstance(defaults, dict) else {},
+            "categories": data.get("categories", {}),
+            "types": data.get("types", {}),
+            "resolutions": data.get("resolutions", {}),
+        }
 
     @staticmethod
     def list_trackers() -> list[dict[str, Any]]:
@@ -519,18 +552,38 @@ class UploadService:
         upload_config = data.get("upload", {})
         trackers = upload_config.get("trackers", [])
 
-        # Return tracker info without sensitive data
-        return [
+        rows = [
             {
                 "name": tracker.get("name", ""),
-                "type": tracker.get("type", ""),
-                "url": tracker.get("url", ""),
+                "type": tracker.get("engine", tracker.get("type", "")),
+                "url": tracker.get("base_url", tracker.get("url", "")),
                 "categories": len(tracker.get("categories", {})),
                 "types": len(tracker.get("types", {})),
                 "resolutions": len(tracker.get("resolutions", {})),
             }
             for tracker in trackers
         ]
+        try:
+            from framekit.core.settings import SettingsStore
+
+            tracker_dir = SettingsStore().path.parent / "trackers"
+            for path in sorted(tracker_dir.glob("*.yaml")):
+                raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                if not isinstance(raw, dict):
+                    continue
+                rows.append(
+                    {
+                        "name": raw.get("name", path.stem),
+                        "type": raw.get("engine", raw.get("type", "")),
+                        "url": raw.get("base_url", raw.get("url", "")),
+                        "categories": len(raw.get("categories", {})),
+                        "types": len(raw.get("types", {})),
+                        "resolutions": len(raw.get("resolutions", {})),
+                    }
+                )
+        except Exception as exc:
+            logger.debug(f"Failed to list tracker YAML profiles: {exc}")
+        return rows
 
     @staticmethod
     def get_tracker_info(tracker_name: str) -> dict[str, Any] | None:
@@ -555,6 +608,16 @@ class UploadService:
                 info = dict(tracker)
                 info["api_key"] = "********" if info.get("api_key") else ""
                 return info
+        file_data = UploadService._load_tracker_file(tracker_name)
+        if file_data:
+            return {
+                "name": file_data.get("name", tracker_name),
+                "type": file_data.get("engine", file_data.get("type", "")),
+                "url": file_data.get("base_url", file_data.get("url", "")),
+                "token_env": file_data.get("token_env", ""),
+                "api_key": "",
+                "defaults": file_data.get("defaults", {}),
+            }
 
         return None
 

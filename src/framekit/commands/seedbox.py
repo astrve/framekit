@@ -20,6 +20,7 @@ from rich.table import Table
 from framekit.core.cli_helpers import join_path_parts
 from framekit.core.i18n import tr
 from framekit.core.paths import get_config_dir
+from framekit.core.release_payload import find_release_payload, find_release_payloads
 from framekit.core.settings import SettingsStore
 from framekit.core.subprocess_safe import run_safe
 from framekit.ui.branding import print_module_banner
@@ -72,7 +73,8 @@ def _get_seedbox_cfg(settings: dict) -> dict:
 
 
 def _list_seedboxes(settings: dict) -> list[dict]:
-    return list(_get_seedbox_cfg(settings).get("seedboxes", []))
+    raw = _get_seedbox_cfg(settings).get("seedboxes", [])
+    return list(raw) if isinstance(raw, list) else []
 
 
 def _find_seedbox(settings: dict, name: str) -> dict | None:
@@ -207,6 +209,9 @@ def _run_post_upload_command(command: str, context: dict[str, str]) -> None:
         return
     try:
         expanded = command.format(**context)
+        if expanded.strip().lower().startswith("echo "):
+            print_info(expanded.strip()[5:].strip().strip("'\""))
+            return
         print_info(tr("seedbox.info.post_upload", default="Running post-upload command..."))
         argv = shlex.split(expanded)
         if not argv:
@@ -239,6 +244,8 @@ def _resolve_remote_path(sb: dict, *, remote_path: str | None, category: str | N
         cat_paths = sb.get("category_paths", {})
         cat_sub = cat_paths.get(category, "")
         if cat_sub:
+            if str(cat_sub).startswith("/"):
+                return str(cat_sub).rstrip("/")
             return f"{base}/{cat_sub.lstrip('/')}"
         print_warning(
             tr(
@@ -250,6 +257,60 @@ def _resolve_remote_path(sb: dict, *, remote_path: str | None, category: str | N
     return base
 
 
+def _resolve_local_payload(local_path: Path) -> tuple[Path, str | None]:
+    payload = find_release_payload(local_path)
+    if payload is None:
+        return local_path, None
+    if payload.path != local_path:
+        print_info(
+            tr(
+                "seedbox.info.detected_payload",
+                default="Detected release payload folder: {path}",
+                path=payload.path,
+            )
+        )
+    return payload.path, payload.category
+
+
+def _resolve_local_payloads(local_path: Path) -> list[tuple[Path, str | None]]:
+    payloads = find_release_payloads(local_path)
+    if not payloads:
+        return [(local_path, None)]
+
+    if len(payloads) > 1:
+        print_info(
+            tr(
+                "seedbox.info.detected_payloads",
+                default="Detected {count} release payload folders.",
+                count=len(payloads),
+            )
+        )
+
+    resolved: list[tuple[Path, str | None]] = []
+    for payload in payloads:
+        if payload.path != local_path:
+            print_info(
+                tr(
+                    "seedbox.info.detected_payload",
+                    default="Detected release payload folder: {path}",
+                    path=payload.path,
+                )
+            )
+        resolved.append((payload.path, payload.category))
+    return resolved
+
+
+def _destination_path_for_source(dest_path: str, local_path: Path) -> str:
+    if not local_path.is_dir():
+        return dest_path
+    normalized = (dest_path or "/").rstrip("/") or "/"
+    if normalized.rstrip("/").endswith(f"/{local_path.name}") or normalized == local_path.name:
+        return normalized
+    if normalized == "/":
+        return f"/{local_path.name}"
+    return f"{normalized}/{local_path.name}"
+
+
 def run_seedbox_push(
     *,
     path: str | None,
@@ -258,6 +319,7 @@ def run_seedbox_push(
     category: str | None,
     dry_run: bool = False,
     verbose: bool = False,
+    allow_cwd: bool = False,
 ) -> int:
     """Upload local files to seedbox via rclone copy."""
     print_module_banner("Seedbox — Push")
@@ -268,12 +330,20 @@ def run_seedbox_push(
     if not sb:
         return 1
 
-    local_path = Path(path) if path else Path.cwd()
-    if not local_path.exists():
+    if not path and not allow_cwd:
+        print_error("Refusing implicit current-directory upload. Pass a path or use --cwd.")
+        return 1
+    requested_path = Path(path) if path else Path.cwd()
+    if not requested_path.exists():
         print_error(
-            tr("seedbox.error.path_not_found", default="Path not found: {path}", path=local_path)
+            tr(
+                "seedbox.error.path_not_found",
+                default="Path not found: {path}",
+                path=requested_path,
+            )
         )
         return 1
+    payloads = _resolve_local_payloads(requested_path)
 
     remote = sb.get("rclone_remote", "")
     if not remote:
@@ -298,47 +368,65 @@ def run_seedbox_push(
                 ):
                     return 1
 
-    dest_path = _resolve_remote_path(sb, remote_path=remote_path, category=category)
-    dest = f"{remote}:{dest_path}"
-
-    print_info(
-        tr(
-            "seedbox.info.pushing",
-            default="Pushing {source} → {dest}",
-            source=local_path,
-            dest=dest,
-        )
-    )
-
-    rclone_args = ["copy", str(local_path), dest, "--progress"]
-    bw_limit = sb.get("bandwidth_limit", "")
-    if bw_limit:
-        rclone_args += ["--bwlimit", bw_limit]
-
-    rc = _run_rclone(rclone_args, dry_run=dry_run, verbose=verbose)
-
-    # Record history
-    if not dry_run and _get_seedbox_cfg(settings).get("history_enabled", True):
-        _append_history(
-            {
-                "timestamp": datetime.now(tz=UTC).isoformat(),
-                "action": "push",
-                "seedbox": sb.get("name", ""),
-                "local_path": str(local_path),
-                "remote_path": dest_path,
-                "success": rc == 0,
-            }
-        )
-
-    if rc == 0:
-        print_success(tr("seedbox.success.push", default="Upload complete."))
-        post_cmd = sb.get("post_upload_command", "")
-        if post_cmd:
-            _run_post_upload_command(
-                post_cmd,
-                {"local_path": str(local_path), "remote_path": dest_path, "remote": remote},
+    success = True
+    for local_path, inferred_category in payloads:
+        effective_category = category or inferred_category
+        if not category and inferred_category:
+            print_info(
+                tr(
+                    "seedbox.info.detected_category",
+                    default="Detected category: {category}",
+                    category=inferred_category,
+                )
             )
-    return rc
+
+        dest_path = _destination_path_for_source(
+            _resolve_remote_path(sb, remote_path=remote_path, category=effective_category),
+            local_path,
+        )
+        dest = f"{remote}:{dest_path}"
+
+        print_info(
+            tr(
+                "seedbox.info.pushing",
+                default="Pushing {source} → {dest}",
+                source=local_path,
+                dest=dest,
+            )
+        )
+
+        rclone_args = ["copy", str(local_path), dest, "--progress"]
+        bw_limit = sb.get("bandwidth_limit", "")
+        if bw_limit:
+            rclone_args += ["--bwlimit", bw_limit]
+
+        rc = _run_rclone(rclone_args, dry_run=dry_run, verbose=verbose)
+        success = success and rc == 0
+
+        if not dry_run and _get_seedbox_cfg(settings).get("history_enabled", True):
+            _append_history(
+                {
+                    "timestamp": datetime.now(tz=UTC).isoformat(),
+                    "action": "push",
+                    "seedbox": sb.get("name", ""),
+                    "local_path": str(local_path),
+                    "remote_path": dest_path,
+                    "success": rc == 0,
+                }
+            )
+
+        if rc == 0:
+            if dry_run:
+                print_success(tr("seedbox.success.push_dry_run", default="Dry-run complete."))
+            else:
+                print_success(tr("seedbox.success.push", default="Upload complete."))
+            post_cmd = sb.get("post_upload_command", "")
+            if post_cmd and not dry_run:
+                _run_post_upload_command(
+                    post_cmd,
+                    {"local_path": str(local_path), "remote_path": dest_path, "remote": remote},
+                )
+    return 0 if success else 1
 
 
 def run_seedbox_pull(
@@ -348,6 +436,7 @@ def run_seedbox_pull(
     local_path: str | None,
     dry_run: bool = False,
     verbose: bool = False,
+    allow_cwd: bool = False,
 ) -> int:
     """Download files from seedbox via rclone copy."""
     print_module_banner("Seedbox — Pull")
@@ -371,6 +460,11 @@ def run_seedbox_pull(
 
     src_path = remote_path or sb.get("remote_base_path", "/")
     source = f"{remote}:{src_path}"
+    if not local_path and not allow_cwd:
+        print_error(
+            "Refusing implicit current-directory download. Pass a destination or use --cwd."
+        )
+        return 1
     dest = Path(local_path) if local_path else Path.cwd()
 
     print_info(
@@ -397,7 +491,10 @@ def run_seedbox_pull(
         )
 
     if rc == 0:
-        print_success(tr("seedbox.success.pull", default="Download complete."))
+        if dry_run:
+            print_success(tr("seedbox.success.pull_dry_run", default="Dry-run complete."))
+        else:
+            print_success(tr("seedbox.success.pull", default="Download complete."))
     return rc
 
 
@@ -449,6 +546,59 @@ def run_seedbox_status(*, seedbox_name: str | None) -> int:
 
     print_info(tr("seedbox.status.checking", default="Checking remote disk usage..."))
     return _run_rclone(["about", f"{remote}:"])
+
+
+def run_seedbox_explain() -> int:
+    """Explain seedbox behavior and safety defaults."""
+    print_module_banner("Seedbox — Explain")
+    table = Table(title="Seedbox module", expand=True, box=box.HEAVY)
+    table.add_column("Field", width=24, no_wrap=True)
+    table.add_column("Value", ratio=1, overflow="fold")
+    table.add_row("status", "experimental")
+    table.add_row("backend", "rclone copy")
+    table.add_row("credentials", "stored by rclone, not Framekit")
+    table.add_row("history", str(_history_path()))
+    table.add_row("push safety", "path required; use --cwd to opt into current directory")
+    table.add_row("pull safety", "destination required; use --cwd to opt into current directory")
+    table.add_row("advanced", "post_upload_command runs a local command from config")
+    console.print(table)
+    return 0
+
+
+def run_seedbox_doctor() -> int:
+    """Validate seedbox configuration without transferring files."""
+    print_module_banner("Seedbox — Doctor")
+    store = SettingsStore()
+    settings = store.load()
+    seedboxes = _list_seedboxes(settings)
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not _find_rclone():
+        warnings.append("rclone not found on PATH.")
+    for sb in seedboxes:
+        name = str(sb.get("name", "") or "")
+        remote = str(sb.get("rclone_remote", "") or "")
+        base_path = str(sb.get("remote_base_path", "") or "")
+        if not name:
+            errors.append("seedbox entry missing name")
+        if not remote:
+            errors.append(f"{name or '<unnamed>'}: missing rclone_remote")
+        if not base_path:
+            errors.append(f"{name or '<unnamed>'}: missing remote_base_path")
+        try:
+            float(sb.get("min_free_gb", 5))
+        except (TypeError, ValueError):
+            errors.append(f"{name or '<unnamed>'}: min_free_gb must be numeric")
+        if sb.get("post_upload_command"):
+            warnings.append(f"{name}: post_upload_command is advanced and runs locally.")
+    if errors:
+        for error in errors:
+            print_error(error)
+        return 1
+    for warning in warnings:
+        print_warning(warning)
+    print_success("Seedbox config valid.")
+    return 0
 
 
 # ── Management subcommands ────────────────────────────────────────────────────
@@ -802,7 +952,7 @@ def run_seedbox_history(*, seedbox_name: str | None, limit: int) -> int:
     help=tr(
         "cli.seedbox.help",
         default=(
-            "Manage seedbox transfers via rclone.\n\n"
+            "-[BETA]- Manage seedbox transfers via rclone.\n\n"
             "Register seedboxes with 'fk seedbox add', then use push/pull to transfer files.\n"
             "Configure rclone remotes separately with 'rclone config'.\n\n"
             "Examples:\n"
@@ -859,6 +1009,7 @@ def seedbox_use_command(name: str) -> int:
 @click.option("-c", "--category", default=None, help="Upload category (movies, series, anime, ...)")
 @click.option("-d", "--dry-run", is_flag=True, help="Preview only (rclone --dry-run)")
 @click.option("-v", "--verbose", is_flag=True, help="Verbose rclone output")
+@click.option("--cwd", is_flag=True, help="Explicitly allow current directory as source")
 def seedbox_push_command(
     path_parts: tuple[str, ...],
     seedbox_name: str | None,
@@ -866,6 +1017,7 @@ def seedbox_push_command(
     category: str | None,
     dry_run: bool,
     verbose: bool,
+    cwd: bool,
 ) -> int:
     """Upload local files to the seedbox."""
     return run_seedbox_push(
@@ -875,30 +1027,50 @@ def seedbox_push_command(
         category=category,
         dry_run=dry_run,
         verbose=verbose,
+        allow_cwd=cwd,
     )
 
 
 @seedbox_group.command("pull", context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("remote_path_arg", required=False)
+@click.argument("local_path_arg", required=False)
 @click.option("-s", "--seedbox", "seedbox_name", default=None, help="Seedbox to use")
 @click.option("--remote-path", default=None, help="Remote source path")
 @click.option("-l", "--local", "local_path", help="Local destination path")
 @click.option("-d", "--dry-run", is_flag=True, help="Preview only (rclone --dry-run)")
 @click.option("-v", "--verbose", is_flag=True, help="Verbose rclone output")
+@click.option("--cwd", is_flag=True, help="Explicitly allow current directory as destination")
 def seedbox_pull_command(
+    remote_path_arg: str | None,
+    local_path_arg: str | None,
     seedbox_name: str | None,
     remote_path: str | None,
     local_path: str | None,
     dry_run: bool,
     verbose: bool,
+    cwd: bool,
 ) -> int:
     """Download files from the seedbox."""
     return run_seedbox_pull(
         seedbox_name=seedbox_name,
-        remote_path=remote_path,
-        local_path=local_path,
+        remote_path=remote_path or remote_path_arg,
+        local_path=local_path or local_path_arg,
         dry_run=dry_run,
         verbose=verbose,
+        allow_cwd=cwd,
     )
+
+
+@seedbox_group.command("explain", context_settings={"help_option_names": ["-h", "--help"]})
+def seedbox_explain_command() -> int:
+    """Explain seedbox module behavior."""
+    return run_seedbox_explain()
+
+
+@seedbox_group.command("doctor", context_settings={"help_option_names": ["-h", "--help"]})
+def seedbox_doctor_command() -> int:
+    """Validate seedbox configuration."""
+    return run_seedbox_doctor()
 
 
 @seedbox_group.command("status", context_settings={"help_option_names": ["-h", "--help"]})

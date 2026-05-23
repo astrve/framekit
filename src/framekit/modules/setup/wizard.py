@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from framekit.core.i18n import tr
@@ -686,12 +685,9 @@ class SetupWizard:
 
     def _save_configuration(self) -> None:
         """Save configuration to framekit.yaml."""
-        # Find the parent directory (where framekit.yaml should be)
-        config_path = Path.cwd() / "framekit.yaml"
-
-        # Use SettingsStore to save
-        store = SettingsStore(config_path)
+        store = SettingsStore()
         store.save(self.config)
+        config_path = store.path
 
         show_info_message(
             tr(

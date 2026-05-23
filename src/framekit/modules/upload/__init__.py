@@ -1,7 +1,7 @@
 """Upload module for automatic torrent uploads to private trackers.
 
 Supports multiple tracker types:
-- UNIT3D (c411, BeyondHD, Blutopia, etc.)
+- UNIT3D (BeyondHD, Blutopia, etc.)
 - Gazelle (RED, OPS, etc.)
 - Custom trackers
 
@@ -17,8 +17,8 @@ Features:
 from .adapters import (
     AdapterError,
     AuthenticationError,
-    C411Adapter,
     CustomAdapter,
+    CustomJsonApiAdapter,
     DiscoveryError,
     GazelleAdapter,
     TrackerAdapter,
@@ -34,7 +34,7 @@ __all__ = [
     # Exceptions
     "AdapterError",
     "AuthenticationError",
-    "C411Adapter",
+    "CustomJsonApiAdapter",
     "CustomAdapter",
     "DiscoveryError",
     "DiscoveryResult",

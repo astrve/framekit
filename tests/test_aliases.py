@@ -165,14 +165,33 @@ class TestAliasManager:
         manager.remove_alias("temp-alias")
         assert manager.get_alias("temp-alias") is None
 
-    def test_remove_builtin_alias_raises_error(self, tmp_path):
-        """Test removing a builtin alias raises error."""
+    def test_remove_builtin_alias_hides_it_persistently(self, tmp_path):
+        """Test removing a builtin alias hides it from future loads."""
         settings_file = tmp_path / "framekit.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
-        with pytest.raises(AliasError, match="Cannot remove built-in alias"):
-            manager.remove_alias("ren")
+        manager.remove_alias("ren")
+
+        assert manager.get_alias("ren") is None
+        assert "ren" not in manager.list_aliases()
+
+        new_manager = AliasManager(SettingsStore(settings_file))
+        assert new_manager.get_alias("ren") is None
+        assert "ren" not in new_manager.list_aliases()
+
+    def test_enable_removed_builtin_alias_restores_it(self, tmp_path):
+        """Test enabling a removed builtin alias restores defaults."""
+        settings_file = tmp_path / "framekit.yaml"
+        store = SettingsStore(settings_file)
+        manager = AliasManager(store)
+
+        manager.remove_alias("ren")
+        manager.enable_alias("ren")
+
+        alias = manager.get_alias("ren")
+        assert alias is not None
+        assert alias.command == "renamer"
 
     def test_enable_alias(self, tmp_path):
         """Test enabling a disabled alias."""

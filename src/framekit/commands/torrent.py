@@ -210,6 +210,94 @@ def _print_vault_fix_hint() -> None:
     )
 
 
+def _prompt_save_announce_enabled(settings: dict) -> bool:
+    torrent_settings = settings.setdefault("modules", {}).setdefault("torrent", {})
+    return bool(torrent_settings.get("prompt_save_announce", True))
+
+
+def _select_save_announce_action() -> str | None:
+    try:
+        selected = select_one(
+            title=tr(
+                "torrent.prompt.save_announce",
+                default="Voulez-vous enregistrer cette announce pour les prochaines fois ?",
+            ),
+            entries=[
+                SelectorOption(
+                    value="yes",
+                    label=tr("common.yes", default="Yes"),
+                    hint=tr(
+                        "torrent.prompt.save_announce.yes_hint",
+                        default="Sauvegarder l'annonce sélectionnée dans le vault si la sécurité est activée.",
+                    ),
+                    selected=True,
+                ),
+                SelectorOption(
+                    value="no",
+                    label=tr("common.no", default="No"),
+                    hint=tr(
+                        "torrent.prompt.save_announce.no_hint",
+                        default="Utiliser cette announce uniquement pour cette exécution.",
+                    ),
+                ),
+                SelectorOption(
+                    value="never",
+                    label=tr(
+                        "torrent.prompt.save_announce.never",
+                        default="Non, ne plus afficher ce message",
+                    ),
+                    hint=tr(
+                        "torrent.prompt.save_announce.never_hint",
+                        default="Désactiver cette question dans framekit.yaml.",
+                    ),
+                ),
+            ],
+            page_size=6,
+            default="no" if not sys.stdin.isatty() else None,
+        )
+    except (KeyboardInterrupt, EOFError):
+        return None
+    return str(selected) if selected else None
+
+
+def _disable_save_announce_prompt(store: SettingsStore, settings: dict) -> None:
+    settings.setdefault("modules", {}).setdefault("torrent", {})["prompt_save_announce"] = False
+    store.save(settings)
+
+
+def _maybe_save_prompted_announce(*, store: SettingsStore, settings: dict, url: str) -> None:
+    if not _prompt_save_announce_enabled(settings):
+        return
+
+    action = _select_save_announce_action()
+    if action == "yes":
+        _save_announce_selection(store, settings, url)
+        print_success(
+            tr(
+                "torrent.success.announce_saved_prompt",
+                default="Announce URL saved. Continuing.",
+            )
+        )
+        return
+
+    if action == "never":
+        _disable_save_announce_prompt(store, settings)
+        print_info(
+            tr(
+                "torrent.info.save_announce_prompt_disabled",
+                default="Cette question ne sera plus affichée.",
+            )
+        )
+        return
+
+    print_info(
+        tr(
+            "torrent.info.announce_not_saved",
+            default="Announce utilisée pour cette exécution uniquement.",
+        )
+    )
+
+
 def _decrypt_torrent_announces() -> list[str]:
     try:
         from framekit.core.settings import Settings
@@ -251,14 +339,14 @@ def _announce_urls(settings: dict) -> list[str]:
 
 
 def _prompt_for_announce_and_save(settings: dict) -> str:
-    """Interactively ask for an announce URL and persist it.
+    """Interactively ask for an announce URL and optionally persist it.
 
     Triggered when the user runs ``framekit torrent`` without any announce
     configured. On a non-TTY (CI/headless) prints the error path the previous
-    behaviour used and returns ``""``. On a TTY, prompts for a URL, validates
-    it, saves it via ``Settings`` (vault or plaintext depending on
-    ``security.enabled``), and returns the saved value so the calling
-    command can continue without restarting.
+    behaviour used and returns ``""``. On a TTY, prompts for a URL, validates it,
+    then asks whether it should be saved via ``Settings`` (vault or plaintext
+    depending on ``security.enabled``). The valid URL is returned even when the
+    user chooses not to save it.
 
     Args:
         settings: Loaded settings dict from ``SettingsStore.load()``. The
@@ -266,8 +354,8 @@ def _prompt_for_announce_and_save(settings: dict) -> str:
             rest of the command sees the new value.
 
     Returns:
-        The validated announce URL, or ``""`` when the user cancelled, the
-        terminal is non-interactive, or the saved value is unusable.
+        The validated announce URL, or ``""`` when the user cancelled or the
+        terminal is non-interactive.
     """
     if not sys.stdin.isatty():
         print_error(
@@ -312,9 +400,8 @@ def _prompt_for_announce_and_save(settings: dict) -> str:
         )
         return ""
 
-    store = SettingsStore()
     try:
-        _save_announce_selection(store, settings, url)
+        _maybe_save_prompted_announce(store=SettingsStore(), settings=settings, url=url)
     except Exception as exc:
         print_error(
             tr(
@@ -323,14 +410,6 @@ def _prompt_for_announce_and_save(settings: dict) -> str:
                 error=str(exc),
             )
         )
-        return ""
-
-    print_success(
-        tr(
-            "torrent.success.announce_saved",
-            default="Announce URL saved. Continuing.",
-        )
-    )
     return url
 
 

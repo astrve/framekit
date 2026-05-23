@@ -48,6 +48,7 @@ metadata:
   trakt_client_secret: ''
   trakt_access_token: ''
   enabled_by_default: true
+  prompt_missing_token_in_pipeline: true
   content_type_hints:
     anime:
       - anilist
@@ -115,6 +116,7 @@ modules:
     selected_announce: ''
     private: true
     piece_length: auto
+    prompt_save_announce: true
 
   prez:
     default_folder: ''

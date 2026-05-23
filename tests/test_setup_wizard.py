@@ -19,6 +19,7 @@ from framekit.commands.setup import (
     _prompt_custom_language,
     _prompt_custom_path,
     _prompt_tmdb_token,
+    _run_storage_step,
     run_guided_setup,
 )
 
@@ -49,18 +50,18 @@ class TestSetupWizardNavigation:
     def test_wizard_skip_all_steps(self, mock_banner: Mock, mock_choose: Mock, temp_settings_store):
         """Skip every optional step and save at the end.
 
-        The wizard fires one yes/no per major step (Language, Security,
-        Folders, Metadata, NFO Template, Prez, Torrent), one inside the Logo
-        step (``Import a logo now?``), then the final ``save_choice``.
+        The wizard fires one yes/no per major step (Storage, Language,
+        Security, Folders, Metadata, NFO Template, Prez, Torrent, Logo),
+        then the final ``save_choice``.
         """
-        mock_choose.side_effect = [False] * 8 + [True]
+        mock_choose.side_effect = [False] * 9 + [True]
 
         result = run_guided_setup(mark_completed=True)
 
         assert result == 0
-        # The skip-all path uses a minimum of nine yes/no prompts; the exact
+        # The skip-all path uses a minimum of ten yes/no prompts; the exact
         # count depends on the logo sub-flow. Pin only the lower bound.
-        assert mock_choose.call_count >= 9
+        assert mock_choose.call_count >= 10
 
 
 class TestInterfaceLanguageSelection:
@@ -243,6 +244,45 @@ class TestWorkspacePathSelection:
         assert result is None
 
 
+class TestSettingsStorageSelection:
+    """Test settings storage path selection."""
+
+    @patch("framekit.commands.setup.console")
+    @patch("framekit.commands.setup.choose_option")
+    @patch("framekit.commands.setup.choose_yes_no")
+    def test_run_storage_step_custom_folder(
+        self,
+        mock_yes_no: Mock,
+        mock_choose: Mock,
+        mock_console: Mock,
+        tmp_path: Path,
+        monkeypatch,
+    ):
+        """Custom storage folder persists a global settings path."""
+        from framekit.core import paths
+
+        workspace = tmp_path / "workspace"
+        config_dir = tmp_path / "config"
+        cache_dir = tmp_path / "cache"
+        custom_dir = tmp_path / "portable-config"
+        workspace.mkdir()
+        monkeypatch.chdir(workspace)
+        monkeypatch.delenv("FRAMEKIT_CONFIG", raising=False)
+        monkeypatch.setattr(paths, "user_config_dir", lambda *_args: str(config_dir))
+        monkeypatch.setattr(paths, "user_cache_dir", lambda *_args: str(cache_dir))
+        mock_yes_no.return_value = True
+        mock_choose.return_value = "custom"
+        mock_console.input.return_value = str(custom_dir)
+
+        store = _run_storage_step()
+
+        expected = custom_dir / "framekit.yaml"
+        assert store.path == expected
+        assert (config_dir / "settings-path.txt").read_text(encoding="utf-8") == str(
+            expected.resolve()
+        )
+
+
 class TestTMDbTokenPrompt:
     """Test TMDb token prompting."""
 
@@ -342,7 +382,7 @@ class TestWizardIntegration:
     ):
         """Test wizard with minimal configuration."""
         # See ``test_wizard_skip_all_steps`` for the prompt sequence rationale.
-        mock_choose.side_effect = [False] * 8 + [True]
+        mock_choose.side_effect = [False] * 9 + [True]
 
         result = run_guided_setup(mark_completed=True)
 
@@ -353,7 +393,7 @@ class TestWizardIntegration:
     @patch("framekit.commands.setup.print_module_banner")
     def test_wizard_decline_save(self, mock_banner: Mock, mock_choose: Mock, temp_settings_store):
         """Test declining to save configuration."""
-        mock_choose.side_effect = [False] * 9
+        mock_choose.side_effect = [False] * 10
 
         result = run_guided_setup(mark_completed=False)
 
