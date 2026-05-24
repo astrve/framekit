@@ -8,8 +8,11 @@ import {
   ModulesPresetsSchema,
   RunModuleResultSchema,
   SeedboxListSchema,
+  SeedboxHistorySchema,
   SettingsSummarySchema,
   SystemInfoSchema,
+  UploadHistorySchema,
+  UploadStateSchema,
   UploadTrackersSchema,
   type DoctorPayload,
   type HealthPayload,
@@ -17,7 +20,10 @@ import {
   type ModulesCatalog,
   type ModulesPresets,
   type SeedboxList,
+  type SeedboxHistory,
   type SettingsSummary,
+  type UploadHistory,
+  type UploadState,
   type RunModuleResult,
   type SystemInfoPayload,
   type UploadTrackers,
@@ -53,6 +59,30 @@ export async function getSeedboxList(): Promise<SeedboxList> {
 
 export async function getUploadTrackers(): Promise<UploadTrackers> {
   return fetchValidated("/api/v1/upload/trackers", UploadTrackersSchema);
+}
+
+export async function getUploadState(): Promise<UploadState> {
+  return fetchValidated("/api/v1/upload/state", UploadStateSchema);
+}
+
+export async function setUploadState(payload: {
+  enabled: boolean;
+  auto_upload?: boolean;
+}): Promise<UploadState> {
+  return fetchValidated("/api/v1/upload/state", UploadStateSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getUploadHistory(limit = 20): Promise<UploadHistory> {
+  return fetchValidated(`/api/v1/upload/history?limit=${limit}`, UploadHistorySchema);
+}
+
+export async function getSeedboxHistory(limit = 50, seedboxName = ""): Promise<SeedboxHistory> {
+  const seedboxQuery = seedboxName.trim() ? `&seedbox_name=${encodeURIComponent(seedboxName.trim())}` : "";
+  return fetchValidated(`/api/v1/seedbox/history?limit=${limit}${seedboxQuery}`, SeedboxHistorySchema);
 }
 
 export async function runModule(payload: {

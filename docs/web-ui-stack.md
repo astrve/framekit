@@ -53,7 +53,11 @@ Reference for Framekit web interface technical baseline.
 - `POST /api/v1/modules/jobs/{job_id}/rerun`
 - `GET /api/v1/settings/summary`
 - `GET /api/v1/seedbox/list`
+- `GET /api/v1/seedbox/history`
 - `GET /api/v1/upload/trackers`
+- `GET /api/v1/upload/state`
+- `POST /api/v1/upload/state`
+- `GET /api/v1/upload/history`
 
 Response validation must be represented in frontend Zod schemas under `src/lib/api/schemas.ts`.
 

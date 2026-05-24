@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { CloudUpload, Copy } from "lucide-react";
 import { useState } from "react";
 
@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { runModule } from "@/lib/api/endpoints";
-import type { RunModuleResult } from "@/lib/api/schemas";
+import { getUploadHistory, getUploadState, runModule, setUploadState } from "@/lib/api/endpoints";
+import type { RunModuleResult, UploadState } from "@/lib/api/schemas";
 
 type UploadAction = "setup" | "list-trackers" | "show-tracker" | "run" | "history" | "enable" | "disable";
 
@@ -23,6 +23,26 @@ export function UploadPage() {
 
   const runMutation = useMutation({
     mutationFn: runModule,
+  });
+  const stateQuery = useQuery({
+    queryKey: ["upload-state"],
+    queryFn: getUploadState,
+  });
+  const historyQuery = useQuery({
+    queryKey: ["upload-history"],
+    queryFn: () => getUploadHistory(20),
+  });
+  const setStateMutation = useMutation({
+    mutationFn: setUploadState,
+    onSuccess: (state: UploadState) => {
+      stateQuery.refetch().catch(() => undefined);
+      setLocalError(null);
+      if (state.enabled) {
+        setAction("enable");
+      } else {
+        setAction("disable");
+      }
+    },
   });
 
   const buildArgs = (): string => {
@@ -174,6 +194,22 @@ export function UploadPage() {
               type="button"
               variant="outline"
               onClick={() => {
+                const current = stateQuery.data;
+                if (!current) {
+                  return;
+                }
+                setStateMutation.mutate({
+                  enabled: !current.enabled,
+                  auto_upload: current.auto_upload,
+                });
+              }}
+            >
+              Toggle enabled
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
                 setAction("list-trackers");
                 setTracker("");
                 setTorrentPath("");
@@ -191,6 +227,12 @@ export function UploadPage() {
             <p className="rounded-md border border-rose-400/60 bg-rose-500/10 p-3 text-sm text-rose-800">
               {localError}
             </p>
+          ) : null}
+          {stateQuery.data ? (
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+              Upload enabled: <strong>{stateQuery.data.enabled ? "yes" : "no"}</strong> | auto-upload:{" "}
+              <strong>{stateQuery.data.auto_upload ? "yes" : "no"}</strong>
+            </div>
           ) : null}
         </CardContent>
       </Card>
@@ -214,6 +256,18 @@ export function UploadPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Upload history</CardTitle>
+          <CardDescription>20 dernières entrées.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+            {JSON.stringify(historyQuery.data?.entries ?? [], null, 2)}
+          </pre>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -45,6 +45,42 @@ test("dedicated pages render and execute mocked commands", async ({ page }) => {
     });
   });
 
+  await page.route("http://127.0.0.1:8000/api/v1/upload/state", async (route) => {
+    if (route.request().method().toUpperCase() === "POST") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ enabled: true, auto_upload: false }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ enabled: false, auto_upload: false }),
+    });
+  });
+
+  await page.route("http://127.0.0.1:8000/api/v1/upload/history?limit=20", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        entries: [{ tracker: "bhd", success: true }],
+      }),
+    });
+  });
+
+  await page.route(/http:\/\/127\.0\.0\.1:8000\/api\/v1\/seedbox\/history.*/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        entries: [{ seedbox: "main-seedbox", action: "push", success: true }],
+      }),
+    });
+  });
+
   await page.route("http://127.0.0.1:8000/api/v1/modules/run", async (route) => {
     const req = route.request();
     const body = req.postDataJSON() as { module: string; args_text: string };

@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 from framekit.core.paths import get_cache_dir, get_config_dir, get_settings_path
 from framekit.core.settings import SettingsStore, redact_settings
 from framekit.core.subprocess_safe import SafeSubprocessError, popen_safe, run_safe
+from framekit.modules.upload.service import UploadService
 
 
 @dataclass(frozen=True)
@@ -401,6 +402,49 @@ def list_upload_trackers_summary() -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+def get_upload_state() -> dict[str, bool]:
+    """Return upload module toggles."""
+    return {
+        "enabled": bool(UploadService.is_upload_enabled()),
+        "auto_upload": bool(UploadService.is_auto_upload_enabled()),
+    }
+
+
+def set_upload_state(*, enabled: bool, auto_upload: bool | None = None) -> dict[str, bool]:
+    """Persist upload module toggles and return effective state."""
+    UploadService.set_upload_enabled(enabled=enabled, auto_upload=auto_upload)
+    return get_upload_state()
+
+
+def list_upload_history(limit: int = 20) -> list[dict[str, Any]]:
+    """Return upload history entries."""
+    return UploadService.get_upload_history(limit=limit)
+
+
+def list_seedbox_history(limit: int = 50, seedbox_name: str | None = None) -> list[dict[str, Any]]:
+    """Return seedbox transfer history entries from NDJSON store."""
+    history_path = get_config_dir() / "seedbox" / "history.ndjson"
+    if not history_path.exists():
+        return []
+    entries: list[dict[str, Any]] = []
+    for line in reversed(history_path.read_text(encoding="utf-8").splitlines()):
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            item = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(item, dict):
+            continue
+        if seedbox_name and str(item.get("seedbox", "")).strip() != seedbox_name:
+            continue
+        entries.append(item)
+        if len(entries) >= limit:
+            break
+    return entries
 
 
 def run_module_command(request: RunModuleRequest) -> RunModuleResponse:

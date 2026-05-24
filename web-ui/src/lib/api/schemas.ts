@@ -80,6 +80,19 @@ export const UploadTrackersSchema = z.object({
   trackers: z.array(UploadTrackerSummarySchema),
 });
 
+export const UploadStateSchema = z.object({
+  enabled: z.boolean(),
+  auto_upload: z.boolean(),
+});
+
+export const UploadHistorySchema = z.object({
+  entries: z.array(z.record(z.string(), z.unknown())),
+});
+
+export const SeedboxHistorySchema = z.object({
+  entries: z.array(z.record(z.string(), z.unknown())),
+});
+
 export const RunModuleResultSchema = z.object({
   ok: z.boolean(),
   argv: z.array(z.string()),
@@ -117,5 +130,8 @@ export type ModulesPresets = z.infer<typeof ModulesPresetsSchema>;
 export type SettingsSummary = z.infer<typeof SettingsSummarySchema>;
 export type SeedboxList = z.infer<typeof SeedboxListSchema>;
 export type UploadTrackers = z.infer<typeof UploadTrackersSchema>;
+export type UploadState = z.infer<typeof UploadStateSchema>;
+export type UploadHistory = z.infer<typeof UploadHistorySchema>;
+export type SeedboxHistory = z.infer<typeof SeedboxHistorySchema>;
 export type RunModuleResult = z.infer<typeof RunModuleResultSchema>;
 export type ModuleJob = z.infer<typeof ModuleJobSchema>;

@@ -127,6 +127,62 @@ def test_upload_trackers_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert payload["trackers"][0]["name"] == "bhd"
 
 
+def test_upload_state_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.get_upload_state",
+        lambda: {"enabled": True, "auto_upload": False},
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/upload/state")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["enabled"] is True
+    assert payload["auto_upload"] is False
+
+
+def test_upload_state_update_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.set_upload_state",
+        lambda enabled, auto_upload=None: {"enabled": enabled, "auto_upload": bool(auto_upload)},
+    )
+    client = TestClient(create_app())
+    response = client.post("/api/v1/upload/state", json={"enabled": True, "auto_upload": True})
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["enabled"] is True
+    assert payload["auto_upload"] is True
+
+
+def test_upload_history_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.list_upload_history",
+        lambda limit=20: [{"tracker": "bhd", "success": True, "limit": limit}],
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/upload/history?limit=12")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["entries"][0]["tracker"] == "bhd"
+    assert payload["entries"][0]["limit"] == 12
+
+
+def test_seedbox_history_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.list_seedbox_history",
+        lambda limit=50, seedbox_name=None: [{"seedbox": seedbox_name or "default", "limit": limit}],
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/seedbox/history?limit=25&seedbox_name=main")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["entries"][0]["seedbox"] == "main"
+    assert payload["entries"][0]["limit"] == 25
+
+
 def test_modules_run_endpoint_returns_payload(monkeypatch: MonkeyPatch) -> None:
     class ResponseStub:
         def model_dump(self) -> dict[str, object]:

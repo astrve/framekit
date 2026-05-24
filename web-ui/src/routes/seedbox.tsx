@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, HardDriveDownload } from "lucide-react";
 import { useState } from "react";
 
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { runModule } from "@/lib/api/endpoints";
+import { getSeedboxHistory, runModule } from "@/lib/api/endpoints";
 import type { RunModuleResult } from "@/lib/api/schemas";
 
 type SeedboxAction = "list" | "status" | "doctor" | "history" | "push" | "pull";
@@ -24,6 +24,10 @@ export function SeedboxPage() {
 
   const runMutation = useMutation({
     mutationFn: runModule,
+  });
+  const historyQuery = useQuery({
+    queryKey: ["seedbox-history", seedboxName],
+    queryFn: () => getSeedboxHistory(50, seedboxName),
   });
 
   const buildArgs = (): string => {
@@ -216,6 +220,18 @@ export function SeedboxPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Seedbox history</CardTitle>
+          <CardDescription>Filtré par seedbox si champ renseigné.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+            {JSON.stringify(historyQuery.data?.entries ?? [], null, 2)}
+          </pre>
+        </CardContent>
+      </Card>
     </div>
   );
 }

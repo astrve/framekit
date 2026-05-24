@@ -5,6 +5,7 @@ from importlib import metadata as importlib_metadata
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 from framekit.commands.doctor import collect_doctor_payload
 from framekit.web.modules import (
@@ -13,14 +14,23 @@ from framekit.web.modules import (
     enqueue_module_job,
     get_module_job,
     get_settings_summary,
+    get_upload_state,
+    list_seedbox_history,
     list_module_jobs,
     list_modules,
     list_presets,
     list_seedboxes_summary,
+    list_upload_history,
     list_upload_trackers_summary,
     rerun_module_job,
     run_module_command,
+    set_upload_state,
 )
+
+
+class UploadStateRequest(BaseModel):
+    enabled: bool
+    auto_upload: bool | None = None
 
 
 def _resolve_version() -> str:
@@ -79,6 +89,26 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/upload/trackers")
     def upload_trackers() -> dict[str, Any]:
         return {"trackers": list_upload_trackers_summary()}
+
+    @app.get("/api/v1/upload/state")
+    def upload_state() -> dict[str, Any]:
+        return get_upload_state()
+
+    @app.post("/api/v1/upload/state")
+    def update_upload_state(request: UploadStateRequest) -> dict[str, Any]:
+        return set_upload_state(enabled=request.enabled, auto_upload=request.auto_upload)
+
+    @app.get("/api/v1/upload/history")
+    def upload_history(limit: int = 20) -> dict[str, Any]:
+        if limit < 1 or limit > 200:
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 200")
+        return {"entries": list_upload_history(limit=limit)}
+
+    @app.get("/api/v1/seedbox/history")
+    def seedbox_history(limit: int = 50, seedbox_name: str | None = None) -> dict[str, Any]:
+        if limit < 1 or limit > 500:
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
+        return {"entries": list_seedbox_history(limit=limit, seedbox_name=seedbox_name)}
 
     @app.post("/api/v1/modules/run")
     def run_module(request: RunModuleRequest) -> dict[str, Any]:
