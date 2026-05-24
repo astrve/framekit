@@ -1,0 +1,2 @@
+"""Framekit web application package."""
+

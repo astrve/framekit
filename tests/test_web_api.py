@@ -1,0 +1,187 @@
+from __future__ import annotations
+
+from _pytest.monkeypatch import MonkeyPatch
+from fastapi.testclient import TestClient
+
+from framekit.web.app import create_app
+
+
+def test_healthz_returns_ok() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_system_info_shape() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/system/info")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["name"] == "framekit"
+    assert isinstance(payload["version"], str)
+    assert isinstance(payload["python_version"], str)
+
+
+def test_doctor_endpoint_returns_tools_and_checks(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.collect_doctor_payload",
+        lambda: {
+            "tools": [{"name": "ffmpeg", "found": True}],
+            "checks": [{"section": "Runtime", "name": "python", "status": "ok", "detail": "3.12"}],
+        },
+    )
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/doctor")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert "tools" in payload
+    assert "checks" in payload
+    assert isinstance(payload["checks"], list)
+
+
+def test_modules_catalog_contains_known_module() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/modules/catalog")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert any(item["name"] == "inspect" for item in payload["modules"])
+
+
+def test_modules_presets_returns_entries() -> None:
+    client = TestClient(create_app())
+    response = client.get("/api/v1/modules/presets")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert any(item["id"] == "doctor-json" for item in payload["presets"])
+
+
+def test_modules_run_endpoint_returns_payload(monkeypatch: MonkeyPatch) -> None:
+    class ResponseStub:
+        def model_dump(self) -> dict[str, object]:
+            return {
+                "ok": True,
+                "argv": ["python", "-m", "framekit", "inspect"],
+                "returncode": 0,
+                "stdout": "ok",
+                "stderr": "",
+                "parsed_kind": None,
+                "parsed_payload": None,
+            }
+
+    monkeypatch.setattr(
+        "framekit.web.app.run_module_command",
+        lambda _request: ResponseStub(),
+    )
+
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/modules/run",
+        json={
+            "module": "inspect",
+            "args_text": "C:/demo",
+            "dry_run": True,
+            "auto_yes": False,
+            "confirm_destructive": False,
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["returncode"] == 0
+    assert payload["parsed_kind"] is None
+
+
+def test_modules_jobs_create_and_get(monkeypatch: MonkeyPatch) -> None:
+    class JobStub:
+        def model_dump(self) -> dict[str, object]:
+            return {
+                "id": "job-1",
+                "status": "pending",
+                "created_at": "2026-05-24T16:00:00+00:00",
+                "started_at": None,
+                "finished_at": None,
+                "request": {"module": "inspect"},
+                "result": None,
+                "error": None,
+            }
+
+    monkeypatch.setattr("framekit.web.app.enqueue_module_job", lambda _request: JobStub())
+    monkeypatch.setattr("framekit.web.app.get_module_job", lambda _job_id: JobStub())
+
+    client = TestClient(create_app())
+    create_response = client.post(
+        "/api/v1/modules/jobs",
+        json={
+            "module": "inspect",
+            "args_text": "C:/demo",
+            "dry_run": False,
+            "auto_yes": False,
+            "confirm_destructive": False,
+        },
+    )
+    get_response = client.get("/api/v1/modules/jobs/job-1")
+
+    assert create_response.status_code == 200
+    assert create_response.json()["id"] == "job-1"
+    assert get_response.status_code == 200
+    assert get_response.json()["id"] == "job-1"
+
+
+def test_modules_jobs_cancel_endpoint(monkeypatch: MonkeyPatch) -> None:
+    class JobStub:
+        def model_dump(self) -> dict[str, object]:
+            return {
+                "id": "job-1",
+                "status": "cancelled",
+                "created_at": "2026-05-24T16:00:00+00:00",
+                "started_at": "2026-05-24T16:00:01+00:00",
+                "finished_at": "2026-05-24T16:00:02+00:00",
+                "request": {"module": "inspect"},
+                "result": None,
+                "error": "Cancelled by user.",
+            }
+
+    monkeypatch.setattr("framekit.web.app.cancel_module_job", lambda _job_id: JobStub())
+
+    client = TestClient(create_app())
+    response = client.delete("/api/v1/modules/jobs/job-1")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "cancelled"
+
+
+def test_modules_jobs_rerun_endpoint(monkeypatch: MonkeyPatch) -> None:
+    class JobStub:
+        def model_dump(self) -> dict[str, object]:
+            return {
+                "id": "job-2",
+                "status": "pending",
+                "created_at": "2026-05-24T16:00:03+00:00",
+                "started_at": None,
+                "finished_at": None,
+                "request": {"module": "inspect"},
+                "result": None,
+                "error": None,
+            }
+
+    monkeypatch.setattr("framekit.web.app.rerun_module_job", lambda _job_id: JobStub())
+
+    client = TestClient(create_app())
+    response = client.post("/api/v1/modules/jobs/job-1/rerun")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["id"] == "job-2"
+    assert payload["status"] == "pending"

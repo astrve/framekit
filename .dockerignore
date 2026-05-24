@@ -1,0 +1,14 @@
+.git
+.venv
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.hypothesis
+.benchmarks
+dist
+build
+htmlcov
+coverage.xml
+web-ui/node_modules
+web-ui/dist
+

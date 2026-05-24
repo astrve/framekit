@@ -4,7 +4,7 @@ import shutil
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
 from rich import box
@@ -639,8 +639,8 @@ def _render_checks(checks: list[DoctorCheck]) -> None:
     console.print(table)
 
 
-def run_doctor_command(*, json_output: bool) -> int:
-    """Run doctor command."""
+def collect_doctor_payload() -> dict[str, object]:
+    """Build doctor payload used by CLI JSON output and web API."""
     store = SettingsStore()
     settings = store.load()
 
@@ -659,13 +659,20 @@ def run_doctor_command(*, json_output: bool) -> int:
     ]
     checks.append(_summary_check(checks))
 
+    return {
+        "tools": tool_payload,
+        "checks": [asdict(check) for check in checks],
+    }
+
+
+def run_doctor_command(*, json_output: bool) -> int:
+    """Run doctor command."""
+    payload = collect_doctor_payload()
+    raw_checks = cast(list[dict[str, Any]], payload["checks"])
+    checks = [DoctorCheck(**item) for item in raw_checks]
+
     if json_output:
-        print_json(
-            {
-                "tools": tool_payload,
-                "checks": [asdict(check) for check in checks],
-            }
-        )
+        print_json(payload)
         return 0
 
     print_module_banner("Doctor")

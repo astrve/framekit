@@ -115,6 +115,10 @@ docs = [
   "mkdocs-material>=9.5.0",
   "mkdocstrings[python]>=0.24.0",
 ]
+web = [
+  "fastapi>=0.115.0,<1.0.0",
+  "uvicorn[standard]>=0.30.0,<1.0.0",
+]
 build-binary = [
   "pyinstaller>=6.20.0",
 ]
