@@ -92,6 +92,8 @@ test("dedicated pages render and execute mocked commands", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Settings & Setup" })).toBeVisible();
   await expect(page.getByText("main-seedbox")).toBeVisible();
   await expect(page.getByText("bhd")).toBeVisible();
+  await page.getByRole("button", { name: "Exécuter" }).click();
+  await expect(page.getByText("ran settings")).toBeVisible();
 
   await page.goto("/seedbox");
   await page.getByRole("button", { name: "Exécuter" }).click();
