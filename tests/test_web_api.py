@@ -105,6 +105,19 @@ def test_settings_patch_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert payload["settings"]["general"]["locale"] == "en"
 
 
+def test_settings_patch_endpoint_returns_400_on_unsupported_key(monkeypatch: MonkeyPatch) -> None:
+    def _raise(_changes: dict[str, object]) -> dict[str, object]:
+        raise ValueError("Unsupported settings key: foo.bar")
+
+    monkeypatch.setattr("framekit.web.app.patch_settings_values", _raise)
+    client = TestClient(create_app())
+    response = client.post("/api/v1/settings/patch", json={"changes": {"foo.bar": "x"}})
+    payload = response.json()
+
+    assert response.status_code == 400
+    assert payload["detail"] == "Unsupported settings key: foo.bar"
+
+
 def test_seedbox_list_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         "framekit.web.app.list_seedboxes_summary",
@@ -158,6 +171,26 @@ def test_seedbox_add_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert response.status_code == 200
     assert payload["seedboxes"][0]["name"] == "main"
     assert payload["seedboxes"][0]["is_default"] is True
+
+
+def test_seedbox_add_endpoint_returns_400_on_validation_error(monkeypatch: MonkeyPatch) -> None:
+    def _raise(**_kwargs: object) -> list[dict[str, object]]:
+        raise ValueError("invalid seedbox")
+
+    monkeypatch.setattr("framekit.web.app.create_seedbox_profile", _raise)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/seedbox/add",
+        json={
+            "name": "",
+            "rclone_remote": "",
+            "remote_base_path": "/",
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 400
+    assert payload["detail"] == "invalid seedbox"
 
 
 def test_seedbox_use_endpoint(monkeypatch: MonkeyPatch) -> None:

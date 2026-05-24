@@ -416,10 +416,22 @@ def create_seedbox_profile(
     normalized_name = name.strip()
     if not normalized_name:
         raise ValueError("seedbox name is required")
+    if ":" in normalized_name:
+        raise ValueError("seedbox name must not contain ':'")
     normalized_remote = rclone_remote.strip()
     if not normalized_remote:
         raise ValueError("rclone_remote is required")
+    if ":" in normalized_remote:
+        raise ValueError("rclone_remote must not contain ':'")
     normalized_base = remote_base_path.strip() or "/"
+    if not normalized_base.startswith("/"):
+        raise ValueError("remote_base_path must start with '/'")
+    if max_concurrent_uploads is not None and (max_concurrent_uploads < 1 or max_concurrent_uploads > 32):
+        raise ValueError("max_concurrent_uploads must be between 1 and 32")
+    if bandwidth_limit.strip():
+        bandwidth_value = bandwidth_limit.strip()
+        if not any(ch.isdigit() for ch in bandwidth_value):
+            raise ValueError("bandwidth_limit must include a numeric value")
     store = SettingsStore()
     settings = store.load()
     seedbox_cfg = settings.setdefault("seedbox", {})

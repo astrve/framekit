@@ -11,38 +11,44 @@ from framekit.commands.doctor import collect_doctor_payload
 from framekit.web.modules import (
     RunModuleRequest,
     cancel_module_job,
+    create_seedbox_profile,
     enqueue_module_job,
     get_module_job,
     get_settings_summary,
-    create_seedbox_profile,
-    patch_settings_values,
-    remove_seedbox_profile,
-    set_default_seedbox,
     get_upload_state,
     get_upload_tracker_info,
-    list_seedbox_history,
     list_module_jobs,
     list_modules,
     list_presets,
+    list_seedbox_history,
     list_seedboxes_summary,
     list_upload_history,
     list_upload_trackers_summary,
+    patch_settings_values,
+    remove_seedbox_profile,
     rerun_module_job,
     run_module_command,
+    set_default_seedbox,
     set_upload_state,
 )
 
 
 class UploadStateRequest(BaseModel):
+    """Request payload for upload state mutation."""
+
     enabled: bool
     auto_upload: bool | None = None
 
 
 class SettingsPatchRequest(BaseModel):
+    """Request payload for restricted settings patch."""
+
     changes: dict[str, Any]
 
 
 class SeedboxCreateRequest(BaseModel):
+    """Request payload for creating seedbox profile."""
+
     name: str
     rclone_remote: str
     remote_base_path: str
@@ -52,6 +58,8 @@ class SeedboxCreateRequest(BaseModel):
 
 
 class SeedboxNameRequest(BaseModel):
+    """Request payload for seedbox target name."""
+
     name: str
 
 
