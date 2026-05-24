@@ -14,6 +14,7 @@ from framekit.web.modules import (
     enqueue_module_job,
     get_module_job,
     get_settings_summary,
+    patch_settings_values,
     get_upload_state,
     list_seedbox_history,
     list_module_jobs,
@@ -31,6 +32,10 @@ from framekit.web.modules import (
 class UploadStateRequest(BaseModel):
     enabled: bool
     auto_upload: bool | None = None
+
+
+class SettingsPatchRequest(BaseModel):
+    changes: dict[str, Any]
 
 
 def _resolve_version() -> str:
@@ -81,6 +86,13 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/settings/summary")
     def settings_summary() -> dict[str, Any]:
         return get_settings_summary()
+
+    @app.post("/api/v1/settings/patch")
+    def settings_patch(request: SettingsPatchRequest) -> dict[str, Any]:
+        try:
+            return patch_settings_values(request.changes)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/v1/seedbox/list")
     def seedbox_list() -> dict[str, Any]:

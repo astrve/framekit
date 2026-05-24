@@ -52,6 +52,7 @@ Reference for Framekit web interface technical baseline.
 - `DELETE /api/v1/modules/jobs/{job_id}`
 - `POST /api/v1/modules/jobs/{job_id}/rerun`
 - `GET /api/v1/settings/summary`
+- `POST /api/v1/settings/patch`
 - `GET /api/v1/seedbox/list`
 - `GET /api/v1/seedbox/history`
 - `GET /api/v1/upload/trackers`

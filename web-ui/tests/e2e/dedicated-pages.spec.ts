@@ -13,6 +13,18 @@ test("dedicated pages render and execute mocked commands", async ({ page }) => {
       }),
     });
   });
+  await page.route("http://127.0.0.1:8000/api/v1/settings/patch", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        settings_path: "C:/cfg/framekit.yaml",
+        config_dir: "C:/cfg",
+        cache_dir: "C:/cache",
+        settings: { general: { locale: "fr" }, seedbox: { max_concurrent_uploads: 3 } },
+      }),
+    });
+  });
 
   await page.route("http://127.0.0.1:8000/api/v1/seedbox/list", async (route) => {
     await route.fulfill({
@@ -128,6 +140,7 @@ test("dedicated pages render and execute mocked commands", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Settings & Setup" })).toBeVisible();
   await expect(page.getByText("main-seedbox")).toBeVisible();
   await expect(page.getByText("bhd")).toBeVisible();
+  await page.getByRole("button", { name: "Appliquer patch" }).click();
   await page.getByRole("button", { name: "Exécuter" }).click();
   await expect(page.getByText("ran settings")).toBeVisible();
 

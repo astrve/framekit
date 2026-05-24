@@ -354,6 +354,28 @@ def get_settings_summary() -> dict[str, Any]:
     }
 
 
+SETTINGS_PATCH_ALLOWLIST: set[str] = {
+    "general.locale",
+    "general.log_level",
+    "upload.enabled",
+    "upload.auto_upload",
+    "upload.max_parallel_uploads",
+    "seedbox.max_concurrent_uploads",
+}
+
+
+def patch_settings_values(changes: dict[str, Any]) -> dict[str, Any]:
+    """Patch a restricted set of settings keys and return updated summary."""
+    if not changes:
+        return get_settings_summary()
+    store = SettingsStore()
+    for key, value in changes.items():
+        if key not in SETTINGS_PATCH_ALLOWLIST:
+            raise ValueError(f"Unsupported settings key: {key}")
+        store.set(key, value)
+    return get_settings_summary()
+
+
 def list_seedboxes_summary() -> list[dict[str, Any]]:
     """Return configured seedboxes summary from settings."""
     store = SettingsStore()

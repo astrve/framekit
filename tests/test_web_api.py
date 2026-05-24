@@ -84,6 +84,27 @@ def test_settings_summary_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert payload["settings"]["general"]["locale"] == "fr"
 
 
+def test_settings_patch_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.patch_settings_values",
+        lambda changes: {
+            "settings_path": "C:/cfg/framekit.yaml",
+            "config_dir": "C:/cfg",
+            "cache_dir": "C:/cache",
+            "settings": {"general": {"locale": changes.get("general.locale", "fr")}},
+        },
+    )
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/settings/patch",
+        json={"changes": {"general.locale": "en"}},
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["settings"]["general"]["locale"] == "en"
+
+
 def test_seedbox_list_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         "framekit.web.app.list_seedboxes_summary",

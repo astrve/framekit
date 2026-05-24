@@ -7,13 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { getSeedboxList, getSettingsSummary, getUploadTrackers, runModule } from "@/lib/api/endpoints";
+import { getSeedboxList, getSettingsSummary, getUploadTrackers, patchSettings, runModule } from "@/lib/api/endpoints";
 import type { RunModuleResult } from "@/lib/api/schemas";
 
 export function SettingsSetupPage() {
   const [moduleName, setModuleName] = useState<"setup" | "settings" | "watch" | "logs">("settings");
   const [argsText, setArgsText] = useState("doctor --json");
   const [confirmDestructive, setConfirmDestructive] = useState(false);
+  const [localeValue, setLocaleValue] = useState("fr");
+  const [seedboxTransfersValue, setSeedboxTransfersValue] = useState("3");
 
   const settingsQuery = useQuery({
     queryKey: ["settings-summary"],
@@ -29,6 +31,19 @@ export function SettingsSetupPage() {
   });
   const runMutation = useMutation({
     mutationFn: runModule,
+  });
+  const patchMutation = useMutation({
+    mutationFn: patchSettings,
+    onSuccess: (payload) => {
+      settingsQuery.refetch().catch(() => undefined);
+      const locale = payload.settings?.general;
+      if (locale && typeof locale === "object" && "locale" in locale) {
+        const value = (locale as Record<string, unknown>)["locale"];
+        if (typeof value === "string") {
+          setLocaleValue(value);
+        }
+      }
+    },
   });
   const runResult: RunModuleResult | null = runMutation.data ?? null;
 
@@ -56,6 +71,42 @@ export function SettingsSetupPage() {
           <pre className="max-h-80 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
             {settingsQuery.data ? JSON.stringify(settingsQuery.data.settings, null, 2) : "Loading..."}
           </pre>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick patch settings</CardTitle>
+          <CardDescription>Clés allowlistées: locale + seedbox transfers.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm" htmlFor="settings-patch-locale">
+              general.locale
+              <Input id="settings-patch-locale" value={localeValue} onChange={(event) => setLocaleValue(event.target.value)} />
+            </label>
+            <label className="space-y-1 text-sm" htmlFor="settings-patch-seedbox">
+              seedbox.max_concurrent_uploads
+              <Input
+                id="settings-patch-seedbox"
+                value={seedboxTransfersValue}
+                onChange={(event) => setSeedboxTransfersValue(event.target.value)}
+              />
+            </label>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              const parsed = Number.parseInt(seedboxTransfersValue, 10);
+              patchMutation.mutate({
+                "general.locale": localeValue.trim() || "fr",
+                "seedbox.max_concurrent_uploads": Number.isNaN(parsed) ? 3 : parsed,
+              });
+            }}
+          >
+            Appliquer patch
+          </Button>
         </CardContent>
       </Card>
 

@@ -53,6 +53,14 @@ export async function getSettingsSummary(): Promise<SettingsSummary> {
   return fetchValidated("/api/v1/settings/summary", SettingsSummarySchema);
 }
 
+export async function patchSettings(changes: Record<string, unknown>): Promise<SettingsSummary> {
+  return fetchValidated("/api/v1/settings/patch", SettingsSummarySchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ changes }),
+  });
+}
+
 export async function getSeedboxList(): Promise<SeedboxList> {
   return fetchValidated("/api/v1/seedbox/list", SeedboxListSchema);
 }
