@@ -203,4 +203,10 @@ test("modules async flow supports create cancel rerun", async ({ page }) => {
   await expect(page.getByRole("button", { name: /job-2/ })).toBeVisible();
   await expect(page.getByText("Return code: 0")).toBeVisible();
   await expect(page.getByText('{"status":"rerun-ok"}')).toBeVisible();
+
+  await page.getByRole("button", { name: "Ouvrir détail" }).click();
+  await expect(page.getByRole("heading", { name: "Job detail" })).toBeVisible();
+  await expect(page.getByText("job-2")).toBeVisible();
+  await expect(page.getByText("Return code: 0")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Retour modules" })).toBeVisible();
 });

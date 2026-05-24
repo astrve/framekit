@@ -16,6 +16,9 @@ const navItems = [
   { to: "/", label: "Home" },
   { to: "/doctor", label: "Doctor" },
   { to: "/modules", label: "Modules" },
+  { to: "/settings-setup", label: "Settings" },
+  { to: "/seedbox", label: "Seedbox" },
+  { to: "/upload", label: "Upload" },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {

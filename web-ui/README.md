@@ -22,7 +22,12 @@ Frontend SPA for local Framekit dashboard.
 - Job cancellation from UI
 - Job history persisted in backend SQLite cache
 - Job list controls: limit, status filter, search, load-more
+- Dedicated job detail page (`/modules/:jobId`) with timeline + command copy
 - Guided launchers for pipeline and batch argument building
+- Dedicated Settings/Setup page (`/settings-setup`)
+- Dedicated Seedbox core page (`/seedbox`)
+- Dedicated Upload core page (`/upload`)
+- Module Studio dedicated launcher pages (`/studio/:module`) for watch/inspect/renamer/cleanmkv/torrent/nfo/prez/screenshot/encode/extract/sort/browse/metadata/validate/logs
 - API errors rendered with HTTP status + backend detail
 
 ## Commands

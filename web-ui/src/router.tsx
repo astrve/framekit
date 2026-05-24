@@ -19,7 +19,46 @@ const modulesRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/modules"), "ModulesPage"),
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, doctorRoute, modulesRoute]);
+const moduleJobDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/modules/$jobId",
+  component: lazyRouteComponent(() => import("@/routes/module-job-detail"), "ModuleJobDetailPage"),
+});
+
+const settingsSetupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings-setup",
+  component: lazyRouteComponent(() => import("@/routes/settings-setup"), "SettingsSetupPage"),
+});
+
+const seedboxRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/seedbox",
+  component: lazyRouteComponent(() => import("@/routes/seedbox"), "SeedboxPage"),
+});
+
+const uploadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/upload",
+  component: lazyRouteComponent(() => import("@/routes/upload"), "UploadPage"),
+});
+
+const moduleStudioRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/studio/$module",
+  component: lazyRouteComponent(() => import("@/routes/module-studio"), "ModuleStudioPage"),
+});
+
+const routeTree = rootRoute.addChildren([
+  homeRoute,
+  doctorRoute,
+  modulesRoute,
+  moduleJobDetailRoute,
+  settingsSetupRoute,
+  seedboxRoute,
+  uploadRoute,
+  moduleStudioRoute,
+]);
 
 export const router = createRouter({
   routeTree,

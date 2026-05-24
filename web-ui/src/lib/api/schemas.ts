@@ -49,6 +49,37 @@ export const ModulesPresetsSchema = z.object({
   presets: z.array(ModulePresetSchema),
 });
 
+export const SettingsSummarySchema = z.object({
+  settings_path: z.string(),
+  config_dir: z.string(),
+  cache_dir: z.string(),
+  settings: z.record(z.string(), z.unknown()),
+});
+
+export const SeedboxSummarySchema = z.object({
+  name: z.string(),
+  rclone_remote: z.string(),
+  remote_base_path: z.string(),
+  max_concurrent_uploads: z.number().nullable().optional(),
+  bandwidth_limit: z.string(),
+  is_default: z.boolean(),
+});
+
+export const SeedboxListSchema = z.object({
+  seedboxes: z.array(SeedboxSummarySchema),
+});
+
+export const UploadTrackerSummarySchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  url: z.string(),
+  enabled: z.boolean(),
+});
+
+export const UploadTrackersSchema = z.object({
+  trackers: z.array(UploadTrackerSummarySchema),
+});
+
 export const RunModuleResultSchema = z.object({
   ok: z.boolean(),
   argv: z.array(z.string()),
@@ -66,6 +97,8 @@ export const ModuleJobSchema = z.object({
   started_at: z.string().nullable().optional(),
   finished_at: z.string().nullable().optional(),
   request: z.record(z.string(), z.unknown()),
+  live_stdout: z.string().optional(),
+  live_stderr: z.string().optional(),
   result: RunModuleResultSchema.nullable().optional(),
   error: z.string().nullable().optional(),
 });
@@ -81,5 +114,8 @@ export type DoctorPayload = z.infer<typeof DoctorPayloadSchema>;
 export type ModuleSpec = z.infer<typeof ModuleSpecSchema>;
 export type ModulesCatalog = z.infer<typeof ModulesCatalogSchema>;
 export type ModulesPresets = z.infer<typeof ModulesPresetsSchema>;
+export type SettingsSummary = z.infer<typeof SettingsSummarySchema>;
+export type SeedboxList = z.infer<typeof SeedboxListSchema>;
+export type UploadTrackers = z.infer<typeof UploadTrackersSchema>;
 export type RunModuleResult = z.infer<typeof RunModuleResultSchema>;
 export type ModuleJob = z.infer<typeof ModuleJobSchema>;

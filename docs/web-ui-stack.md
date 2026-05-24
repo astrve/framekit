@@ -51,6 +51,9 @@ Reference for Framekit web interface technical baseline.
 - `GET /api/v1/modules/jobs/{job_id}`
 - `DELETE /api/v1/modules/jobs/{job_id}`
 - `POST /api/v1/modules/jobs/{job_id}/rerun`
+- `GET /api/v1/settings/summary`
+- `GET /api/v1/seedbox/list`
+- `GET /api/v1/upload/trackers`
 
 Response validation must be represented in frontend Zod schemas under `src/lib/api/schemas.ts`.
 
@@ -67,8 +70,10 @@ Async jobs:
 - Cancellation supported for `pending` and `running` jobs.
 - Rerun endpoint creates a new job from a previous job request payload.
 - UI exposes `limit`, `status` filter, text search, and incremental `Charger plus`.
+- UI exposes job detail route (`/modules/:jobId`) with timestamps, duration, outputs, command copy.
 - UI exposes guided launchers for `pipeline` and `batch` (args builder).
 - UI shows detailed API error messages (`HTTP code + detail`).
+- Dedicated pages available: `settings/setup`, `seedbox`, `upload`, and `module-studio` (watch/inspect/renamer/cleanmkv/torrent/nfo/prez/screenshot/encode/extract/sort/browse/metadata/validate/logs).
 
 ## Minimal Test Strategy (Required)
 
@@ -81,6 +86,8 @@ Async jobs:
 - Keep e2e baseline green:
   - smoke path: home load + doctor render.
   - modules path: async create + cancel + rerun.
+  - modules detail path: open job detail route and validate result visibility.
+  - dedicated pages path: settings/setup + seedbox + upload + module-studio basic execution.
 
 ## Non-goals (V1)
 

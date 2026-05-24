@@ -1,0 +1,157 @@
+import { useMutation } from "@tanstack/react-query";
+import { CloudUpload } from "lucide-react";
+import { useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { runModule } from "@/lib/api/endpoints";
+import type { RunModuleResult } from "@/lib/api/schemas";
+
+type UploadAction = "setup" | "list-trackers" | "show-tracker" | "run" | "history" | "enable" | "disable";
+
+export function UploadPage() {
+  const [action, setAction] = useState<UploadAction>("list-trackers");
+  const [tracker, setTracker] = useState("");
+  const [torrentPath, setTorrentPath] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [dryRun, setDryRun] = useState(true);
+
+  const runMutation = useMutation({
+    mutationFn: runModule,
+  });
+
+  const buildArgs = (): string => {
+    const args: string[] = [action];
+    if (action === "show-tracker" && tracker.trim()) {
+      args.push(`"${tracker.trim()}"`);
+    }
+    if (action === "run") {
+      if (torrentPath.trim()) {
+        args.push(`"${torrentPath.trim()}"`);
+      }
+      if (tracker.trim()) {
+        args.push("--tracker", `"${tracker.trim()}"`);
+      }
+      if (name.trim()) {
+        args.push("--name", `"${name.trim()}"`);
+      }
+      if (description.trim()) {
+        args.push("--description", `"${description.trim()}"`);
+      }
+      if (dryRun) {
+        args.push("--dry-run");
+      }
+    }
+    if (action === "history") {
+      args.push("--limit", "20");
+    }
+    return args.join(" ");
+  };
+
+  const result: RunModuleResult | null = runMutation.data ?? null;
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h1 className="text-2xl font-semibold tracking-tight">Upload</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Couverture core V1: setup/list/show/run/history/enable/disable.</p>
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CloudUpload className="h-4 w-4 text-primary" />
+            Action
+          </CardTitle>
+          <CardDescription>Construit commande `framekit upload ...`</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm" htmlFor="upload-action">
+              Action
+              <select
+                id="upload-action"
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={action}
+                onChange={(event) => {
+                  setAction(event.target.value as UploadAction);
+                }}
+              >
+                <option value="setup">setup</option>
+                <option value="list-trackers">list-trackers</option>
+                <option value="show-tracker">show-tracker</option>
+                <option value="run">run</option>
+                <option value="history">history</option>
+                <option value="enable">enable</option>
+                <option value="disable">disable</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm" htmlFor="upload-tracker">
+              Tracker
+              <Input id="upload-tracker" value={tracker} onChange={(e) => setTracker(e.target.value)} />
+            </label>
+            <label className="space-y-1 text-sm md:col-span-2" htmlFor="upload-torrent-path">
+              Torrent path / release path (run)
+              <Input id="upload-torrent-path" value={torrentPath} onChange={(e) => setTorrentPath(e.target.value)} />
+            </label>
+            <label className="space-y-1 text-sm" htmlFor="upload-name">
+              Name (run)
+              <Input id="upload-name" value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label className="space-y-1 text-sm" htmlFor="upload-description">
+              Description (run)
+              <Input id="upload-description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            </label>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
+            dry-run
+          </label>
+
+          <pre className="max-h-40 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+            framekit upload {buildArgs()}
+          </pre>
+
+          <Button
+            type="button"
+            onClick={() => {
+              runMutation.mutate({
+                module: "upload",
+                args_text: buildArgs(),
+                dry_run: false,
+                auto_yes: false,
+                confirm_destructive: true,
+              });
+            }}
+          >
+            Exécuter
+          </Button>
+        </CardContent>
+      </Card>
+
+      {result ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Result</CardTitle>
+            <CardDescription>Return code: {result.returncode}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Badge variant={result.ok ? "success" : "danger"}>{result.ok ? "success" : "failed"}</Badge>
+            <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+              {result.stdout || "(stdout empty)"}
+            </pre>
+            {result.stderr ? (
+              <pre className="max-h-72 overflow-auto rounded-md border border-rose-300 bg-rose-100 p-3 text-xs text-rose-800">
+                {result.stderr}
+              </pre>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}

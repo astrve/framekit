@@ -5,18 +5,21 @@ import shlex
 import sqlite3
 import subprocess  # nosec B404
 import sys
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Event, Lock
+from queue import Empty, SimpleQueue
+from threading import Event, Lock, Thread
 from time import monotonic, sleep
 from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-from framekit.core.paths import get_cache_dir
+from framekit.core.paths import get_cache_dir, get_config_dir, get_settings_path
+from framekit.core.settings import SettingsStore, redact_settings
 from framekit.core.subprocess_safe import SafeSubprocessError, popen_safe, run_safe
 
 
@@ -126,6 +129,8 @@ class ModuleJob(BaseModel):
     started_at: str | None = None
     finished_at: str | None = None
     request: RunModuleRequest
+    live_stdout: str = ""
+    live_stderr: str = ""
     result: RunModuleResponse | None = None
     error: str | None = None
 
@@ -304,6 +309,20 @@ def _trim_jobs_if_needed() -> None:
         _delete_persisted_job(item.id)
 
 
+def _parse_json_payload(stdout_text: str) -> tuple[str | None, dict[str, Any] | list[Any] | None]:
+    parsed_kind: str | None = None
+    parsed_payload: dict[str, Any] | list[Any] | None = None
+    if stdout_text.strip():
+        try:
+            parsed = json.loads(stdout_text)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, (dict, list)):
+            parsed_kind = "json"
+            parsed_payload = parsed
+    return parsed_kind, parsed_payload
+
+
 def list_modules() -> list[dict[str, Any]]:
     """Return module catalog exposed by web runner."""
     return [
@@ -320,6 +339,68 @@ def list_modules() -> list[dict[str, Any]]:
 def list_presets() -> list[dict[str, Any]]:
     """Return preset catalog for web workbench quick-fill."""
     return [preset.model_dump() for preset in PRESETS]
+
+
+def get_settings_summary() -> dict[str, Any]:
+    """Return redacted settings + key runtime paths for web setup/settings pages."""
+    store = SettingsStore()
+    settings = store.load()
+    return {
+        "settings_path": str(get_settings_path()),
+        "config_dir": str(get_config_dir()),
+        "cache_dir": str(get_cache_dir()),
+        "settings": redact_settings(settings),
+    }
+
+
+def list_seedboxes_summary() -> list[dict[str, Any]]:
+    """Return configured seedboxes summary from settings."""
+    store = SettingsStore()
+    settings = store.load()
+    seedbox_cfg = settings.get("seedbox", {})
+    default_name = str(seedbox_cfg.get("default", "") or "").strip()
+    seedboxes = seedbox_cfg.get("seedboxes", [])
+    result: list[dict[str, Any]] = []
+    if not isinstance(seedboxes, list):
+        return result
+    for item in seedboxes:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "") or "").strip()
+        result.append(
+            {
+                "name": name,
+                "rclone_remote": str(item.get("rclone_remote", "") or ""),
+                "remote_base_path": str(item.get("remote_base_path", "/") or "/"),
+                "max_concurrent_uploads": item.get("max_concurrent_uploads"),
+                "bandwidth_limit": str(item.get("bandwidth_limit", "") or ""),
+                "is_default": bool(name and name == default_name),
+            }
+        )
+    return result
+
+
+def list_upload_trackers_summary() -> list[dict[str, Any]]:
+    """Return configured upload trackers summary from settings."""
+    store = SettingsStore()
+    settings = store.load()
+    upload_cfg = settings.get("upload", {})
+    trackers = upload_cfg.get("trackers", [])
+    result: list[dict[str, Any]] = []
+    if not isinstance(trackers, list):
+        return result
+    for item in trackers:
+        if not isinstance(item, dict):
+            continue
+        result.append(
+            {
+                "name": str(item.get("name", "") or ""),
+                "type": str(item.get("type", item.get("engine", "")) or ""),
+                "url": str(item.get("url", item.get("base_url", "")) or ""),
+                "enabled": bool(item.get("enabled", True)),
+            }
+        )
+    return result
 
 
 def run_module_command(request: RunModuleRequest) -> RunModuleResponse:
@@ -355,16 +436,7 @@ def run_module_command(request: RunModuleRequest) -> RunModuleResponse:
             stderr=str(exc),
         )
 
-    parsed_kind: str | None = None
-    parsed_payload: dict[str, Any] | list[Any] | None = None
-    if completed.stdout.strip():
-        try:
-            parsed = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            parsed = None
-        if isinstance(parsed, (dict, list)):
-            parsed_kind = "json"
-            parsed_payload = parsed
+    parsed_kind, parsed_payload = _parse_json_payload(completed.stdout)
 
     return RunModuleResponse(
         ok=completed.returncode == 0,
@@ -394,29 +466,90 @@ def _build_module_argv(request: RunModuleRequest) -> list[str]:
 
 
 def _run_module_command_cancellable(
-    request: RunModuleRequest, *, job_id: str, cancel_event: Event
+    request: RunModuleRequest,
+    *,
+    job_id: str,
+    cancel_event: Event,
+    on_output: Callable[[str, str], None] | None = None,
 ) -> RunModuleResponse:
     argv = _build_module_argv(request)
     process: Any = None
+    stdout_buffer: list[str] = []
+    stderr_buffer: list[str] = []
+    output_queue: SimpleQueue[tuple[str, str]] = SimpleQueue()
+    stop_readers = Event()
+
+    def _reader(stream_name: str, stream_obj: Any) -> None:
+        if stream_obj is None:
+            return
+        try:
+            while not stop_readers.is_set():
+                chunk = stream_obj.readline()
+                if not chunk:
+                    break
+                output_queue.put((stream_name, chunk))
+        except Exception:
+            return
+
+    def _drain_queue() -> bool:
+        changed = False
+        while True:
+            try:
+                stream_name, chunk = output_queue.get_nowait()
+            except Empty:
+                break
+            if stream_name == "stdout":
+                stdout_buffer.append(chunk)
+            else:
+                stderr_buffer.append(chunk)
+            changed = True
+        if changed and on_output is not None:
+            on_output("".join(stdout_buffer), "".join(stderr_buffer))
+        return changed
+
     try:
         process = popen_safe(
             argv,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
         )
         with _JOBS_LOCK:
             _JOB_PROCESSES[job_id] = process
+        stdout_thread = Thread(
+            target=_reader,
+            args=("stdout", process.stdout),
+            daemon=True,
+            name=f"framekit-web-{job_id}-stdout",
+        )
+        stderr_thread = Thread(
+            target=_reader,
+            args=("stderr", process.stderr),
+            daemon=True,
+            name=f"framekit-web-{job_id}-stderr",
+        )
+        stdout_thread.start()
+        stderr_thread.start()
 
         started = monotonic()
         while True:
+            _drain_queue()
             if cancel_event.is_set():
                 process.terminate()
                 try:
                     process.wait(timeout=2.0)
                 except subprocess.TimeoutExpired:
                     process.kill()
-                stdout_text, stderr_text = process.communicate(timeout=2.0)
+                stop_readers.set()
+                stdout_thread.join(timeout=2.0)
+                stderr_thread.join(timeout=2.0)
+                _drain_queue()
+                stdout_text = "".join(stdout_buffer)
+                stderr_text = "".join(stderr_buffer)
                 return RunModuleResponse(
                     ok=False,
                     argv=argv,
@@ -431,7 +564,12 @@ def _run_module_command_cancellable(
                     process.wait(timeout=2.0)
                 except subprocess.TimeoutExpired:
                     process.kill()
-                stdout_text, stderr_text = process.communicate(timeout=2.0)
+                stop_readers.set()
+                stdout_thread.join(timeout=2.0)
+                stderr_thread.join(timeout=2.0)
+                _drain_queue()
+                stdout_text = "".join(stdout_buffer)
+                stderr_text = "".join(stderr_buffer)
                 return RunModuleResponse(
                     ok=False,
                     argv=argv,
@@ -441,30 +579,20 @@ def _run_module_command_cancellable(
                 )
 
             if process.poll() is not None:
-                stdout_text, stderr_text = process.communicate(timeout=2.0)
-                completed = subprocess.CompletedProcess(
-                    args=argv,
-                    returncode=process.returncode or 0,
-                    stdout=stdout_text or "",
-                    stderr=stderr_text or "",
-                )
-                parsed_kind: str | None = None
-                parsed_payload: dict[str, Any] | list[Any] | None = None
-                if completed.stdout.strip():
-                    try:
-                        parsed = json.loads(completed.stdout)
-                    except json.JSONDecodeError:
-                        parsed = None
-                    if isinstance(parsed, (dict, list)):
-                        parsed_kind = "json"
-                        parsed_payload = parsed
+                stop_readers.set()
+                stdout_thread.join(timeout=2.0)
+                stderr_thread.join(timeout=2.0)
+                _drain_queue()
+                stdout_text = "".join(stdout_buffer)
+                stderr_text = "".join(stderr_buffer)
+                parsed_kind, parsed_payload = _parse_json_payload(stdout_text)
 
                 return RunModuleResponse(
-                    ok=completed.returncode == 0,
+                    ok=(process.returncode or 0) == 0,
                     argv=argv,
-                    returncode=completed.returncode,
-                    stdout=completed.stdout,
-                    stderr=completed.stderr,
+                    returncode=process.returncode or 0,
+                    stdout=stdout_text,
+                    stderr=stderr_text,
                     parsed_kind=parsed_kind,
                     parsed_payload=parsed_payload,
                 )
@@ -501,14 +629,29 @@ def enqueue_module_job(request: RunModuleRequest) -> ModuleJob:
         with _JOBS_LOCK:
             current = _JOBS[job.id]
             updated = current.model_copy(
-                update={"status": "running", "started_at": _utc_now()}
+                update={"status": "running", "started_at": _utc_now(), "live_stdout": "", "live_stderr": ""}
             )
             _JOBS[job.id] = updated
             _persist_job(updated)
             cancel_event = _JOB_CANCEL_EVENTS[job.id]
+
+        def _on_output(stdout_text: str, stderr_text: str) -> None:
+            with _JOBS_LOCK:
+                current = _JOBS.get(job.id)
+                if current is None:
+                    return
+                updated = current.model_copy(
+                    update={
+                        "live_stdout": stdout_text,
+                        "live_stderr": stderr_text,
+                    }
+                )
+                _JOBS[job.id] = updated
+                _persist_job(updated)
+
         try:
             result = _run_module_command_cancellable(
-                request, job_id=job.id, cancel_event=cancel_event
+                request, job_id=job.id, cancel_event=cancel_event, on_output=_on_output
             )
         except Exception as exc:  # nosec B110
             with _JOBS_LOCK:
@@ -534,6 +677,8 @@ def enqueue_module_job(request: RunModuleRequest) -> ModuleJob:
             updated = current.model_copy(
                 update={
                     "status": status,
+                    "live_stdout": result.stdout,
+                    "live_stderr": result.stderr,
                     "result": result,
                     "finished_at": _utc_now(),
                 }

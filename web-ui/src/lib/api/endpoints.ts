@@ -7,14 +7,20 @@ import {
   ModuleJobsListSchema,
   ModulesPresetsSchema,
   RunModuleResultSchema,
+  SeedboxListSchema,
+  SettingsSummarySchema,
   SystemInfoSchema,
+  UploadTrackersSchema,
   type DoctorPayload,
   type HealthPayload,
   type ModuleJob,
   type ModulesCatalog,
   type ModulesPresets,
+  type SeedboxList,
+  type SettingsSummary,
   type RunModuleResult,
   type SystemInfoPayload,
+  type UploadTrackers,
 } from "@/lib/api/schemas";
 
 export async function getHealth(): Promise<HealthPayload> {
@@ -35,6 +41,18 @@ export async function getModulesCatalog(): Promise<ModulesCatalog> {
 
 export async function getModulesPresets(): Promise<ModulesPresets> {
   return fetchValidated("/api/v1/modules/presets", ModulesPresetsSchema);
+}
+
+export async function getSettingsSummary(): Promise<SettingsSummary> {
+  return fetchValidated("/api/v1/settings/summary", SettingsSummarySchema);
+}
+
+export async function getSeedboxList(): Promise<SeedboxList> {
+  return fetchValidated("/api/v1/seedbox/list", SeedboxListSchema);
+}
+
+export async function getUploadTrackers(): Promise<UploadTrackers> {
+  return fetchValidated("/api/v1/upload/trackers", UploadTrackersSchema);
 }
 
 export async function runModule(payload: {

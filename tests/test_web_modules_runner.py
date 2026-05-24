@@ -59,7 +59,7 @@ def test_run_module_command_blocks_destructive_without_confirmation() -> None:
 def test_enqueue_module_job_completes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "framekit.web.modules._run_module_command_cancellable",
-        lambda _request, *, job_id, cancel_event: RunModuleResponse(
+        lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=True,
             argv=["python", "-m", "framekit", "doctor", "--json"],
             returncode=0,
@@ -146,7 +146,7 @@ def test_cancel_module_job_marks_cancelled(monkeypatch: pytest.MonkeyPatch) -> N
 def test_rerun_module_job_creates_new_job(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "framekit.web.modules._run_module_command_cancellable",
-        lambda _request, *, job_id, cancel_event: RunModuleResponse(
+        lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=True,
             argv=["python", "-m", "framekit", "inspect"],
             returncode=0,

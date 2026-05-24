@@ -12,9 +12,12 @@ from framekit.web.modules import (
     cancel_module_job,
     enqueue_module_job,
     get_module_job,
+    get_settings_summary,
     list_module_jobs,
     list_modules,
     list_presets,
+    list_seedboxes_summary,
+    list_upload_trackers_summary,
     rerun_module_job,
     run_module_command,
 )
@@ -64,6 +67,18 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/modules/presets")
     def modules_presets() -> dict[str, Any]:
         return {"presets": list_presets()}
+
+    @app.get("/api/v1/settings/summary")
+    def settings_summary() -> dict[str, Any]:
+        return get_settings_summary()
+
+    @app.get("/api/v1/seedbox/list")
+    def seedbox_list() -> dict[str, Any]:
+        return {"seedboxes": list_seedboxes_summary()}
+
+    @app.get("/api/v1/upload/trackers")
+    def upload_trackers() -> dict[str, Any]:
+        return {"trackers": list_upload_trackers_summary()}
 
     @app.post("/api/v1/modules/run")
     def run_module(request: RunModuleRequest) -> dict[str, Any]:

@@ -38,6 +38,22 @@ export function HomePage() {
             <Link to="/modules" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
               Ouvrir Modules Workbench
             </Link>
+            <Link to="/settings-setup" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
+              Ouvrir Settings/Setup
+            </Link>
+            <Link to="/seedbox" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
+              Ouvrir Seedbox
+            </Link>
+            <Link to="/upload" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
+              Ouvrir Upload
+            </Link>
+            <Link
+              to="/studio/$module"
+              params={{ module: "watch" }}
+              className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+            >
+              Ouvrir Module Studio
+            </Link>
           </div>
         </div>
       </section>

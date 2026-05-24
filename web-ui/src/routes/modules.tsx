@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { Clock3, Play, RotateCcw, Square } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useForm, useWatch, type UseFormSetValue } from "react-hook-form";
@@ -295,6 +296,7 @@ function mutationErrorMessage(error: unknown): string {
 }
 
 export function ModulesPage() {
+  const navigate = useNavigate();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [jobsLimit, setJobsLimit] = useState(20);
   const [statusFilter, setStatusFilter] = useState<JobStatusFilter>("all");
@@ -893,15 +895,19 @@ export function ModulesPage() {
           </p>
 
           {filteredJobs.map((job) => (
-            <button
-              type="button"
+            <div
               key={job.id}
-              className="grid w-full gap-2 rounded-md border border-border p-3 text-left md:grid-cols-[1fr_auto_auto]"
-              onClick={() => {
-                setSelectedJobId(job.id);
-              }}
+              className="grid w-full gap-2 rounded-md border border-border p-3 text-left md:grid-cols-[1fr_auto_auto_auto]"
             >
-              <p className="text-xs text-muted-foreground">{job.id}</p>
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => {
+                  setSelectedJobId(job.id);
+                }}
+              >
+                <p className="text-xs text-muted-foreground">{job.id}</p>
+              </button>
               <p className="font-medium">{String((job.request["module"] as string) ?? "-")}</p>
               <Badge
                 variant={
@@ -914,7 +920,19 @@ export function ModulesPage() {
               >
                 {job.status}
               </Badge>
-            </button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void navigate({
+                    to: "/modules/$jobId",
+                    params: { jobId: job.id },
+                  });
+                }}
+              >
+                Détail
+              </Button>
+            </div>
           ))}
           {(jobsQuery.data?.jobs.length ?? 0) >= jobsLimit && jobsLimit < 100 ? (
             <Button
@@ -966,6 +984,18 @@ export function ModulesPage() {
             ) : null}
             {jobStatusQuery.data ? (
               <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    void navigate({
+                      to: "/modules/$jobId",
+                      params: { jobId: jobStatusQuery.data.id },
+                    });
+                  }}
+                >
+                  Ouvrir détail
+                </Button>
                 <Button
                   type="button"
                   variant="outline"

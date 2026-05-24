@@ -65,6 +65,68 @@ def test_modules_presets_returns_entries() -> None:
     assert any(item["id"] == "doctor-json" for item in payload["presets"])
 
 
+def test_settings_summary_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.get_settings_summary",
+        lambda: {
+            "settings_path": "C:/cfg/framekit.yaml",
+            "config_dir": "C:/cfg",
+            "cache_dir": "C:/cache",
+            "settings": {"general": {"locale": "fr"}},
+        },
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/settings/summary")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["settings_path"].endswith("framekit.yaml")
+    assert payload["settings"]["general"]["locale"] == "fr"
+
+
+def test_seedbox_list_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.list_seedboxes_summary",
+        lambda: [
+            {
+                "name": "main-seedbox",
+                "rclone_remote": "main",
+                "remote_base_path": "/downloads",
+                "max_concurrent_uploads": 3,
+                "bandwidth_limit": "",
+                "is_default": True,
+            }
+        ],
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/seedbox/list")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["seedboxes"][0]["name"] == "main-seedbox"
+    assert payload["seedboxes"][0]["is_default"] is True
+
+
+def test_upload_trackers_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.list_upload_trackers_summary",
+        lambda: [
+            {
+                "name": "bhd",
+                "type": "unit3d",
+                "url": "https://example.test",
+                "enabled": True,
+            }
+        ],
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/upload/trackers")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["trackers"][0]["name"] == "bhd"
+
+
 def test_modules_run_endpoint_returns_payload(monkeypatch: MonkeyPatch) -> None:
     class ResponseStub:
         def model_dump(self) -> dict[str, object]:
