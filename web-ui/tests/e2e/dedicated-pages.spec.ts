@@ -103,6 +103,14 @@ test("dedicated pages render and execute mocked commands", async ({ page }) => {
   await page.getByRole("button", { name: "Exécuter" }).click();
   await expect(page.getByText("ran upload")).toBeVisible();
 
+  await page.goto("/pipeline");
+  await page.getByRole("button", { name: "Exécuter" }).click();
+  await expect(page.getByRole("button", { name: "Ouvrir dernier job" })).toBeVisible();
+
+  await page.goto("/batch");
+  await page.getByRole("button", { name: "Exécuter" }).click();
+  await expect(page.getByRole("button", { name: "Ouvrir dernier job" })).toBeVisible();
+
   await page.goto("/studio/watch");
   await expect(page.getByRole("heading", { name: /Module Studio/ })).toBeVisible();
   await page.getByRole("button", { name: "Exécuter" }).click();

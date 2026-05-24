@@ -43,6 +43,18 @@ const uploadRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/upload"), "UploadPage"),
 });
 
+const pipelineRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pipeline",
+  component: lazyRouteComponent(() => import("@/routes/pipeline"), "PipelinePage"),
+});
+
+const batchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/batch",
+  component: lazyRouteComponent(() => import("@/routes/batch"), "BatchPage"),
+});
+
 const moduleStudioRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/studio/$module",
@@ -57,6 +69,8 @@ const routeTree = rootRoute.addChildren([
   settingsSetupRoute,
   seedboxRoute,
   uploadRoute,
+  pipelineRoute,
+  batchRoute,
   moduleStudioRoute,
 ]);
 

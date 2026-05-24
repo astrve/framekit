@@ -47,6 +47,12 @@ export function HomePage() {
             <Link to="/upload" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
               Ouvrir Upload
             </Link>
+            <Link to="/pipeline" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
+              Ouvrir Pipeline
+            </Link>
+            <Link to="/batch" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
+              Ouvrir Batch
+            </Link>
             <Link
               to="/studio/$module"
               params={{ module: "watch" }}
