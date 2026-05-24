@@ -213,6 +213,19 @@ def test_upload_trackers_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert payload["trackers"][0]["name"] == "bhd"
 
 
+def test_upload_tracker_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.get_upload_tracker_info",
+        lambda tracker_name: {"name": tracker_name, "type": "unit3d", "url": "https://example.test"},
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/upload/tracker/bhd")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["tracker"]["name"] == "bhd"
+
+
 def test_upload_state_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         "framekit.web.app.get_upload_state",

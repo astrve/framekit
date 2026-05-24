@@ -19,6 +19,7 @@ from framekit.web.modules import (
     remove_seedbox_profile,
     set_default_seedbox,
     get_upload_state,
+    get_upload_tracker_info,
     list_seedbox_history,
     list_module_jobs,
     list_modules,
@@ -147,6 +148,13 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/upload/trackers")
     def upload_trackers() -> dict[str, Any]:
         return {"trackers": list_upload_trackers_summary()}
+
+    @app.get("/api/v1/upload/tracker/{tracker_name}")
+    def upload_tracker(tracker_name: str) -> dict[str, Any]:
+        info = get_upload_tracker_info(tracker_name)
+        if info is None:
+            raise HTTPException(status_code=404, detail="tracker not found")
+        return {"tracker": info}
 
     @app.get("/api/v1/upload/state")
     def upload_state() -> dict[str, Any]:

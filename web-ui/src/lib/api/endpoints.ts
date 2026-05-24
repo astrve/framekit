@@ -12,6 +12,7 @@ import {
   SettingsSummarySchema,
   SystemInfoSchema,
   UploadHistorySchema,
+  UploadTrackerInfoSchema,
   UploadStateSchema,
   UploadTrackersSchema,
   type DoctorPayload,
@@ -23,6 +24,7 @@ import {
   type SeedboxHistory,
   type SettingsSummary,
   type UploadHistory,
+  type UploadTrackerInfo,
   type UploadState,
   type RunModuleResult,
   type SystemInfoPayload,
@@ -98,6 +100,10 @@ export async function removeSeedbox(name: string): Promise<SeedboxList> {
 
 export async function getUploadTrackers(): Promise<UploadTrackers> {
   return fetchValidated("/api/v1/upload/trackers", UploadTrackersSchema);
+}
+
+export async function getUploadTrackerInfo(name: string): Promise<UploadTrackerInfo> {
+  return fetchValidated(`/api/v1/upload/tracker/${encodeURIComponent(name)}`, UploadTrackerInfoSchema);
 }
 
 export async function getUploadState(): Promise<UploadState> {

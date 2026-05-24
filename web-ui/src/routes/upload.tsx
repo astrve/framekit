@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { getUploadHistory, getUploadState, runModule, setUploadState } from "@/lib/api/endpoints";
+import { getUploadHistory, getUploadState, getUploadTrackerInfo, getUploadTrackers, runModule, setUploadState } from "@/lib/api/endpoints";
 import type { RunModuleResult, UploadState } from "@/lib/api/schemas";
 
 type UploadAction = "setup" | "list-trackers" | "show-tracker" | "run" | "history" | "enable" | "disable";
@@ -31,6 +31,15 @@ export function UploadPage() {
   const historyQuery = useQuery({
     queryKey: ["upload-history"],
     queryFn: () => getUploadHistory(20),
+  });
+  const trackersQuery = useQuery({
+    queryKey: ["upload-trackers-page"],
+    queryFn: getUploadTrackers,
+  });
+  const trackerInfoQuery = useQuery({
+    queryKey: ["upload-tracker-info", tracker],
+    queryFn: () => getUploadTrackerInfo(tracker.trim()),
+    enabled: tracker.trim().length > 0,
   });
   const setStateMutation = useMutation({
     mutationFn: setUploadState,
@@ -234,6 +243,28 @@ export function UploadPage() {
               <strong>{stateQuery.data.auto_upload ? "yes" : "no"}</strong>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Trackers configured</CardTitle>
+          <CardDescription>Liste + détail tracker sélectionné.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {(trackersQuery.data?.trackers ?? []).map((item) => (
+              <Button key={item.name} type="button" size="sm" variant="outline" onClick={() => setTracker(item.name)}>
+                {item.name}
+              </Button>
+            ))}
+          </div>
+          <pre className="max-h-64 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+            {JSON.stringify(trackersQuery.data?.trackers ?? [], null, 2)}
+          </pre>
+          <pre className="max-h-64 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+            {JSON.stringify(trackerInfoQuery.data?.tracker ?? {}, null, 2)}
+          </pre>
         </CardContent>
       </Card>
 

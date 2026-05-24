@@ -515,6 +515,14 @@ def list_upload_trackers_summary() -> list[dict[str, Any]]:
     return result
 
 
+def get_upload_tracker_info(name: str) -> dict[str, Any] | None:
+    """Return one tracker details when available."""
+    tracker_name = name.strip()
+    if not tracker_name:
+        return None
+    return UploadService.get_tracker_info(tracker_name)
+
+
 def get_upload_state() -> dict[str, bool]:
     """Return upload module toggles."""
     return {
