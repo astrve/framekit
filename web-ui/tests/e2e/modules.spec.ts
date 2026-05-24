@@ -19,6 +19,8 @@ type JobRecord = {
     parsed_payload?: unknown;
   } | null;
   error?: string | null;
+  live_stdout?: string;
+  live_stderr?: string;
 };
 
 test("modules async flow supports create cancel rerun", async ({ page }) => {
@@ -84,11 +86,14 @@ test("modules async flow supports create cancel rerun", async ({ page }) => {
       const id = `job-${sequence++}`;
       const created: JobRecord = {
         id,
-        status: "pending",
+        status: "running",
         created_at: now(),
+        started_at: now(),
         request: body,
         result: null,
         error: null,
+        live_stdout: "step 1: start\nstep 2: working",
+        live_stderr: "warn: sample",
       };
       jobs.set(id, created);
       await route.fulfill({
@@ -195,6 +200,13 @@ test("modules async flow supports create cancel rerun", async ({ page }) => {
   await page.getByRole("button", { name: "Exécuter" }).click();
   await expect(page.getByRole("button", { name: /job-1/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel job" })).toBeVisible();
+  await page.getByRole("button", { name: "Ouvrir détail" }).click();
+  await expect(page.getByText("step 1: start")).toBeVisible();
+  await page.getByRole("button", { name: "Pause follow" }).click();
+  await page.getByLabel("Filtre").fill("step 2");
+  await expect(page.getByText("step 2: working")).toBeVisible();
+  await page.getByRole("link", { name: "Retour modules" }).click();
+  await page.getByRole("button", { name: /job-1/ }).click();
 
   await page.getByRole("button", { name: "Cancel job" }).click();
   await expect(page.getByText("Cancelled by user.")).toBeVisible();
