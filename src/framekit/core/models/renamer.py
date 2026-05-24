@@ -26,8 +26,11 @@ class RenamePlanItem:
 
     existing_language_tag: str | None = None
     resulting_language_tag: str | None = None
+    calculated_language_tag: str | None = None
+    language_tag_conflict: bool = False
 
     parsed_episode_code: str | None = None
     parsed_episode_title: str | None = None
 
     multi_language_detected: bool = False
+    resolution_conflict: bool = False

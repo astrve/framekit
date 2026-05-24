@@ -67,6 +67,12 @@ def _print_summary(total: int, metrics, *, total_bytes: int | None) -> None:
         console.print(f"  Compression: {metrics.compression_ratio:.1f}%")
 
 
+def _console_has_active_live_display() -> bool:
+    """Return True when Rich Live is already active on the shared console."""
+    live = getattr(console, "_live", None)
+    return live is not None
+
+
 @contextmanager
 def framekit_progress(
     label: str,
@@ -90,6 +96,16 @@ def framekit_progress(
     Yields:
         ProgressAdvance: Function to advance the progress bar
     """
+    if _console_has_active_live_display():
+        # A parent dashboard already owns the terminal Live context.
+        # Returning a no-op avoids nested LiveError while preserving callbacks.
+        def advance(_amount: int = 1, *, files: int = 0) -> None:
+            _ = files
+            return None
+
+        yield advance
+        return
+
     is_bytes = unit == "bytes"
     columns: list = [
         SpinnerColumn(),
@@ -179,6 +195,20 @@ def enhanced_progress(
     Yields:
         EnhancedProgressAdvance: Function to advance the progress bar with metrics
     """
+    if _console_has_active_live_display():
+        def advance(
+            _amount: int = 1,
+            *,
+            success: bool | None = None,
+            skipped: bool = False,
+        ) -> None:
+            _ = success
+            _ = skipped
+            return None
+
+        yield advance
+        return
+
     from framekit.core.reporting import ProgressMetrics
 
     metrics = ProgressMetrics(

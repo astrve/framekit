@@ -18,6 +18,7 @@ from framekit.modules.extract.models import (
     AudioTrack,
     ExtractionOptions,
     ExtractionResult,
+    SubtitleFormat,
     SubtitleTrack,
     VideoExtractionOptions,
     VideoTrack,
@@ -55,6 +56,82 @@ def _audio_extension_for_track(
         AudioFormat.DTS_HD: "dts",
         AudioFormat.TRUEHD: "thd",
     }.get(source_format, "aac")
+
+
+def _language_tag(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "UND"
+    language, _variant = normalize_language(raw)
+    if language:
+        short = LANGUAGE_SHORT_MAP.get(language)
+        if short:
+            return short.upper()
+        letters = "".join(ch for ch in language.upper() if ch.isalpha())
+        if len(letters) >= 2:
+            return letters[:3]
+    compact = "".join(ch for ch in raw.upper() if ch.isalpha())
+    return compact[:3] if compact else "UND"
+
+
+def _audio_role(track: AudioTrack) -> str | None:
+    title = str(track.title or "").lower()
+    if any(
+        marker in title
+        for marker in (
+            "audio description",
+            "audio-description",
+            "descriptive audio",
+            "descriptive",
+            "ad ",
+            "(ad)",
+            "[ad]",
+            "visually impaired",
+            "blind",
+        )
+    ):
+        return "AD"
+    if track.commentary:
+        return "COMM"
+    return None
+
+
+def _subtitle_role(track: SubtitleTrack) -> str | None:
+    if track.forced:
+        return "FORCED"
+    if track.hearing_impaired:
+        return "SDH"
+    title = str(track.title or "").lower()
+    if "comment" in title:
+        return "COMM"
+    return None
+
+
+def _build_tagged_output_path(
+    *,
+    output_dir: Path,
+    file_stem: str,
+    extension: str,
+    language: str | None,
+    role: str | None,
+    collisions: dict[str, int],
+) -> Path:
+    lang = _language_tag(language)
+    tokens = [file_stem, lang]
+    if role:
+        tokens.append(role.upper())
+    base_name = ".".join(tokens)
+    collision_count = collisions.get(base_name, 0) + 1
+    collisions[base_name] = collision_count
+    if collision_count > 1:
+        tokens.append(str(collision_count))
+    return output_dir / f"{'.'.join(tokens)}.{extension.lstrip('.')}"
+
+
+def _emit_progress(progress_callback: Callable[..., None] | None, **payload: object) -> None:
+    if progress_callback is None:
+        return
+    progress_callback(**payload)
 
 
 class ExtractionService:
@@ -179,29 +256,39 @@ class ExtractionService:
 
         # Initialize extractor
         extractor = SubtitleExtractor(self.registry)
+        total_files = len(files)
+        files_done = 0
 
-        for file_path in files:
-            # Validate file exists
-            if not file_path.exists():
+        for file_index, file_path in enumerate(files, start=1):
+            resolved_path = file_path.resolve()
+            if not resolved_path.exists() or resolved_path.is_dir():
                 report.add_error(
                     "file_not_found",
-                    f"File does not exist: {file_path}",
-                    file=str(file_path),
+                    f"File does not exist or is not a video file: {resolved_path}",
+                    file=str(resolved_path),
                 )
                 continue
 
             report.processed += 1
+            _emit_progress(
+                progress_callback,
+                phase="analysis",
+                current_file=resolved_path.name,
+                file_index=file_index,
+                total_files=total_files,
+                files=0,
+            )
 
             try:
-                info = probe_media_file(file_path)
-                subtitle_tracks = []
+                info = probe_media_file(resolved_path)
+                subtitle_tracks: list[SubtitleTrack] = []
                 for media_track in info.subtitle_tracks:
                     if self._is_font_subtitle_track(media_track):
                         report.skipped += 1
                         report.add_warning(
                             "font_track_skipped",
-                            f"Skipped embedded font track: {file_path.name}",
-                            file=str(file_path),
+                            f"Skipped embedded font track: {resolved_path.name}",
+                            file=str(resolved_path),
                             track_id=getattr(media_track, "id", None),
                         )
                         continue
@@ -234,20 +321,62 @@ class ExtractionService:
                 if not subtitle_tracks:
                     report.add_warning(
                         "no_subtitle_tracks",
-                        f"No extractable subtitle tracks: {file_path.name}",
-                        file=str(file_path),
+                        f"No extractable subtitle tracks: {resolved_path.name}",
+                        file=str(resolved_path),
+                    )
+                    files_done += 1
+                    _emit_progress(
+                        progress_callback,
+                        phase="finalization",
+                        current_file=resolved_path.name,
+                        file_index=file_index,
+                        total_files=total_files,
+                        files=1,
+                        files_done=files_done,
                     )
                     continue
 
-                for track in subtitle_tracks:
-                    output_path = extractor.generate_output_filename(
-                        video_path=file_path,
-                        track=track,
-                        options=options,
+                _emit_progress(
+                    progress_callback,
+                    phase="selection",
+                    current_file=resolved_path.name,
+                    file_index=file_index,
+                    total_files=total_files,
+                    total_tracks=len(subtitle_tracks),
+                    files=0,
+                )
+                collisions: dict[str, int] = {}
+                output_dir = options.output_dir or resolved_path.parent
+                format_hint = (
+                    options.output_format.value
+                    if options.output_format != SubtitleFormat.ORIGINAL
+                    else None
+                )
+
+                for track_index, track in enumerate(subtitle_tracks, start=1):
+                    extension = format_hint or extractor.detect_subtitle_format(track.codec).value
+                    output_path = _build_tagged_output_path(
+                        output_dir=output_dir,
+                        file_stem=resolved_path.stem,
+                        extension=extension,
+                        language=track.language,
+                        role=_subtitle_role(track),
+                        collisions=collisions,
                     )
                     output_path.parent.mkdir(parents=True, exist_ok=True)
+                    _emit_progress(
+                        progress_callback,
+                        phase="extraction",
+                        current_file=resolved_path.name,
+                        file_index=file_index,
+                        total_files=total_files,
+                        current_track=track_index,
+                        total_tracks=len(subtitle_tracks),
+                        track_progress=0.0,
+                        files=0,
+                    )
                     result = extractor.extract_subtitle(
-                        video_path=file_path,
+                        video_path=resolved_path,
                         output_path=output_path,
                         track=track,
                         target_format=options.output_format,
@@ -256,7 +385,7 @@ class ExtractionService:
                     if result.success:
                         report.modified += 1
                         report.add_detail(
-                            file=file_path.name,
+                            file=resolved_path.name,
                             action="extract_subtitle",
                             status="success",
                             message=f"Extracted to {result.output_file.name}",
@@ -265,19 +394,37 @@ class ExtractionService:
                         report.add_error(
                             "extraction_failed",
                             result.error or "Unknown error",
-                            file=str(file_path),
+                            file=str(resolved_path),
                         )
+                    _emit_progress(
+                        progress_callback,
+                        phase="extraction",
+                        current_file=resolved_path.name,
+                        file_index=file_index,
+                        total_files=total_files,
+                        current_track=track_index,
+                        total_tracks=len(subtitle_tracks),
+                        track_progress=100.0,
+                        files=0,
+                    )
 
-                # Invoke progress callback
-                if progress_callback:
-                    progress_callback(files=1)
+                files_done += 1
+                _emit_progress(
+                    progress_callback,
+                    phase="finalization",
+                    current_file=resolved_path.name,
+                    file_index=file_index,
+                    total_files=total_files,
+                    files=1,
+                    files_done=files_done,
+                )
 
             except Exception as exc:
-                logger.exception(f"Failed to extract subtitle from {file_path}")
+                logger.exception(f"Failed to extract subtitle from {resolved_path}")
                 report.add_error(
                     "extraction_exception",
                     str(exc),
-                    file=str(file_path),
+                    file=str(resolved_path),
                 )
 
         return report, results
@@ -307,22 +454,32 @@ class ExtractionService:
 
         # Initialize extractor
         extractor = AudioExtractor(self.registry)
+        total_files = len(files)
+        files_done = 0
 
-        for file_path in files:
-            # Validate file exists
-            if not file_path.exists():
+        for file_index, file_path in enumerate(files, start=1):
+            resolved_path = file_path.resolve()
+            if not resolved_path.exists() or resolved_path.is_dir():
                 report.add_error(
                     "file_not_found",
-                    f"File does not exist: {file_path}",
-                    file=str(file_path),
+                    f"File does not exist or is not a video file: {resolved_path}",
+                    file=str(resolved_path),
                 )
                 continue
 
             report.processed += 1
+            _emit_progress(
+                progress_callback,
+                phase="analysis",
+                current_file=resolved_path.name,
+                file_index=file_index,
+                total_files=total_files,
+                files=0,
+            )
 
             try:
-                info = probe_media_file(file_path)
-                selected_audio_tracks = []
+                info = probe_media_file(resolved_path)
+                selected_audio_tracks: list[AudioTrack] = []
                 for index, media_track in enumerate(info.audio_tracks):
                     language = getattr(media_track, "language", None)
                     title = str(getattr(media_track, "title", "") or "")
@@ -349,31 +506,81 @@ class ExtractionService:
                 if not selected_audio_tracks:
                     report.add_warning(
                         "no_audio_tracks",
-                        f"No extractable audio tracks: {file_path.name}",
-                        file=str(file_path),
+                        f"No extractable audio tracks: {resolved_path.name}",
+                        file=str(resolved_path),
+                    )
+                    files_done += 1
+                    _emit_progress(
+                        progress_callback,
+                        phase="finalization",
+                        current_file=resolved_path.name,
+                        file_index=file_index,
+                        total_files=total_files,
+                        files=1,
+                        files_done=files_done,
                     )
                     continue
 
-                for track in selected_audio_tracks:
+                _emit_progress(
+                    progress_callback,
+                    phase="selection",
+                    current_file=resolved_path.name,
+                    file_index=file_index,
+                    total_files=total_files,
+                    total_tracks=len(selected_audio_tracks),
+                    files=0,
+                )
+                collisions: dict[str, int] = {}
+                output_dir = options.output_dir or resolved_path.parent
+                duration_seconds = None
+                if getattr(info, "duration_ms", None):
+                    duration_seconds = float(info.duration_ms) / 1000.0
+
+                for track_index, track in enumerate(selected_audio_tracks, start=1):
                     output_suffix = _audio_extension_for_track(
                         extractor,
                         track,
                         options.output_format,
                     )
-                    output_dir = options.output_dir or file_path.parent
-                    output_path = output_dir / f"{file_path.stem}.a{track.track_id}.{output_suffix}"
+                    output_path = _build_tagged_output_path(
+                        output_dir=output_dir,
+                        file_stem=resolved_path.stem,
+                        extension=output_suffix,
+                        language=track.language,
+                        role=_audio_role(track),
+                        collisions=collisions,
+                    )
                     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    def _track_progress(track_progress: float) -> None:
+                        _emit_progress(
+                            progress_callback,
+                            phase="extraction",
+                            current_file=resolved_path.name,
+                            file_index=file_index,
+                            total_files=total_files,
+                            current_track=track_index,
+                            total_tracks=len(selected_audio_tracks),
+                            track_progress=max(0.0, min(track_progress, 100.0)),
+                            files=0,
+                        )
+
+                    _track_progress(0.0)
                     result = extractor.extract_audio(
-                        video_path=file_path,
+                        video_path=resolved_path,
                         track=track,
                         output_path=output_path,
                         options=options,
+                        progress_callback=_track_progress,
+                        expected_duration_seconds=duration_seconds,
                     )
+                    _track_progress(100.0)
+
                     results.append(result)
                     if result.success:
                         report.modified += 1
                         report.add_detail(
-                            file=file_path.name,
+                            file=resolved_path.name,
                             action="extract_audio",
                             status="success",
                             message=f"Extracted to {result.output_file.name}",
@@ -382,19 +589,26 @@ class ExtractionService:
                         report.add_error(
                             "extraction_failed",
                             result.error or "Unknown error",
-                            file=str(file_path),
+                            file=str(resolved_path),
                         )
 
-                # Invoke progress callback
-                if progress_callback:
-                    progress_callback(files=1)
+                files_done += 1
+                _emit_progress(
+                    progress_callback,
+                    phase="finalization",
+                    current_file=resolved_path.name,
+                    file_index=file_index,
+                    total_files=total_files,
+                    files=1,
+                    files_done=files_done,
+                )
 
             except Exception as exc:
-                logger.exception(f"Failed to extract audio from {file_path}")
+                logger.exception(f"Failed to extract audio from {resolved_path}")
                 report.add_error(
                     "extraction_exception",
                     str(exc),
-                    file=str(file_path),
+                    file=str(resolved_path),
                 )
 
         return report, results
@@ -424,21 +638,31 @@ class ExtractionService:
 
         # Initialize extractor
         extractor = VideoExtractor(self.registry)
+        total_files = len(files)
+        files_done = 0
 
-        for file_path in files:
-            # Validate file exists
-            if not file_path.exists():
+        for file_index, file_path in enumerate(files, start=1):
+            resolved_path = file_path.resolve()
+            if not resolved_path.exists() or resolved_path.is_dir():
                 report.add_error(
                     "file_not_found",
-                    f"File does not exist: {file_path}",
-                    file=str(file_path),
+                    f"File does not exist or is not a video file: {resolved_path}",
+                    file=str(resolved_path),
                 )
                 continue
 
             report.processed += 1
+            _emit_progress(
+                progress_callback,
+                phase="analysis",
+                current_file=resolved_path.name,
+                file_index=file_index,
+                total_files=total_files,
+                files=0,
+            )
 
             try:
-                info = probe_media_file(file_path)
+                info = probe_media_file(resolved_path)
                 track = VideoTrack(
                     track_id=0,
                     codec=str(info.video_codec or info.video_format_name or "h264").lower(),
@@ -451,30 +675,58 @@ class ExtractionService:
                     hdr=bool(info.hdr_format),
                 )
 
-                # Determine output path
+                _emit_progress(
+                    progress_callback,
+                    phase="selection",
+                    current_file=resolved_path.name,
+                    file_index=file_index,
+                    total_files=total_files,
+                    total_tracks=1,
+                    files=0,
+                )
+
                 extension = _normalize_video_extension(
                     extractor.get_output_extension(options.output_codec)
                 )
                 output_path = (
-                    options.output_dir / f"{file_path.stem}{extension}"
+                    options.output_dir / f"{resolved_path.stem}{extension}"
                     if options.output_dir
-                    else file_path.with_suffix(extension)
+                    else resolved_path.with_suffix(extension)
                 )
+                duration_seconds = None
+                if getattr(info, "duration_ms", None):
+                    duration_seconds = float(info.duration_ms) / 1000.0
 
-                # Extract video
+                def _track_progress(track_progress: float) -> None:
+                    _emit_progress(
+                        progress_callback,
+                        phase="extraction",
+                        current_file=resolved_path.name,
+                        file_index=file_index,
+                        total_files=total_files,
+                        current_track=1,
+                        total_tracks=1,
+                        track_progress=max(0.0, min(track_progress, 100.0)),
+                        files=0,
+                    )
+
+                _track_progress(0.0)
                 result = extractor.extract_video(
-                    video_path=file_path,
+                    video_path=resolved_path,
                     output_path=output_path,
                     track=track,
                     options=options,
+                    progress_callback=_track_progress,
+                    expected_duration_seconds=duration_seconds,
                 )
+                _track_progress(100.0)
 
                 results.append(result)
 
                 if result.success:
                     report.modified += 1
                     report.add_detail(
-                        file=file_path.name,
+                        file=resolved_path.name,
                         action="extract_video",
                         status="success",
                         message=f"Extracted to {result.output_file.name}",
@@ -483,19 +735,26 @@ class ExtractionService:
                     report.add_error(
                         "extraction_failed",
                         result.error or "Unknown error",
-                        file=str(file_path),
+                        file=str(resolved_path),
                     )
 
-                # Invoke progress callback
-                if progress_callback:
-                    progress_callback(files=1)
+                files_done += 1
+                _emit_progress(
+                    progress_callback,
+                    phase="finalization",
+                    current_file=resolved_path.name,
+                    file_index=file_index,
+                    total_files=total_files,
+                    files=1,
+                    files_done=files_done,
+                )
 
             except Exception as exc:
-                logger.exception(f"Failed to extract video from {file_path}")
+                logger.exception(f"Failed to extract video from {resolved_path}")
                 report.add_error(
                     "extraction_exception",
                     str(exc),
-                    file=str(file_path),
+                    file=str(resolved_path),
                 )
 
         return report, results

@@ -254,6 +254,50 @@ def _generate_yaml_with_comments(data: dict[str, Any]) -> str:  # pyright: ignor
     lines.append(f"    default_folder: '{data['modules']['renamer']['default_folder']}'")
     _lang_tag = data["modules"]["renamer"]["default_language_tag"]
     lines.append(f"    default_language_tag: '{_lang_tag}'")
+    renamer = data["modules"]["renamer"]
+    lines.append(f"    profile: {_yaml_quote(renamer.get('profile', 'fr_tracker'))}")
+    language_profiles = renamer.get("language_profiles", {})
+    lines.append("    language_profiles:")
+    lines.append(f"      active: {_yaml_quote(language_profiles.get('active', 'fr_tracker'))}")
+    profiles_blob = language_profiles.get("profiles", {})
+    if isinstance(profiles_blob, dict) and profiles_blob:
+        lines.append("      profiles:")
+        for profile_name, raw_profile in profiles_blob.items():
+            if not isinstance(raw_profile, dict):
+                continue
+            lines.append(f"        {profile_name}:")
+            lines.append(
+                f"          default_language: {_yaml_quote(raw_profile.get('default_language', ''))}"
+            )
+            variant_languages = raw_profile.get("variant_languages", [])
+            if isinstance(variant_languages, list) and variant_languages:
+                lines.append("          variant_languages:")
+                lines.extend(f"            - {_yaml_quote(v)}" for v in variant_languages)
+            else:
+                lines.append("          variant_languages: []")
+            tags = raw_profile.get("tags", {})
+            if not isinstance(tags, dict):
+                tags = {}
+            lines.append("          tags:")
+            lines.append(f"            only_default: {_yaml_quote(tags.get('only_default', ''))}")
+            lines.append(
+                "            default_plus_others: "
+                + _yaml_quote(tags.get("default_plus_others", ""))
+            )
+            lines.append(
+                "            default_plus_variants_only: "
+                + _yaml_quote(tags.get("default_plus_variants_only", ""))
+            )
+            lines.append(
+                "            default_plus_variants_and_others: "
+                + _yaml_quote(tags.get("default_plus_variants_and_others", ""))
+            )
+            lines.append(
+                "            none_default_multi: "
+                + _yaml_quote(tags.get("none_default_multi", "MULTI"))
+            )
+    else:
+        lines.append("      profiles: {}")
     lines.append("")
 
     # CleanMKV module
@@ -313,6 +357,14 @@ def _generate_yaml_with_comments(data: dict[str, Any]) -> str:  # pyright: ignor
     lines.append(f"    with_metadata: {str(data['modules']['prez']['with_metadata']).lower()}")
     lines.append("")
 
+    # Screenshot module
+    lines.append("  # Screenshot Module")
+    lines.append("  screenshot:")
+    screenshot_data = data["modules"].get("screenshot", {})
+    lines.append(f"    default_folder: {_yaml_quote(screenshot_data.get('default_folder', ''))}")
+    lines.append(f"    target: {_yaml_quote(screenshot_data.get('target', 'prez'))}")
+    lines.append("")
+
     # Pipeline module
     lines.append("  # Pipeline Module")
     lines.append("  pipeline:")
@@ -368,7 +420,15 @@ def _generate_yaml_with_comments(data: dict[str, Any]) -> str:  # pyright: ignor
     lines.append("seedbox:")
     seedbox_data = data.get("seedbox", {})
     lines.append(f"  default: {_yaml_quote(seedbox_data.get('default', ''))}")
+    profile_defaults = seedbox_data.get("default_by_profile", {})
+    if isinstance(profile_defaults, dict) and profile_defaults:
+        lines.append("  default_by_profile:")
+        for profile_name, seedbox_name in profile_defaults.items():
+            lines.append(f"    {_yaml_quote(profile_name)}: {_yaml_quote(seedbox_name)}")
+    else:
+        lines.append("  default_by_profile: {}")
     lines.append(f"  history_enabled: {str(seedbox_data.get('history_enabled', True)).lower()}")
+    lines.append(f"  max_concurrent_uploads: {seedbox_data.get('max_concurrent_uploads', 3)}")
     seedboxes = seedbox_data.get("seedboxes", [])
     if seedboxes:
         lines.append("  seedboxes:")
@@ -381,6 +441,7 @@ def _generate_yaml_with_comments(data: dict[str, Any]) -> str:  # pyright: ignor
         lines.append(f"      bandwidth_limit: {_yaml_quote(sb.get('bandwidth_limit', ''))}")
         lines.append(f"      disk_check_enabled: {str(sb.get('disk_check_enabled', True)).lower()}")
         lines.append(f"      min_free_gb: {sb.get('min_free_gb', 5)}")
+        lines.append(f"      max_concurrent_uploads: {sb.get('max_concurrent_uploads', 3)}")
         lines.append(f"      post_upload_command: {_yaml_quote(sb.get('post_upload_command', ''))}")
         cat_paths = sb.get("category_paths", {})
         lines.append("      category_paths:")

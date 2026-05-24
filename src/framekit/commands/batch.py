@@ -40,6 +40,33 @@ from framekit.ui.unified_selector import (
     select_one as _select_one,
 )
 
+BATCH_MODULE_ORDER: tuple[str, ...] = (
+    "renamer",
+    "cleanmkv",
+    "metadata",
+    "nfo",
+    "torrent",
+    "prez",
+    "encode",
+    "screenshot",
+    "seedbox",
+    "rename-parent",
+)
+BATCH_MODULES_DEFAULT: tuple[str, ...] = (
+    "renamer",
+    "cleanmkv",
+    "metadata",
+    "nfo",
+    "torrent",
+    "prez",
+)
+BATCH_MODULE_ALIASES: dict[str, str] = {
+    "encoder": "encode",
+    "enc": "encode",
+    "rename_parent": "rename-parent",
+    "renameparent": "rename-parent",
+}
+
 # ----- helpers -----
 
 
@@ -92,7 +119,7 @@ def _print_batch_summary(service: BatchService) -> None:
             details = item.error_message or ""
         else:
             status_text = Text(f"[{item.status.value.upper()}]", style="yellow")
-            details = ""
+            details = item.error_message or ""
         table.add_row(item.display_name, status_text, details)
 
     console.print(table)
@@ -1029,6 +1056,65 @@ def _build_batch_config(
     )
 
 
+def _normalize_batch_module_name(value: str) -> str:
+    normalized = str(value).strip().lower()
+    return BATCH_MODULE_ALIASES.get(normalized, normalized)
+
+
+def _module_label(module_name: str) -> str:
+    labels = {
+        "renamer": tr("pipeline.step.renamer", default="Renamer"),
+        "cleanmkv": tr("pipeline.step.cleanmkv", default="CleanMKV"),
+        "metadata": tr("pipeline.step.metadata", default="Metadata (NFO + Prez)"),
+        "nfo": tr("pipeline.step.nfo", default="NFO"),
+        "torrent": tr("pipeline.step.torrent", default="Torrent"),
+        "prez": tr("pipeline.step.prez", default="Prez"),
+        "encode": tr("pipeline.step.encoder", default="Encode"),
+        "screenshot": tr("pipeline.step.screenshot", default="Screenshot"),
+        "seedbox": tr("pipeline.step.seedbox", default="Seedbox"),
+        "rename-parent": tr("pipeline.step.rename_parent", default="Rename parent"),
+    }
+    return labels.get(module_name, module_name)
+
+
+def _select_batch_modules_interactive(
+    initially_enabled: tuple[str, ...] | None,
+) -> tuple[str, ...] | None:
+    selected_by_default = set(initially_enabled or BATCH_MODULES_DEFAULT)
+    entries: list[SelectorEntry] = [SelectorDivider(tr("batch.modules.title", default="Modules"))]
+    for module_name in BATCH_MODULE_ORDER:
+        entries.append(
+            SelectorOption(
+                value=module_name,
+                label=_module_label(module_name),
+                hint=tr(
+                    "batch.modules.hint",
+                    default="Enable this module for batch processing",
+                ),
+                selected=module_name in selected_by_default,
+            )
+        )
+    try:
+        selected = select_many(
+            title=tr("batch.modules.select", default="Select batch modules"),
+            entries=entries,
+            page_size=14,
+            minimal_count=1,
+        )
+    except KeyboardInterrupt:
+        return initially_enabled
+    normalized = [
+        module_name
+        for value in selected
+        if (module_name := _normalize_batch_module_name(str(value))) in BATCH_MODULE_ORDER
+    ]
+    if not normalized:
+        return initially_enabled
+    # Preserve stable order expected by pipeline.
+    ordered = tuple(name for name in BATCH_MODULE_ORDER if name in set(normalized))
+    return ordered
+
+
 def _resolve_batch_dashboard(
     *, use_dashboard: bool | None, service: BatchService
 ) -> BatchDashboard | None:
@@ -1077,7 +1163,7 @@ def _run_batch_processing(
 
     if not dashboard:
         _print_batch_summary(service)
-    failed = sum(1 for result in results if not result.success)
+    failed = sum(1 for result in results if result.item.status == BatchStatus.FAILED)
     return (1 if failed > 0 else 0), results
 
 
@@ -1126,7 +1212,10 @@ def _run_batch_processing(
 @click.option(
     "--modules",
     "enabled_modules_option",
-    help="Comma-separated modules: renamer,cleanmkv,encoder,nfo,torrent,prez,upload.",
+    help=(
+        "Comma-separated modules: "
+        "renamer,cleanmkv,metadata,nfo,torrent,prez,encode,screenshot,seedbox,rename-parent,upload."
+    ),
 )
 @click.option(
     "-L",
@@ -1138,16 +1227,24 @@ def _run_batch_processing(
 @click.option("-A", "--announce", help="Tracker announce URL for torrent creation.")
 @click.option("--skip-renamer", is_flag=True, help="Skip renamer module")
 @click.option("--skip-cleanmkv", is_flag=True, help="Skip cleanmkv module")
-@click.option("--skip-encoder", is_flag=True, help="Skip encoder module")
+@click.option("--skip-metadata", is_flag=True, help="Skip metadata module")
 @click.option("--skip-nfo", is_flag=True, help="Skip NFO module")
 @click.option("--skip-torrent", is_flag=True, help="Skip torrent module")
 @click.option("--skip-prez", is_flag=True, help="Skip prez module")
+@click.option("--skip-encode", "--skip-encoder", is_flag=True, help="Skip encode module")
+@click.option("--skip-screenshot", is_flag=True, help="Skip screenshot module")
+@click.option("--skip-seedbox", is_flag=True, help="Skip seedbox module")
+@click.option("--skip-rename-parent", is_flag=True, help="Skip rename-parent module")
 @click.option("--ren", "opt_renamer", is_flag=True, help="Enable renamer module")
 @click.option("--cmk", "opt_cleanmkv", is_flag=True, help="Enable cleanmkv module")
-@click.option("--enc", "opt_encoder", is_flag=True, help="Enable encoder module")
+@click.option("--meta", "opt_metadata", is_flag=True, help="Enable metadata module")
 @click.option("--nfo", "opt_nfo", is_flag=True, help="Enable NFO module")
 @click.option("--tor", "opt_torrent", is_flag=True, help="Enable torrent module")
 @click.option("--prez", "opt_prez", is_flag=True, help="Enable prez module")
+@click.option("--enc", "opt_encode", is_flag=True, help="Enable encode module")
+@click.option("--shot", "opt_screenshot", is_flag=True, help="Enable screenshot module")
+@click.option("--seedbox", "opt_seedbox", is_flag=True, help="Enable seedbox module")
+@click.option("--rp", "opt_rename_parent", is_flag=True, help="Enable rename-parent module")
 @click.option(
     "--all", "all_modules", is_flag=True, help="Run all modules without interactive prompt"
 )
@@ -1181,16 +1278,26 @@ def batch_command(
     announce: str | None,
     skip_renamer: bool = False,
     skip_cleanmkv: bool = False,
-    skip_encoder: bool = False,
+    skip_metadata: bool = False,
     skip_nfo: bool = False,
     skip_torrent: bool = False,
     skip_prez: bool = False,
+    skip_encode: bool = False,
+    skip_screenshot: bool = False,
+    skip_seedbox: bool = False,
+    skip_rename_parent: bool = False,
+    skip_encoder: bool = False,  # legacy alias for tests/direct callback usage
     opt_renamer: bool = False,
     opt_cleanmkv: bool = False,
-    opt_encoder: bool = False,
+    opt_metadata: bool = False,
     opt_nfo: bool = False,
     opt_torrent: bool = False,
     opt_prez: bool = False,
+    opt_encode: bool = False,
+    opt_screenshot: bool = False,
+    opt_seedbox: bool = False,
+    opt_rename_parent: bool = False,
+    opt_encoder: bool = False,  # legacy alias for tests/direct callback usage
     all_modules: bool = False,
     preset: str | None = None,
     with_metadata: bool | None = None,
@@ -1248,39 +1355,67 @@ def batch_command(
         opt_in.append("renamer")
     if opt_cleanmkv:
         opt_in.append("cleanmkv")
-    if opt_encoder:
-        opt_in.append("encoder")
+    if opt_metadata:
+        opt_in.append("metadata")
+    if opt_encode or opt_encoder:
+        opt_in.append("encode")
     if opt_nfo:
         opt_in.append("nfo")
     if opt_torrent:
         opt_in.append("torrent")
     if opt_prez:
         opt_in.append("prez")
+    if opt_screenshot:
+        opt_in.append("screenshot")
+    if opt_seedbox:
+        opt_in.append("seedbox")
+    if opt_rename_parent:
+        opt_in.append("rename-parent")
 
     skip_map = {
         "renamer": skip_renamer,
         "cleanmkv": skip_cleanmkv,
-        "encoder": skip_encoder,
+        "metadata": skip_metadata,
+        "encode": skip_encode or skip_encoder,
         "nfo": skip_nfo,
         "torrent": skip_torrent,
         "prez": skip_prez,
+        "screenshot": skip_screenshot,
+        "seedbox": skip_seedbox,
+        "rename-parent": skip_rename_parent,
     }
 
     def apply_skips(modules: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(module for module in modules if not skip_map.get(module, False))
 
+    skip_requested = any(skip_map.values())
+    allowed_modules = set(BATCH_MODULE_ORDER) | {"upload"}
+
     if all_modules:
-        resolved_modules: tuple[str, ...] | None = apply_skips(PIPELINE_MODULES_DEFAULT)
+        resolved_modules: tuple[str, ...] | None = apply_skips(tuple(BATCH_MODULE_ORDER))
     elif opt_in:
         resolved_modules = apply_skips(tuple(opt_in))
     elif enabled_modules_option:
-        resolved_modules = apply_skips(
-            tuple(it.strip().lower() for it in enabled_modules_option.split(",") if it.strip())
-        )
-    elif any(skip_map.values()):
+        selected = []
+        for raw_name in enabled_modules_option.split(","):
+            normalized = _normalize_batch_module_name(raw_name)
+            if normalized in allowed_modules:
+                selected.append(normalized)
+        resolved_modules = apply_skips(tuple(selected))
+    elif skip_requested:
         resolved_modules = apply_skips(PIPELINE_MODULES_DEFAULT)
+    elif not auto and sys.stdin.isatty():
+        resolved_modules = _select_batch_modules_interactive(PIPELINE_MODULES_DEFAULT)
     else:
         resolved_modules = None
+    if resolved_modules is not None and not resolved_modules:
+        print_error(
+            tr(
+                "batch.error.no_module_selected",
+                default="No valid batch modules selected.",
+            )
+        )
+        return 1
 
     config = _build_batch_config(
         pipeline_preset=pipeline_preset,

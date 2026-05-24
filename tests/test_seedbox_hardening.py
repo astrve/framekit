@@ -4,6 +4,7 @@ from click.testing import CliRunner
 
 from framekit.commands.main import cli
 from framekit.commands.seedbox import (
+    _get_default_seedbox,
     _destination_path_for_source,
     _list_seedboxes,
     _resolve_local_payload,
@@ -16,6 +17,22 @@ def test_seedbox_list_treats_null_seedboxes_as_empty() -> None:
     assert _list_seedboxes({"seedbox": {"seedboxes": None}}) == []
 
 
+def test_seedbox_default_prefers_profile_mapping() -> None:
+    settings = {
+        "seedbox": {
+            "default": "global",
+            "default_by_profile": {"anime": "anime-box"},
+            "seedboxes": [
+                {"name": "global", "rclone_remote": "r1", "remote_base_path": "/"},
+                {"name": "anime-box", "rclone_remote": "r2", "remote_base_path": "/"},
+            ],
+        }
+    }
+    sb = _get_default_seedbox(settings, profile_name="anime")
+    assert sb is not None
+    assert sb.get("name") == "anime-box"
+
+
 def test_seedbox_push_requires_path_or_cwd(tmp_path, monkeypatch) -> None:
     settings_file = tmp_path / "framekit.yaml"
     settings_file.write_text(
@@ -24,10 +41,12 @@ def test_seedbox_push_requires_path_or_cwd(tmp_path, monkeypatch) -> None:
                 "seedbox:",
                 "  default: box",
                 "  history_enabled: true",
+                "  max_concurrent_uploads: 3",
                 "  seedboxes:",
                 "    - name: box",
                 "      rclone_remote: remote",
                 "      remote_base_path: /data",
+                "      max_concurrent_uploads: 4",
             ]
         ),
         encoding="utf-8",
@@ -120,10 +139,12 @@ def test_seedbox_push_uploads_each_payload_from_batch_parent(tmp_path, monkeypat
                 "seedbox:",
                 "  default: box",
                 "  history_enabled: false",
+                "  max_concurrent_uploads: 2",
                 "  seedboxes:",
                 "    - name: box",
                 "      rclone_remote: remote",
                 "      remote_base_path: /downloads/releases",
+                "      max_concurrent_uploads: 5",
                 "      disk_check_enabled: false",
                 "      category_paths:",
                 "        movies: movies",
@@ -157,4 +178,32 @@ def test_seedbox_push_uploads_each_payload_from_batch_parent(tmp_path, monkeypat
     destinations = [args[2] for args, _, _ in calls]
     assert "remote:/downloads/releases/movies/MOVIE.ONE.2024.1080P.WEB-GRP" in destinations
     assert "remote:/downloads/releases/series/SHOW.NAME.S01E01.1080P.WEB-GRP" in destinations
+    assert all("--transfers" in args for args, _, _ in calls)
+    assert all(args[args.index("--transfers") + 1] == "5" for args, _, _ in calls)
     assert all(dry_run for _, dry_run, _ in calls)
+
+
+def test_seedbox_use_profile_binding_updates_settings(tmp_path, monkeypatch) -> None:
+    settings_file = tmp_path / "framekit.yaml"
+    settings_file.write_text(
+        "\n".join(
+            [
+                "seedbox:",
+                "  default: box",
+                "  seedboxes:",
+                "    - name: box",
+                "      rclone_remote: remote",
+                "      remote_base_path: /data",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+
+    result = CliRunner().invoke(cli, ["seedbox", "use", "box", "--profile", "anime"])
+
+    assert result.exit_code == 0
+    content = settings_file.read_text(encoding="utf-8")
+    assert "default_by_profile" in content
+    assert "anime" in content
+    assert "box" in content

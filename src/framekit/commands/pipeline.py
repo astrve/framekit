@@ -95,11 +95,29 @@ from framekit.ui.unified_selector import (
     select_one as _select_one,
 )
 
-PIPELINE_MODULES = ("renamer", "cleanmkv", "nfo", "prez", "torrent", "upload", "encoder")
-# Module execution order: renamer → cleanmkv → nfo → prez → torrent → upload → encoder
-# Encoder is opt-in (heavy operation) — excluded from the default set
-PIPELINE_MODULES_DEFAULT = ("renamer", "cleanmkv", "nfo", "torrent", "prez", "upload")
-PIPELINE_METADATA_MODULES = frozenset({"nfo", "prez", "upload"})
+PIPELINE_MODULES = (
+    "renamer",
+    "cleanmkv",
+    "metadata",
+    "nfo",
+    "torrent",
+    "prez",
+    "encode",
+    "screenshot",
+    "seedbox",
+    "upload",
+    "rename-parent",
+)
+# Display order for module selection.
+# Execution order for heavy/dependent phases is handled in pipeline_orchestrator.
+PIPELINE_MODULES_DEFAULT = ("renamer", "cleanmkv", "metadata", "nfo", "torrent", "prez")
+PIPELINE_METADATA_MODULES = frozenset({"metadata", "nfo", "prez", "upload"})
+PIPELINE_MODULE_ALIASES = {
+    "encoder": "encode",
+    "enc": "encode",
+    "rename_parent": "rename-parent",
+    "renameparent": "rename-parent",
+}
 PipelineStep = tuple[str, str, Callable[[], int]]
 _PIPELINE_NFO_OUTPUT_MODES = frozenset({"global", "per_file", "both"})
 _PIPELINE_NFO_TEMPLATE_ALIASES = {
@@ -155,8 +173,10 @@ class PipelineContext:
     release: ReleaseNfoData | None = None
     metadata_context: dict | None = None
     nfo_path: Path | None = None
+    nfo_outputs: tuple[Path, ...] = field(default_factory=tuple)
     torrent_path: Path | None = None
     prez_outputs: tuple[Path, ...] = field(default_factory=tuple)
+    screenshot_outputs: tuple[Path, ...] = field(default_factory=tuple)
     dry_run: bool = False
 
 
@@ -171,11 +191,12 @@ def _pipeline_explain_text() -> str:
             "The pipeline command orchestrates multiple modules in sequence:\n\n"
             "1. Renamer: Standardize filenames\n"
             "2. CleanMKV: Remove unwanted tracks\n"
-            "3. NFO: Generate release information\n"
-            "4. Torrent: Create torrent file\n"
-            "5. Prez: Generate presentation files\n"
-            "6. Upload: Upload to trackers\n"
-            "7. Encoder: Encode video files (opt-in)\n\n"
+            "3. Metadata: Resolve metadata context\n"
+            "4. NFO: Generate release information\n"
+            "5. Torrent: Create torrent file\n"
+            "6. Prez: Generate presentation files\n"
+            "7. Encode: Encode video files (opt-in)\n"
+            "8. Screenshot / Seedbox / Upload / Rename parent (opt-in)\n\n"
             "Use --preset to load a saved configuration.\n"
             "Use --preview to see what will happen before execution."
         ),
@@ -186,18 +207,33 @@ def _module_label(name: str) -> str:
     return {
         "renamer": tr("pipeline.step.renamer", default="Renamer"),
         "cleanmkv": tr("pipeline.step.cleanmkv", default="CleanMKV"),
-        "encoder": tr("pipeline.step.encoder", default="Encoder"),
-        "nfo": tr("pipeline.step.nfo", default="NFO + Metadata"),
+        "metadata": tr("pipeline.step.metadata", default="Metadata (NFO + Prez)"),
+        "nfo": tr("pipeline.step.nfo", default="NFO"),
         "torrent": tr("pipeline.step.torrent", default="Torrent"),
         "prez": tr("pipeline.step.prez", default="Prez"),
+        "encode": tr("pipeline.step.encoder", default="Encode"),
+        "screenshot": tr("pipeline.step.screenshot", default="Screenshot"),
+        "seedbox": tr("pipeline.step.seedbox", default="Seedbox"),
         "upload": tr("pipeline.step.upload", default="Upload"),
+        "rename-parent": tr("pipeline.step.rename_parent", default="Rename parent"),
     }.get(name, name)
+
+
+def _normalize_module_name(value: str) -> str:
+    normalized = str(value).strip().lower()
+    if not normalized:
+        return ""
+    return PIPELINE_MODULE_ALIASES.get(normalized, normalized)
 
 
 def _resolve_enabled_modules(settings: dict, requested: tuple[str, ...] | None = None) -> set[str]:
     allowed = set(PIPELINE_MODULES)
     if requested is not None:
-        return {item for item in requested if item in allowed}
+        return {
+            module
+            for item in requested
+            if (module := _normalize_module_name(item)) in allowed
+        }
     configured = (
         settings.get("modules", {})
         .get("pipeline", {})
@@ -205,7 +241,9 @@ def _resolve_enabled_modules(settings: dict, requested: tuple[str, ...] | None =
     )
     if isinstance(configured, list):
         selected = {
-            str(item).strip().lower() for item in configured if str(item).strip().lower() in allowed
+            module
+            for item in configured
+            if (module := _normalize_module_name(item)) in allowed
         }
         return selected or set(PIPELINE_MODULES_DEFAULT)
     return set(PIPELINE_MODULES_DEFAULT)
@@ -1231,11 +1269,15 @@ def run_pipeline_command(
     auto_mode: bool = False,
     skip_renamer: bool = False,
     skip_cleanmkv: bool = False,
-    skip_encoder: bool = False,
+    skip_metadata: bool = False,
     skip_nfo: bool = False,
     skip_torrent: bool = False,
     skip_prez: bool = False,
+    skip_encode: bool = False,
+    skip_screenshot: bool = False,
+    skip_seedbox: bool = False,
     skip_upload: bool = False,
+    skip_rename_parent: bool = False,
     step_callback: Callable[[str, str], None] | None = None,
     result_callback: Callable[[dict[str, dict]], None] | None = None,
 ) -> int:
@@ -1258,11 +1300,15 @@ def run_pipeline_command(
         enabled_modules,
         skip_renamer=skip_renamer,
         skip_cleanmkv=skip_cleanmkv,
-        skip_encoder=skip_encoder,
+        skip_metadata=skip_metadata,
         skip_nfo=skip_nfo,
         skip_torrent=skip_torrent,
         skip_prez=skip_prez,
+        skip_encode=skip_encode,
+        skip_screenshot=skip_screenshot,
+        skip_seedbox=skip_seedbox,
         skip_upload=skip_upload,
+        skip_rename_parent=skip_rename_parent,
     )
 
     # Load and apply preset configuration
@@ -1338,6 +1384,7 @@ def run_pipeline_command(
     return execute_pipeline_modules(
         work_folder=work_folder,
         output_folder=output_folder,
+        source_root=root,
         selected_modules=selected_modules,
         effective_remove_terms=effective_remove_terms,
         settings=settings,
@@ -1375,20 +1422,29 @@ def _apply_skip_flags(
     *,
     skip_renamer: bool = False,
     skip_cleanmkv: bool = False,
-    skip_encoder: bool = False,
+    skip_metadata: bool = False,
     skip_nfo: bool = False,
     skip_torrent: bool = False,
     skip_prez: bool = False,
+    skip_encode: bool = False,
+    skip_screenshot: bool = False,
+    skip_seedbox: bool = False,
     skip_upload: bool = False,
+    skip_rename_parent: bool = False,
+    skip_encoder: bool = False,  # legacy alias
 ) -> tuple[str, ...] | None:
     skip_map = {
         "renamer": skip_renamer,
         "cleanmkv": skip_cleanmkv,
-        "encoder": skip_encoder,
+        "metadata": skip_metadata,
         "nfo": skip_nfo,
         "torrent": skip_torrent,
         "prez": skip_prez,
+        "encode": skip_encode or skip_encoder,
+        "screenshot": skip_screenshot,
+        "seedbox": skip_seedbox,
         "upload": skip_upload,
+        "rename-parent": skip_rename_parent,
     }
     if not any(skip_map.values()):
         return enabled_modules
@@ -1402,18 +1458,26 @@ def _apply_skip_flags(
 @click.option("-a", "--announce", type=str, help="Torrent announce URL")
 @click.option("--skip-renamer", is_flag=True, help="Skip renamer module")
 @click.option("--skip-cleanmkv", is_flag=True, help="Skip cleanmkv module")
-@click.option("--skip-encoder", is_flag=True, help="Skip encoder module")
+@click.option("--skip-metadata", is_flag=True, help="Skip metadata module")
 @click.option("--skip-nfo", is_flag=True, help="Skip NFO module")
 @click.option("--skip-torrent", is_flag=True, help="Skip torrent module")
 @click.option("--skip-prez", is_flag=True, help="Skip prez module")
+@click.option("--skip-encode", "--skip-encoder", is_flag=True, help="Skip encode module")
+@click.option("--skip-screenshot", is_flag=True, help="Skip screenshot module")
+@click.option("--skip-seedbox", is_flag=True, help="Skip seedbox module")
 @click.option("--skip-upload", is_flag=True, help="Skip upload module")
+@click.option("--skip-rename-parent", is_flag=True, help="Skip rename-parent module")
 @click.option("--ren", "opt_renamer", is_flag=True, help="Enable renamer module")
 @click.option("--cmk", "opt_cleanmkv", is_flag=True, help="Enable cleanmkv module")
-@click.option("--enc", "opt_encoder", is_flag=True, help="Enable encoder module")
+@click.option("--meta", "opt_metadata", is_flag=True, help="Enable metadata module")
 @click.option("--nfo", "opt_nfo", is_flag=True, help="Enable NFO module")
 @click.option("--tor", "opt_torrent", is_flag=True, help="Enable torrent module")
 @click.option("--prez", "opt_prez", is_flag=True, help="Enable prez module")
+@click.option("--enc", "opt_encode", is_flag=True, help="Enable encode module")
+@click.option("--shot", "opt_screenshot", is_flag=True, help="Enable screenshot module")
+@click.option("--seedbox", "opt_seedbox", is_flag=True, help="Enable seedbox module")
 @click.option("--up", "opt_upload", is_flag=True, help="Enable upload module")
+@click.option("--rp", "opt_rename_parent", is_flag=True, help="Enable rename-parent module")
 @click.option(
     "--all", "all_modules", is_flag=True, help="Run all modules without interactive prompt"
 )
@@ -1451,18 +1515,26 @@ def pipeline_command(
     announce: str | None,
     skip_renamer: bool,
     skip_cleanmkv: bool,
-    skip_encoder: bool,
+    skip_metadata: bool,
     skip_nfo: bool,
     skip_torrent: bool,
     skip_prez: bool,
+    skip_encode: bool,
+    skip_screenshot: bool,
+    skip_seedbox: bool,
     skip_upload: bool,
+    skip_rename_parent: bool,
     opt_renamer: bool,
     opt_cleanmkv: bool,
-    opt_encoder: bool,
+    opt_metadata: bool,
     opt_nfo: bool,
     opt_torrent: bool,
     opt_prez: bool,
+    opt_encode: bool,
+    opt_screenshot: bool,
+    opt_seedbox: bool,
     opt_upload: bool,
+    opt_rename_parent: bool,
     all_modules: bool,
     preset: str | None,
     preview: bool,
@@ -1482,7 +1554,7 @@ def pipeline_command(
     create_preset: bool,
     verbose: int,
 ) -> None:
-    """Execute the complete pipeline: renamer → cleanmkv → nfo → torrent → prez → upload."""
+    """Execute the complete pipeline workflow."""
     configure_verbosity(verbose)
     if is_verbose():
         logger.info(f"Pipeline execution with verbosity level {verbose}")
@@ -1498,40 +1570,56 @@ def pipeline_command(
         opt_in.append("renamer")
     if opt_cleanmkv:
         opt_in.append("cleanmkv")
-    if opt_encoder:
-        opt_in.append("encoder")
+    if opt_metadata:
+        opt_in.append("metadata")
     if opt_nfo:
         opt_in.append("nfo")
     if opt_torrent:
         opt_in.append("torrent")
     if opt_prez:
         opt_in.append("prez")
+    if opt_encode:
+        opt_in.append("encode")
+    if opt_screenshot:
+        opt_in.append("screenshot")
+    if opt_seedbox:
+        opt_in.append("seedbox")
     if opt_upload:
         opt_in.append("upload")
+    if opt_rename_parent:
+        opt_in.append("rename-parent")
 
     skip_requested = any(
         (
             skip_renamer,
             skip_cleanmkv,
-            skip_encoder,
+            skip_metadata,
             skip_nfo,
             skip_torrent,
             skip_prez,
+            skip_encode,
+            skip_screenshot,
+            skip_seedbox,
             skip_upload,
+            skip_rename_parent,
         )
     )
     sel_tmpl: bool | None = None
     sel_terms: bool | None = None
     if all_modules:
         final_enabled: tuple[str, ...] | None = _apply_skip_flags(
-            PIPELINE_MODULES_DEFAULT,
+            tuple(PIPELINE_MODULES),
             skip_renamer=skip_renamer,
             skip_cleanmkv=skip_cleanmkv,
-            skip_encoder=skip_encoder,
+            skip_metadata=skip_metadata,
             skip_nfo=skip_nfo,
             skip_torrent=skip_torrent,
             skip_prez=skip_prez,
+            skip_encode=skip_encode,
+            skip_screenshot=skip_screenshot,
+            skip_seedbox=skip_seedbox,
             skip_upload=skip_upload,
+            skip_rename_parent=skip_rename_parent,
         )
         final_select: bool | None = False
     elif opt_in:
@@ -1539,11 +1627,15 @@ def pipeline_command(
             tuple(opt_in),
             skip_renamer=skip_renamer,
             skip_cleanmkv=skip_cleanmkv,
-            skip_encoder=skip_encoder,
+            skip_metadata=skip_metadata,
             skip_nfo=skip_nfo,
             skip_torrent=skip_torrent,
             skip_prez=skip_prez,
+            skip_encode=skip_encode,
+            skip_screenshot=skip_screenshot,
+            skip_seedbox=skip_seedbox,
             skip_upload=skip_upload,
+            skip_rename_parent=skip_rename_parent,
         )
         final_select = False
     elif skip_requested:
@@ -1551,11 +1643,15 @@ def pipeline_command(
             PIPELINE_MODULES_DEFAULT,
             skip_renamer=skip_renamer,
             skip_cleanmkv=skip_cleanmkv,
-            skip_encoder=skip_encoder,
+            skip_metadata=skip_metadata,
             skip_nfo=skip_nfo,
             skip_torrent=skip_torrent,
             skip_prez=skip_prez,
+            skip_encode=skip_encode,
+            skip_screenshot=skip_screenshot,
+            skip_seedbox=skip_seedbox,
             skip_upload=skip_upload,
+            skip_rename_parent=skip_rename_parent,
         )
         final_select = False
     else:
@@ -1612,11 +1708,15 @@ def pipeline_command(
             auto_mode=auto_mode,
             skip_renamer=skip_renamer,
             skip_cleanmkv=skip_cleanmkv,
-            skip_encoder=skip_encoder,
+            skip_metadata=skip_metadata,
             skip_nfo=skip_nfo,
             skip_torrent=skip_torrent,
             skip_prez=skip_prez,
+            skip_encode=skip_encode,
+            skip_screenshot=skip_screenshot,
+            skip_seedbox=skip_seedbox,
             skip_upload=skip_upload,
+            skip_rename_parent=skip_rename_parent,
         )
     )
 

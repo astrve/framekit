@@ -161,3 +161,17 @@ def test_international_profile_uses_neutral_multi_tag():
 
     assert result == "SHOW.S01E01.MULTI.1080P.WEB.EAC3.5.1.H265"
     assert resulting_lang == "MULTI"
+
+
+def test_non_bucket_resolution_is_normalized_to_preferred_bucket():
+    """Non-standard resolution tokens (e.g. 1012P) must be replaced, not duplicated."""
+    result, *_ = normalize_name_part(
+        "Movie.1012p.WEB-DL.DDP.5.1.H.264",
+        preferred_resolution="1080P",
+        preferred_audio_tag="EAC3.5.1",
+        preferred_video_tag="H264",
+    )
+    assert "1012P" not in result
+    assert result.count("1080P") == 1
+    assert "MULTI.VFF" in result
+    assert result.endswith(".WEB.EAC3.5.1.H264")

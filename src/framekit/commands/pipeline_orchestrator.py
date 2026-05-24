@@ -9,6 +9,7 @@ This module handles the core pipeline execution flow, including:
 
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -20,9 +21,13 @@ from framekit.commands.pipeline_preview import print_pipeline_report
 from framekit.commands.pipeline_steps import (
     _cleanmkv_step,
     _encoder_step,
+    _metadata_step,
     _nfo_step,
     _prez_step,
+    _rename_parent_step,
     _renamer_step,
+    _screenshot_step,
+    _seedbox_step,
     _torrent_step,
     _upload_step,
 )
@@ -48,11 +53,16 @@ def _module_label(name: str) -> str:
     return {
         "renamer": tr("pipeline.step.renamer", default="Renamer"),
         "cleanmkv": tr("pipeline.step.cleanmkv", default="CleanMKV"),
+        "metadata": tr("pipeline.step.metadata", default="Metadata (NFO + Prez)"),
+        "encode": tr("pipeline.step.encoder", default="Encoder"),
         "encoder": tr("pipeline.step.encoder", default="Encoder"),
-        "nfo": tr("pipeline.step.nfo", default="NFO + Metadata"),
+        "nfo": tr("pipeline.step.nfo", default="NFO"),
         "torrent": tr("pipeline.step.torrent", default="Torrent"),
         "prez": tr("pipeline.step.prez", default="Prez"),
+        "screenshot": tr("pipeline.step.screenshot", default="Screenshot"),
+        "seedbox": tr("pipeline.step.seedbox", default="Seedbox"),
         "upload": tr("pipeline.step.upload", default="Upload"),
+        "rename-parent": tr("pipeline.step.rename_parent", default="Rename parent"),
     }.get(name, name)
 
 
@@ -147,14 +157,20 @@ def _run_pipeline_with_progress(
     Returns:
         Dictionary mapping module names to result dictionaries
     """
-    import contextlib
-
     results = {}
 
     for i, (module_name, label, callback) in enumerate(steps, 1):
         if step_callback is not None:
             with contextlib.suppress(Exception):
                 step_callback(module_name, label)
+        else:
+            print_info(
+                tr(
+                    "pipeline.step.running",
+                    default="{label} in progress...",
+                    label=label,
+                )
+            )
 
         start_time = time.time()
         try:
@@ -266,10 +282,20 @@ def _build_phase1_steps(
         elif effective_remove_terms:
             terms_for_step = effective_remove_terms
             steps.append(
-                ("renamer", _module_label("renamer"), lambda: _renamer_step(root, terms_for_step))
+                (
+                    "renamer",
+                    _module_label("renamer"),
+                    lambda: _renamer_step(root, terms_for_step, auto_mode=auto_mode),
+                )
             )
         else:
-            steps.append(("renamer", _module_label("renamer"), lambda: _renamer_step(root)))
+            steps.append(
+                (
+                    "renamer",
+                    _module_label("renamer"),
+                    lambda: _renamer_step(root, auto_mode=auto_mode),
+                )
+            )
 
     if "cleanmkv" in selected_modules:
         if dry_run:
@@ -307,6 +333,7 @@ def _build_phase1_steps(
 
 def _build_phase2_steps(
     *,
+    root: Path,
     work_folder: Path,
     output_folder: Path,
     selected_modules: set[str],
@@ -322,22 +349,38 @@ def _build_phase2_steps(
     context,
 ) -> list[PipelineStep]:
     output_steps: list[PipelineStep] = []
-    if "encoder" in selected_modules:
+    if "metadata" in selected_modules:
+        output_steps.append(
+            (
+                "metadata",
+                _module_label("metadata"),
+                lambda: _metadata_step(
+                    work_folder,
+                    nfo_locale,
+                    context,
+                    settings,
+                    metadata_enabled=metadata_enabled,
+                    auto_mode=auto_mode,
+                ),
+            )
+        )
+
+    if "encode" in selected_modules:
         if dry_run:
             from framekit.commands.pipeline_steps import _encoder_step_dry_run
 
             output_steps.append(
                 (
-                    "encoder",
-                    _module_label("encoder"),
+                    "encode",
+                    _module_label("encode"),
                     lambda: _encoder_step_dry_run(work_folder, settings),
                 )
             )
         else:
             output_steps.append(
                 (
-                    "encoder",
-                    _module_label("encoder"),
+                    "encode",
+                    _module_label("encode"),
                     lambda: _encoder_step(work_folder, settings),
                 )
             )
@@ -391,6 +434,48 @@ def _build_phase2_steps(
             )
         )
 
+    if "screenshot" in selected_modules:
+        if dry_run:
+            output_steps.append(
+                (
+                    "screenshot",
+                    _module_label("screenshot"),
+                    _dry_run_step(
+                        "pipeline.dry_run.screenshot",
+                        "[dry-run] Would extract screenshots from release videos",
+                    ),
+                )
+            )
+        else:
+            output_steps.append(
+                (
+                    "screenshot",
+                    _module_label("screenshot"),
+                    lambda: _screenshot_step(work_folder, context, settings),
+                )
+            )
+
+    if "seedbox" in selected_modules:
+        if dry_run:
+            output_steps.append(
+                (
+                    "seedbox",
+                    _module_label("seedbox"),
+                    _dry_run_step(
+                        "pipeline.dry_run.seedbox",
+                        "[dry-run] Would push release payload to configured seedbox",
+                    ),
+                )
+            )
+        else:
+            output_steps.append(
+                (
+                    "seedbox",
+                    _module_label("seedbox"),
+                    lambda: _seedbox_step(output_folder, settings, auto_mode=auto_mode),
+                )
+            )
+
     if "upload" in selected_modules:
         if dry_run:
             output_steps.append(
@@ -412,7 +497,31 @@ def _build_phase2_steps(
                     lambda: _upload_step(work_folder, context, settings, _upload_auto),
                 )
             )
+
     return output_steps
+
+
+def _auto_enable_seedbox(selected_modules: set[str], settings: dict) -> set[str]:
+    """Auto-enable seedbox before upload when config is valid and reachable."""
+    if "upload" not in selected_modules or "seedbox" in selected_modules:
+        return selected_modules
+    try:
+        from framekit.commands.seedbox import seedbox_ready_for_pipeline
+
+        ready, _message = seedbox_ready_for_pipeline(settings)
+    except Exception:
+        ready = False
+    if not ready:
+        return selected_modules
+    updated = set(selected_modules)
+    updated.add("seedbox")
+    print_info(
+        tr(
+            "pipeline.seedbox.auto_enabled",
+            default="Seedbox module auto-enabled (valid configuration detected).",
+        )
+    )
+    return updated
 
 
 def _status_and_details(step_result: dict) -> tuple[str, str]:
@@ -443,6 +552,27 @@ def _first_failure_code(phase_results: dict[str, dict]) -> int:
     return 1
 
 
+def _artifacts_ready_for_rename_parent(
+    selected_modules: set[str],
+    phase_results: dict[str, dict],
+) -> tuple[bool, str]:
+    required_modules = [name for name in ("nfo", "torrent", "prez") if name in selected_modules]
+    if not required_modules:
+        return False, tr(
+            "pipeline.rename_parent.skipped.no_artifacts_selected",
+            default="Skipped: no artifacts module selected (nfo/torrent/prez).",
+        )
+    for module_name in required_modules:
+        module_result = phase_results.get(module_name)
+        if not module_result or not module_result.get("success", False):
+            return False, tr(
+                "pipeline.rename_parent.skipped.artifact_failed",
+                default="Skipped: required artifact module failed ({module}).",
+                module=module_name,
+            )
+    return True, ""
+
+
 def execute_pipeline_modules(
     *,
     work_folder: Path,
@@ -462,6 +592,7 @@ def execute_pipeline_modules(
     preset_config: dict | None = None,
     auto_mode: bool = False,
     dry_run: bool = False,
+    source_root: Path | None = None,
 ) -> int:
     """Execute all selected pipeline modules in sequence.
 
@@ -493,7 +624,7 @@ def execute_pipeline_modules(
         release_payload_folder,
     )
 
-    root = work_folder
+    root = source_root or work_folder
 
     # Create Release/ structure upfront so Phase-2 output steps always have a home,
     # even when cleanmkv fails or is skipped.
@@ -501,6 +632,8 @@ def execute_pipeline_modules(
         release_artifacts_folder(root).mkdir(parents=True, exist_ok=True)
 
     report_rows: list[tuple[str, str, str, float]] = []
+    selected_modules = _auto_enable_seedbox(selected_modules, settings)
+
     steps = _build_phase1_steps(
         root=root,
         selected_modules=selected_modules,
@@ -562,6 +695,7 @@ def execute_pipeline_modules(
 
     context = PipelineContext(dry_run=dry_run)
     output_steps = _build_phase2_steps(
+        root=root,
         work_folder=work_folder,
         output_folder=output_folder,
         selected_modules=selected_modules,
@@ -569,7 +703,7 @@ def execute_pipeline_modules(
         nfo_locale=nfo_locale,
         nfo_mode=nfo_mode,
         select_templates=select_templates,
-        metadata_enabled=metadata_enabled,
+        metadata_enabled=metadata_enabled and ("metadata" in selected_modules),
         announce=announce,
         preset=preset,
         auto_mode=auto_mode,
@@ -582,6 +716,65 @@ def execute_pipeline_modules(
         output_steps, stop_on_error=stop_on_error, step_callback=step_callback
     )
     failures += _collect_phase_results(report_rows, phase2_results)
+
+    if "rename-parent" in selected_modules:
+        rename_label = _module_label("rename-parent")
+        should_run_rename_parent, skip_reason = _artifacts_ready_for_rename_parent(
+            selected_modules,
+            phase2_results,
+        )
+        if should_run_rename_parent:
+            if step_callback is not None:
+                with contextlib.suppress(Exception):
+                    step_callback("rename-parent", rename_label)
+            else:
+                print_info(
+                    tr(
+                        "pipeline.step.running",
+                        default="{label} in progress...",
+                        label=rename_label,
+                    )
+                )
+            rename_start = time.time()
+            rename_code = _rename_parent_step(root, settings, dry_run=dry_run)
+            rename_elapsed = time.time() - rename_start
+            rename_success = rename_code == 0
+            phase2_results["rename-parent"] = {
+                "success": rename_success,
+                "code": rename_code,
+                "elapsed": rename_elapsed,
+                "label": rename_label,
+                "error": None
+                if rename_success
+                else tr(
+                    "pipeline.error.step_exit_code",
+                    default="{label}: exit code {code}",
+                    label=rename_label,
+                    code=rename_code,
+                ),
+            }
+            status_str, details = _status_and_details(phase2_results["rename-parent"])
+            report_rows.append(("rename-parent", status_str, details, rename_elapsed))
+            if not rename_success:
+                failures += 1
+        else:
+            phase2_results["rename-parent"] = {
+                "success": False,
+                "code": -1,
+                "elapsed": 0.0,
+                "label": rename_label,
+                "skipped": True,
+                "error": skip_reason,
+            }
+            report_rows.append(
+                (
+                    "rename-parent",
+                    tr("common.skipped", default="Skipped"),
+                    skip_reason,
+                    0.0,
+                )
+            )
+
     if result_callback is not None:
         result_callback({**phase1_results, **phase2_results})
 

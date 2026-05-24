@@ -19,9 +19,8 @@ from framekit.core.settings import (
 )
 
 
-def test_schema_version_is_v14() -> None:
-    assert SETTINGS_SCHEMA_VERSION == 14
-    assert DEFAULT_SETTINGS["schema_version"] == 14
+def test_schema_version_matches_defaults() -> None:
+    assert DEFAULT_SETTINGS["schema_version"] == SETTINGS_SCHEMA_VERSION
 
 
 def test_default_settings_no_longer_carry_removed_keys() -> None:
@@ -49,7 +48,7 @@ def test_migrate_v11_strips_removed_general_keys() -> None:
 
     migrated = _migrate_legacy_settings(legacy)
 
-    assert migrated["schema_version"] == 14
+    assert migrated["schema_version"] == SETTINGS_SCHEMA_VERSION
     assert "path_resolution_mode" not in migrated["general"]
     assert "export_json_reports" not in migrated["general"]
     assert "dry_run_by_default" not in migrated["general"]
@@ -94,7 +93,7 @@ def test_normalize_pipeline_defaults_stop_on_error_false() -> None:
 def test_store_round_trip_preserves_schema(tmp_path: Path) -> None:
     store = SettingsStore(tmp_path / "framekit.yaml")
     data = store.load()
-    assert data["schema_version"] == 14
+    assert data["schema_version"] == SETTINGS_SCHEMA_VERSION
     assert "tmdb_api_key" not in data["metadata"]
     assert "path_resolution_mode" not in data["general"]
 
@@ -102,7 +101,7 @@ def test_store_round_trip_preserves_schema(tmp_path: Path) -> None:
     store.save(data)
     reloaded = store.load()
     assert reloaded["metadata"]["tmdb_read_access_token"] == "eyJabc.def.ghi"
-    assert reloaded["schema_version"] == 14
+    assert reloaded["schema_version"] == SETTINGS_SCHEMA_VERSION
 
 
 def test_store_creates_file_with_default_content(tmp_path: Path) -> None:
@@ -111,10 +110,16 @@ def test_store_creates_file_with_default_content(tmp_path: Path) -> None:
     store.ensure_exists()
     assert yaml_path.exists()
     text = yaml_path.read_text(encoding="utf-8")
-    assert "schema_version: 14" in text
+    assert f"schema_version: {SETTINGS_SCHEMA_VERSION}" in text
     assert "tmdb_api_key" not in text
     assert "path_resolution_mode" not in text
 
 
 def test_plugins_allowlist_defaults_to_empty() -> None:
     assert DEFAULT_SETTINGS["plugins"]["allowed"] == []
+
+
+def test_seedbox_defaults_include_profile_mapping_and_concurrency() -> None:
+    seedbox = DEFAULT_SETTINGS["seedbox"]
+    assert seedbox["default_by_profile"] == {}
+    assert seedbox["max_concurrent_uploads"] == 3

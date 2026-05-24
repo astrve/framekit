@@ -1093,8 +1093,75 @@ def _run_security_step(settings: dict) -> None:
     )
     if enable_security is None:
         raise SetupCancelled
-    settings.setdefault("security", {})["enabled"] = bool(enable_security)
+    security = settings.setdefault("security", {})
+    security["enabled"] = bool(enable_security)
     if enable_security:
+        _show_step(
+            tr("setup.security_storage_title", default="Secret storage backend"),
+            tr(
+                "setup.security_storage_body",
+                default=(
+                    "Choose where encryption keys are stored.\n"
+                    "Keyring uses your OS secure storage. File mode uses a local vault file."
+                ),
+            ),
+            current_step="Security",
+            all_steps=SETUP_STEPS,
+        )
+        current_storage = str(security.get("key_storage", "keyring") or "keyring").lower()
+        storage_choice = choose_option(
+            title=tr("setup.security_storage_choice", default="Choose secret storage backend"),
+            options=[
+                ChoiceOption(
+                    "keyring",
+                    tr("setup.security_storage.keyring", default="System keyring"),
+                    tr(
+                        "setup.security_storage.keyring_hint",
+                        default="Recommended. Uses secure OS credential store.",
+                    ),
+                ),
+                ChoiceOption(
+                    "file",
+                    tr("setup.security_storage.file", default="Local encrypted file"),
+                    tr(
+                        "setup.security_storage.file_hint",
+                        default="Portable, but requires managing the vault file path.",
+                    ),
+                ),
+            ],
+            preferred_value=current_storage if current_storage in {"keyring", "file"} else "keyring",
+        )
+        if storage_choice is None:
+            raise SetupCancelled
+        security["key_storage"] = storage_choice
+        if storage_choice == "file":
+            default_vault = str(security.get("vault_path", "") or "").strip()
+            if not default_vault:
+                default_vault = str(get_config_dir() / "security.vault")
+            vault_path = click.prompt("Vault file path", default=default_vault).strip()
+            security["vault_path"] = vault_path
+        else:
+            security["vault_path"] = ""
+        auto_migrate = choose_yes_no(
+            tr(
+                "setup.security_auto_migrate",
+                default="Migrate existing plaintext secrets to encrypted storage automatically?",
+            ),
+            default_yes=bool(security.get("auto_migrate", True)),
+        )
+        if auto_migrate is None:
+            raise SetupCancelled
+        security["auto_migrate"] = bool(auto_migrate)
+        backup_before_changes = choose_yes_no(
+            tr(
+                "setup.security_backup_before_changes",
+                default="Create backup before changing encrypted secrets?",
+            ),
+            default_yes=bool(security.get("backup_before_changes", True)),
+        )
+        if backup_before_changes is None:
+            raise SetupCancelled
+        security["backup_before_changes"] = bool(backup_before_changes)
         print_success(
             tr(
                 "setup.success.security_enabled",
@@ -1358,75 +1425,72 @@ def maybe_offer_first_time_setup() -> None:
     help=tr(
         "cli.setup.help",
         default=(
-            "Run the guided first-time setup wizard to configure Framekit.\n\n"
-            "The setup wizard walks you through essential configuration steps, including interface "
-            "language, default folders, TMDb API credentials, and module preferences.\n\n"
+            "Run the Framekit setup wizard.\n\n"
+            "The setup command now uses the wizard flow only, with Normal and Advanced modes.\n\n"
             "Quick examples:\n"
-            "  fk setup                                # Run full setup wizard\n"
-            "  fk setup --wizard                       # Run new profile-based wizard\n"
+            "  fk setup                                # Wizard in Normal mode\n"
+            "  fk setup --mode advanced                # Wizard in Advanced mode\n"
             "  fk init                                 # Same as setup\n\n"
-            "Configuration steps:\n"
-            "  1. Interface language selection\n"
-            "  2. Default folder paths for each module\n"
-            "  3. Metadata provider setup (TMDb API token)\n"
-            "  4. NFO template selection\n"
-            "  5. Prez template preferences\n"
-            "  6. Torrent announce URL configuration\n"
-            "  7. Logo import (optional)\n\n"
-            "Features:\n"
-            "  • Interactive step-by-step guidance\n"
-            "  • Smart defaults based on your system\n"
-            "  • Configuration validation\n"
-            "  • Skip completed steps on re-run\n"
-            "  • Summary of all settings\n\n"
-            "Best practices:\n"
-            "  • Run setup immediately after installation\n"
-            "  • Have your TMDb API token ready (get from themoviedb.org)\n"
-            "  • Choose workspace paths carefully\n"
-            "  • Re-run setup anytime to update configuration\n\n"
             "Related commands: settings, doctor, metadata"
         ),
+    ),
+)
+@click.option(
+    "--mode",
+    "-m",
+    type=click.Choice(["normal", "advanced"], case_sensitive=False),
+    default="normal",
+    show_default=True,
+    help=tr(
+        "cli.setup.mode.help",
+        default="Wizard mode: normal (essential) or advanced (full options)",
     ),
 )
 @click.option(
     "--wizard",
     "-w",
     is_flag=True,
+    hidden=True,
     help=tr(
         "cli.setup.wizard.help",
-        default="Use the new profile-based setup wizard (beginner/advanced/custom)",
+        default="Deprecated. Setup already uses the wizard flow.",
     ),
 )
 @click.option(
     "--profile",
     "-p",
-    type=click.Choice(["beginner", "advanced", "custom"], case_sensitive=False),
-    default="beginner",
+    type=click.Choice(["normal", "advanced", "beginner", "custom"], case_sensitive=False),
+    default=None,
+    hidden=True,
     help=tr(
         "cli.setup.profile.help",
-        default="Setup profile to use with --wizard flag",
+        default="Deprecated profile alias for compatibility.",
     ),
 )
-def setup_command(wizard: bool, profile: str) -> int:
+def setup_command(mode: str, wizard: bool, profile: str | None) -> int:
     """Handle setup command."""
-    if wizard:
-        from framekit.modules.setup import SetupWizard, WizardCancelled
+    _ = wizard  # kept for backward compatibility
+    from framekit.modules.setup import SetupWizard, WizardCancelled
 
-        try:
-            setup_wizard = SetupWizard(profile=profile)
-            setup_wizard.run()
-            return 0
-        except WizardCancelled:
-            console.print(
-                tr("wizard.cancelled", default="Setup wizard cancelled."),
-                style="yellow",
-            )
-            return 1
-        except Exception as e:
-            console.print(
-                tr("wizard.error", default=f"Setup wizard error: {e}"),
-                style="red",
-            )
-            return 1
-    else:
-        return run_guided_setup(mark_completed=True)
+    requested = (profile or mode or "normal").strip().lower()
+    if requested in {"beginner", "custom"}:
+        requested = "normal"
+    if requested not in {"normal", "advanced"}:
+        requested = "normal"
+
+    try:
+        setup_wizard = SetupWizard(profile=requested)
+        setup_wizard.run()
+        return 0
+    except WizardCancelled:
+        console.print(
+            tr("wizard.cancelled", default="Setup wizard cancelled."),
+            style="yellow",
+        )
+        return 1
+    except Exception as e:
+        console.print(
+            tr("wizard.error", default=f"Setup wizard error: {e}"),
+            style="red",
+        )
+        return 1

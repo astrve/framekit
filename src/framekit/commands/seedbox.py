@@ -8,6 +8,7 @@ Upload history is written to ~/.config/framekit/seedbox/history.ndjson.
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import shutil
 from datetime import UTC, datetime
@@ -84,14 +85,60 @@ def _find_seedbox(settings: dict, name: str) -> dict | None:
     return None
 
 
-def _get_default_seedbox(settings: dict) -> dict | None:
+def _active_profile_name() -> str | None:
+    try:
+        from framekit.core.settings.profiles import get_active_profile
+
+        active = get_active_profile()
+    except Exception:
+        return None
+    if not active:
+        return None
+    profile_name = str(active).strip()
+    return profile_name or None
+
+
+def _default_by_profile(settings: dict) -> dict[str, str]:
     cfg = _get_seedbox_cfg(settings)
-    default_name = cfg.get("default", "")
+    raw = cfg.get("default_by_profile", {})
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(profile).strip(): str(seedbox_name).strip()
+        for profile, seedbox_name in raw.items()
+        if str(profile).strip() and str(seedbox_name).strip()
+    }
+
+
+def _configured_default_seedbox_name(settings: dict, *, profile_name: str | None = None) -> str:
+    profile_defaults = _default_by_profile(settings)
+    if profile_name and profile_name in profile_defaults:
+        return profile_defaults[profile_name]
+
+    cfg = _get_seedbox_cfg(settings)
+    default_name = str(cfg.get("default", "") or "").strip()
     if default_name:
-        sb = _find_seedbox(settings, default_name)
+        return default_name
+
+    # Fall back to first configured seedbox
+    seedboxes = _list_seedboxes(settings)
+    return str(seedboxes[0].get("name", "") or "").strip() if seedboxes else ""
+
+
+def _get_default_seedbox(settings: dict, *, profile_name: str | None = None) -> dict | None:
+    preferred_name = _configured_default_seedbox_name(settings, profile_name=profile_name)
+    if preferred_name:
+        sb = _find_seedbox(settings, preferred_name)
         if sb:
             return sb
-    # Fall back to first configured seedbox
+
+    # Profile mapping can become stale if a seedbox was removed.
+    cfg_default = str(_get_seedbox_cfg(settings).get("default", "") or "").strip()
+    if cfg_default and cfg_default != preferred_name:
+        sb = _find_seedbox(settings, cfg_default)
+        if sb:
+            return sb
+
     seedboxes = _list_seedboxes(settings)
     return seedboxes[0] if seedboxes else None
 
@@ -108,7 +155,16 @@ def _resolve_seedbox(settings: dict, name: str | None) -> dict | None:
                 )
             )
         return sb
-    sb = _get_default_seedbox(settings)
+    active_profile = _active_profile_name()
+    profile_default = ""
+    if active_profile:
+        profile_default = _default_by_profile(settings).get(active_profile, "")
+    if profile_default and not _find_seedbox(settings, profile_default):
+        print_warning(
+            f"Active profile '{active_profile}' maps to unknown seedbox '{profile_default}'. Falling back."
+        )
+
+    sb = _get_default_seedbox(settings, profile_name=active_profile)
     if not sb:
         print_error(
             tr(
@@ -116,16 +172,29 @@ def _resolve_seedbox(settings: dict, name: str | None) -> dict | None:
                 default="No seedbox configured. Use 'fk seedbox add' to register one.",
             )
         )
+    elif active_profile and profile_default and sb.get("name") == profile_default:
+        print_info(f"Using seedbox '{profile_default}' mapped to active profile '{active_profile}'.")
     return sb
 
 
-def _save_seedboxes(store: SettingsStore, seedboxes: list[dict], default: str = "") -> None:
+def _save_seedboxes(
+    store: SettingsStore,
+    seedboxes: list[dict],
+    default: str | None = None,
+    *,
+    default_by_profile: dict[str, str] | None = None,
+    max_concurrent_uploads: int | None = None,
+) -> None:
     data = store.load()
     if "seedbox" not in data:
         data["seedbox"] = {}
     data["seedbox"]["seedboxes"] = seedboxes
-    if default:
+    if default is not None:
         data["seedbox"]["default"] = default
+    if default_by_profile is not None:
+        data["seedbox"]["default_by_profile"] = default_by_profile
+    if max_concurrent_uploads is not None:
+        data["seedbox"]["max_concurrent_uploads"] = max(1, int(max_concurrent_uploads))
     store.save(data)
 
 
@@ -134,6 +203,88 @@ def _save_seedboxes(store: SettingsStore, seedboxes: list[dict], default: str = 
 
 def _find_rclone() -> str | None:
     return shutil.which("rclone")
+
+
+def _list_rclone_remotes(rclone_path: str) -> tuple[set[str], str | None]:
+    try:
+        result = run_safe(
+            [rclone_path, "listremotes"],
+            capture_output=True,
+            timeout=15,
+            check=False,
+            log_label="rclone listremotes",
+        )
+    except Exception as exc:
+        return set(), str(exc)
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout or "").strip() or "listremotes failed"
+        return set(), message
+    remotes = {
+        line.rstrip(":").strip()
+        for line in result.stdout.splitlines()
+        if line.rstrip(":").strip()
+    }
+    return remotes, None
+
+
+def _rclone_remote_exists(rclone_path: str, remote: str) -> tuple[bool, str | None]:
+    remotes, error = _list_rclone_remotes(rclone_path)
+    if error:
+        return False, error
+    if remote in remotes:
+        return True, None
+    return False, f"Remote '{remote}' not found in rclone config."
+
+
+def _remote_target(remote: str, base_path: str | None) -> str:
+    path_value = str(base_path or "/").strip() or "/"
+    if path_value.startswith("/"):
+        return f"{remote}:{path_value}"
+    return f"{remote}:/{path_value}"
+
+
+def _validate_remote_path_access(
+    rclone_path: str, remote: str, base_path: str
+) -> tuple[bool, str | None]:
+    target = _remote_target(remote, base_path)
+    try:
+        result = run_safe(
+            [rclone_path, "lsf", target, "--max-depth", "1"],
+            capture_output=True,
+            timeout=20,
+            check=False,
+            log_label="rclone lsf",
+        )
+    except Exception as exc:
+        return False, str(exc)
+    if result.returncode == 0:
+        return True, None
+    message = (result.stderr or result.stdout or "").strip() or "unable to access remote path"
+    return False, message
+
+
+_BWLIMIT_RE = re.compile(r"^(off|\d+(\.\d+)?[kKmMgGtTpP]?)$")
+
+
+def _validate_bandwidth_limit(value: str) -> bool:
+    raw = value.strip()
+    if not raw:
+        return True
+    return bool(_BWLIMIT_RE.match(raw))
+
+
+def _positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _seedbox_transfer_limit(settings: dict, sb: dict) -> int:
+    cfg = _get_seedbox_cfg(settings)
+    default_limit = _positive_int(cfg.get("max_concurrent_uploads", 3), 3)
+    return _positive_int(sb.get("max_concurrent_uploads", default_limit), default_limit)
 
 
 def _run_rclone(args: list[str], *, dry_run: bool = False, verbose: bool = False) -> int:
@@ -320,6 +471,7 @@ def run_seedbox_push(
     dry_run: bool = False,
     verbose: bool = False,
     allow_cwd: bool = False,
+    non_interactive: bool = False,
 ) -> int:
     """Upload local files to seedbox via rclone copy."""
     print_module_banner("Seedbox — Push")
@@ -362,6 +514,14 @@ def run_seedbox_push(
         if rclone:
             min_free = float(sb.get("min_free_gb", 5))
             if not _check_disk_space(rclone, remote, min_free):
+                if non_interactive:
+                    print_error(
+                        tr(
+                            "seedbox.error.low_disk_abort",
+                            default="Upload aborted: remote free disk is below configured minimum.",
+                        )
+                    )
+                    return 1
                 if not click.confirm(
                     tr("seedbox.confirm.low_disk", default="Continue despite low disk space?"),
                     default=False,
@@ -395,7 +555,8 @@ def run_seedbox_push(
             )
         )
 
-        rclone_args = ["copy", str(local_path), dest, "--progress"]
+        transfers = _seedbox_transfer_limit(settings, sb)
+        rclone_args = ["copy", str(local_path), dest, "--progress", "--transfers", str(transfers)]
         bw_limit = sb.get("bandwidth_limit", "")
         if bw_limit:
             rclone_args += ["--bwlimit", bw_limit]
@@ -530,6 +691,7 @@ def run_seedbox_status(*, seedbox_name: str | None) -> int:
     table.add_row("Name", sb.get("name", ""))
     table.add_row("rclone remote", remote)
     table.add_row("Base path", sb.get("remote_base_path", "/"))
+    table.add_row("Max concurrent uploads", str(_seedbox_transfer_limit(settings, sb)))
     bw = sb.get("bandwidth_limit", "") or "unlimited"
     table.add_row("Bandwidth limit", bw)
     table.add_row("Disk check", "enabled" if sb.get("disk_check_enabled", True) else "disabled")
@@ -543,6 +705,32 @@ def run_seedbox_status(*, seedbox_name: str | None) -> int:
         table.add_row("Post-upload command", post_cmd)
     table.add_row("rclone path", rclone)
     console.print(table)
+    remote_ok, remote_error = _rclone_remote_exists(rclone, remote)
+    if not remote_ok:
+        print_error(
+            tr(
+                "seedbox.error.remote_not_found",
+                default="Remote '{remote}' was not found in rclone config.",
+                remote=remote,
+            )
+        )
+        if remote_error:
+            print_warning(remote_error)
+        return 1
+
+    base_path = str(sb.get("remote_base_path", "/") or "/").strip() or "/"
+    path_ok, path_error = _validate_remote_path_access(rclone, remote, base_path)
+    if not path_ok:
+        print_error(
+            tr(
+                "seedbox.error.base_path_unreachable",
+                default="Cannot access remote base path: {target}",
+                target=_remote_target(remote, base_path),
+            )
+        )
+        if path_error:
+            print_warning(path_error)
+        return 1
 
     print_info(tr("seedbox.status.checking", default="Checking remote disk usage..."))
     return _run_rclone(["about", f"{remote}:"])
@@ -558,6 +746,8 @@ def run_seedbox_explain() -> int:
     table.add_row("backend", "rclone copy")
     table.add_row("credentials", "stored by rclone, not Framekit")
     table.add_row("history", str(_history_path()))
+    table.add_row("profile defaults", "optional: map active Framekit profile -> seedbox")
+    table.add_row("concurrency", "uses rclone --transfers from seedbox max_concurrent_uploads")
     table.add_row("push safety", "path required; use --cwd to opt into current directory")
     table.add_row("pull safety", "destination required; use --cwd to opt into current directory")
     table.add_row("advanced", "post_upload_command runs a local command from config")
@@ -573,24 +763,83 @@ def run_seedbox_doctor() -> int:
     seedboxes = _list_seedboxes(settings)
     errors: list[str] = []
     warnings: list[str] = []
-    if not _find_rclone():
+    rclone = _find_rclone()
+    if not rclone:
         warnings.append("rclone not found on PATH.")
+    raw_global_limit = _get_seedbox_cfg(settings).get("max_concurrent_uploads", 3)
+    try:
+        global_max_concurrent = int(raw_global_limit)
+    except (TypeError, ValueError):
+        errors.append("seedbox.max_concurrent_uploads must be numeric")
+        global_max_concurrent = 3
+    if global_max_concurrent < 1:
+        errors.append("seedbox.max_concurrent_uploads must be >= 1")
+        global_max_concurrent = 3
+    seen_names: set[str] = set()
+    seen_pairs: set[tuple[str, str]] = set()
     for sb in seedboxes:
         name = str(sb.get("name", "") or "")
         remote = str(sb.get("rclone_remote", "") or "")
         base_path = str(sb.get("remote_base_path", "") or "")
         if not name:
             errors.append("seedbox entry missing name")
+        elif name in seen_names:
+            errors.append(f"duplicate seedbox name: {name}")
+        else:
+            seen_names.add(name)
         if not remote:
             errors.append(f"{name or '<unnamed>'}: missing rclone_remote")
         if not base_path:
             errors.append(f"{name or '<unnamed>'}: missing remote_base_path")
+        if remote and base_path:
+            pair = (remote, base_path)
+            if pair in seen_pairs:
+                errors.append(
+                    f"{name or '<unnamed>'}: duplicate remote/base path combination ({remote}:{base_path})"
+                )
+            else:
+                seen_pairs.add(pair)
         try:
-            float(sb.get("min_free_gb", 5))
+            min_free = float(sb.get("min_free_gb", 5))
+            if min_free <= 0:
+                errors.append(f"{name or '<unnamed>'}: min_free_gb must be > 0")
         except (TypeError, ValueError):
             errors.append(f"{name or '<unnamed>'}: min_free_gb must be numeric")
+        bwlimit = str(sb.get("bandwidth_limit", "") or "").strip()
+        if bwlimit and not _validate_bandwidth_limit(bwlimit):
+            errors.append(f"{name or '<unnamed>'}: invalid bandwidth_limit '{bwlimit}'")
+        try:
+            max_transfers = int(sb.get("max_concurrent_uploads", global_max_concurrent))
+        except (TypeError, ValueError):
+            errors.append(f"{name or '<unnamed>'}: max_concurrent_uploads must be numeric")
+            max_transfers = global_max_concurrent
+        if max_transfers < 1:
+            errors.append(f"{name or '<unnamed>'}: max_concurrent_uploads must be >= 1")
+        if rclone and remote:
+            remote_ok, remote_error = _rclone_remote_exists(rclone, remote)
+            if not remote_ok:
+                errors.append(
+                    f"{name or '<unnamed>'}: rclone remote '{remote}' invalid"
+                    + (f" ({remote_error})" if remote_error else "")
+                )
+            elif base_path:
+                path_ok, path_error = _validate_remote_path_access(rclone, remote, base_path)
+                if not path_ok:
+                    errors.append(
+                        f"{name or '<unnamed>'}: base path inaccessible {_remote_target(remote, base_path)}"
+                        + (f" ({path_error})" if path_error else "")
+                    )
         if sb.get("post_upload_command"):
             warnings.append(f"{name}: post_upload_command is advanced and runs locally.")
+    default_name = str(_get_seedbox_cfg(settings).get("default", "") or "").strip()
+    if default_name and default_name not in seen_names:
+        errors.append(f"default seedbox '{default_name}' is not defined")
+    default_by_profile = _default_by_profile(settings)
+    for profile_name, seedbox_name in default_by_profile.items():
+        if seedbox_name not in seen_names:
+            errors.append(
+                f"profile '{profile_name}' maps to undefined seedbox '{seedbox_name}'"
+            )
     if errors:
         for error in errors:
             print_error(error)
@@ -628,22 +877,41 @@ def _print_wizard_step(title: str, explanation: str, steps: list[str], current: 
 
 
 def _validate_rclone_remote(remote: str) -> bool:
-    """Return True if the remote appears in `rclone listremotes`, or if check cannot run."""
+    """Return True if the remote exists in rclone config."""
     rclone = _find_rclone()
     if not rclone:
-        return True
-    try:
-        result = run_safe(
-            [rclone, "listremotes"],
-            capture_output=True,
-            timeout=10,
-            check=False,
-            log_label="rclone listremotes",
+        return False
+    ok, _error = _rclone_remote_exists(rclone, remote)
+    return ok
+
+
+def seedbox_ready_for_pipeline(settings: dict) -> tuple[bool, str]:
+    """Return whether seedbox can be auto-enabled for pipeline usage."""
+    active_profile = _active_profile_name()
+    sb = _get_default_seedbox(settings, profile_name=active_profile)
+    if not sb:
+        return False, "Seedbox not configured. Use 'fk seedbox add'."
+    rclone = _find_rclone()
+    if not rclone:
+        return False, "rclone not found on PATH."
+    remote = str(sb.get("rclone_remote", "") or "").strip()
+    if not remote:
+        return False, f"Seedbox '{sb.get('name', '<unnamed>')}' has no rclone_remote."
+    exists, remote_error = _rclone_remote_exists(rclone, remote)
+    if not exists:
+        return (
+            False,
+            remote_error
+            or f"Seedbox remote '{remote}' is invalid. Run 'rclone config' then 'fk seedbox add'.",
         )
-        listed = [line.rstrip(":").strip() for line in result.stdout.splitlines() if line.strip()]
-        return remote in listed
-    except Exception:
-        return True
+    base_path = str(sb.get("remote_base_path", "/") or "/").strip() or "/"
+    accessible, path_error = _validate_remote_path_access(rclone, remote, base_path)
+    if not accessible:
+        return (
+            False,
+            f"Seedbox path not reachable: {_remote_target(remote, base_path)} ({path_error or 'unknown error'})",
+        )
+    return True, "ok"
 
 
 def run_seedbox_add(
@@ -658,15 +926,29 @@ def run_seedbox_add(
     store = SettingsStore()
     settings = store.load()
     seedboxes = _list_seedboxes(settings)
+    rclone = _find_rclone()
+    if not rclone:
+        print_error(
+            tr(
+                "seedbox.error.rclone_required_for_add",
+                default=(
+                    "rclone is required to add a seedbox profile.\n"
+                    "Install rclone first, run 'rclone config', then retry."
+                ),
+            )
+        )
+        return 1
 
     STEPS = [
         "Name",
         "rclone Remote",
         "Base Path",
+        "Concurrency",
         "Bandwidth",
         "Disk Check",
         "Categories",
         "Post-upload",
+        "Defaults",
     ]
 
     # ── Step 0: Name ──────────────────────────────────────────────────────────
@@ -706,20 +988,24 @@ def run_seedbox_add(
     if not rclone_remote:
         rclone_remote = click.prompt("  rclone remote name", default=name)
     rclone_remote = (rclone_remote or "").strip()
-
-    if not _validate_rclone_remote(rclone_remote):
-        print_warning(
+    if not rclone_remote:
+        print_error("rclone remote name cannot be empty.")
+        return 1
+    remote_ok, remote_error = _rclone_remote_exists(rclone, rclone_remote)
+    if not remote_ok:
+        print_error(
             tr(
-                "seedbox.warn.remote_not_found",
+                "seedbox.error.remote_not_found",
                 default=(
-                    "Remote '{remote}' was not found in 'rclone listremotes'.\n"
-                    "  Make sure it exists in your rclone config before uploading."
+                    "Remote '{remote}' was not found in rclone config.\n"
+                    "Run 'rclone config' then retry."
                 ),
                 remote=rclone_remote,
             )
         )
-        if not click.confirm("  Continue anyway?", default=False):
-            return 1
+        if remote_error:
+            print_warning(remote_error)
+        return 1
 
     # ── Step 2: Base path ─────────────────────────────────────────────────────
     _print_wizard_step(
@@ -733,36 +1019,79 @@ def run_seedbox_add(
     if not base_path:
         base_path = click.prompt("  Remote base path", default="/")
     base_path = (base_path or "").strip() or "/"
+    access_ok, access_error = _validate_remote_path_access(rclone, rclone_remote, base_path)
+    if not access_ok:
+        print_error(
+            tr(
+                "seedbox.error.base_path_unreachable",
+                default="Cannot access remote base path: {target}",
+                target=_remote_target(rclone_remote, base_path),
+            )
+        )
+        if access_error:
+            print_warning(access_error)
+        return 1
 
-    # ── Step 3: Bandwidth limit ───────────────────────────────────────────────
+    # ── Step 3: Concurrency ───────────────────────────────────────────────────
+    _print_wizard_step(
+        "Concurrent uploads",
+        "Maximum simultaneous file transfers for this seedbox profile.\n"
+        "  This maps to rclone '--transfers'.\n"
+        "  Recommended: 2-6 depending on your line and provider limits.",
+        STEPS,
+        3,
+    )
+    cfg = _get_seedbox_cfg(settings)
+    default_max_transfers = _positive_int(cfg.get("max_concurrent_uploads", 3), 3)
+    raw_max_transfers = click.prompt(
+        "  Max concurrent uploads",
+        default=str(default_max_transfers),
+    ).strip()
+    try:
+        max_transfers = int(raw_max_transfers)
+    except ValueError:
+        print_error("Max concurrent uploads must be numeric.")
+        return 1
+    if max_transfers <= 0:
+        print_error("Max concurrent uploads must be greater than 0.")
+        return 1
+
+    # ── Step 4: Bandwidth limit ───────────────────────────────────────────────
     _print_wizard_step(
         "Bandwidth limit (optional)",
         "Throttle the upload speed to avoid saturating your connection.\n"
         "  Format: '10M' = 10 MB/s,  '500K' = 500 KB/s\n"
         "  Leave blank for unlimited.",
         STEPS,
-        3,
+        4,
     )
     bw = click.prompt("  Bandwidth limit (e.g. 10M)", default="").strip()
+    if not _validate_bandwidth_limit(bw):
+        print_error("Invalid bandwidth limit. Use values like 500K, 10M, 1.5G or off.")
+        return 1
 
-    # ── Step 4: Disk space check ──────────────────────────────────────────────
+    # ── Step 5: Disk space check ──────────────────────────────────────────────
     _print_wizard_step(
         "Disk space check (optional)",
         "Framekit can query available disk space on the seedbox before uploading\n"
         "and warn you if free space falls below a minimum threshold.",
         STEPS,
-        4,
+        5,
     )
     disk_check = click.confirm("  Enable disk space check before upload?", default=True)
-    min_free = 5
+    min_free = 5.0
     if disk_check:
         min_free_str = click.prompt("  Minimum free space required (GB)", default="5")
         try:
-            min_free = int(min_free_str)
+            min_free = float(min_free_str)
         except ValueError:
-            min_free = 5
+            print_error("Minimum free space must be numeric.")
+            return 1
+        if min_free <= 0:
+            print_error("Minimum free space must be greater than 0.")
+            return 1
 
-    # ── Step 5: Category paths ────────────────────────────────────────────────
+    # ── Step 6: Category paths ────────────────────────────────────────────────
     _print_wizard_step(
         "Category paths (optional)",
         "Map upload categories to sub-folders on the seedbox.\n"
@@ -770,7 +1099,7 @@ def run_seedbox_add(
         "  Example: movies → 'Movies',  series → 'Series'\n"
         "  Press Enter to skip a category.",
         STEPS,
-        5,
+        6,
     )
     category_paths: dict[str, str] = {}
     for cat in ("movies", "series", "anime"):
@@ -778,7 +1107,7 @@ def run_seedbox_add(
         if sub:
             category_paths[cat] = sub
 
-    # ── Step 6: Post-upload command ───────────────────────────────────────────
+    # ── Step 7: Post-upload command ───────────────────────────────────────────
     _print_wizard_step(
         "Post-upload command (optional)",
         "A shell command to run after a successful upload.\n"
@@ -786,24 +1115,56 @@ def run_seedbox_add(
         "  Example: echo 'Uploaded {local_path}'\n"
         "  Leave blank to skip.",
         STEPS,
-        6,
+        7,
     )
     post_cmd = click.prompt("  Post-upload command", default="").strip()
+
+    # ── Step 8: Defaults ──────────────────────────────────────────────────────
+    _print_wizard_step(
+        "Default selection",
+        "You can set this seedbox as global default and optionally for the active Framekit profile.",
+        STEPS,
+        8,
+    )
+    active_profile = _active_profile_name()
 
     # ── Build and save ────────────────────────────────────────────────────────
     new_sb: dict[str, Any] = {
         "name": name,
         "rclone_remote": rclone_remote,
         "remote_base_path": base_path,
+        "max_concurrent_uploads": max_transfers,
         "bandwidth_limit": bw,
         "disk_check_enabled": disk_check,
         "min_free_gb": min_free,
         "post_upload_command": post_cmd,
         "category_paths": category_paths,
     }
+    duplicate = next(
+        (
+            sb
+            for sb in seedboxes
+            if str(sb.get("rclone_remote", "")).strip() == rclone_remote
+            and str(sb.get("remote_base_path", "/")).strip() == base_path
+        ),
+        None,
+    )
+    if duplicate is not None:
+        print_error(
+            tr(
+                "seedbox.error.duplicate_remote_path",
+                default=(
+                    "A seedbox profile already uses this remote/base path combination: "
+                    "{name} ({remote}:{base_path})"
+                ),
+                name=str(duplicate.get("name", "<unnamed>")),
+                remote=rclone_remote,
+                base_path=base_path,
+            )
+        )
+        return 1
     seedboxes.append(new_sb)
 
-    cfg = _get_seedbox_cfg(settings)
     current_default = cfg.get("default", "")
     if not current_default or click.confirm(
         tr("seedbox.add.set_default", default="Set '{name}' as default seedbox?", name=name),
@@ -811,7 +1172,20 @@ def run_seedbox_add(
     ):
         current_default = name
 
-    _save_seedboxes(store, seedboxes, default=current_default)
+    profile_defaults = _default_by_profile(settings)
+    if active_profile:
+        if click.confirm(
+            f"  Use '{name}' by default for active profile '{active_profile}'?",
+            default=True,
+        ):
+            profile_defaults[active_profile] = name
+
+    _save_seedboxes(
+        store,
+        seedboxes,
+        default=current_default,
+        default_by_profile=profile_defaults,
+    )
     print_success(
         tr("seedbox.add.success", default="Seedbox '{name}' registered successfully.", name=name)
     )
@@ -844,21 +1218,31 @@ def run_seedbox_list() -> int:
     table.add_column("Name", style="bold cyan", no_wrap=True)
     table.add_column("rclone Remote")
     table.add_column("Base Path")
+    table.add_column("Max Xfers", justify="right")
     table.add_column("BW Limit")
     table.add_column("Default", justify="center")
 
+    global_default_xfers = _positive_int(cfg.get("max_concurrent_uploads", 3), 3)
     for sb in seedboxes:
         name = sb.get("name", "")
         is_default = "✓" if name == default_name else ""
+        max_xfers = _positive_int(sb.get("max_concurrent_uploads", global_default_xfers), global_default_xfers)
         table.add_row(
             name,
             sb.get("rclone_remote", ""),
             sb.get("remote_base_path", "/"),
+            str(max_xfers),
             sb.get("bandwidth_limit", "") or "unlimited",
             is_default,
         )
 
     console.print(table)
+    profile_defaults = _default_by_profile(settings)
+    if profile_defaults:
+        mappings = ", ".join(
+            f"{profile}:{seedbox_name}" for profile, seedbox_name in sorted(profile_defaults.items())
+        )
+        print_info(f"Profile defaults: {mappings}")
     return 0
 
 
@@ -881,13 +1265,24 @@ def run_seedbox_remove(*, name: str) -> int:
     if new_default == name:
         new_default = seedboxes[0].get("name", "") if seedboxes else ""
 
-    _save_seedboxes(store, seedboxes, default=new_default)
+    profile_defaults = {
+        profile: seedbox_name
+        for profile, seedbox_name in _default_by_profile(settings).items()
+        if seedbox_name != name
+    }
+
+    _save_seedboxes(
+        store,
+        seedboxes,
+        default=new_default,
+        default_by_profile=profile_defaults,
+    )
     print_success(tr("seedbox.remove.success", default="Seedbox '{name}' removed.", name=name))
     return 0
 
 
-def run_seedbox_use(*, name: str) -> int:
-    """Set a seedbox as the default."""
+def run_seedbox_use(*, name: str, profile_name: str | None = None) -> int:
+    """Set a seedbox as the default globally or for a specific profile."""
     store = SettingsStore()
     settings = store.load()
     if not _find_seedbox(settings, name):
@@ -899,9 +1294,22 @@ def run_seedbox_use(*, name: str) -> int:
     data = store.load()
     if "seedbox" not in data:
         data["seedbox"] = {}
-    data["seedbox"]["default"] = name
+    seedbox_cfg = data["seedbox"]
+    if profile_name:
+        mapping = seedbox_cfg.get("default_by_profile", {})
+        if not isinstance(mapping, dict):
+            mapping = {}
+        mapping[str(profile_name).strip()] = name
+        seedbox_cfg["default_by_profile"] = mapping
+        print_success(
+            f"Default seedbox for profile '{profile_name}' set to '{name}'."
+        )
+    else:
+        seedbox_cfg["default"] = name
+        print_success(
+            tr("seedbox.use.success", default="Default seedbox set to '{name}'.", name=name)
+        )
     store.save(data)
-    print_success(tr("seedbox.use.success", default="Default seedbox set to '{name}'.", name=name))
     return 0
 
 
@@ -991,9 +1399,10 @@ def seedbox_remove_command(name: str) -> int:
 
 @seedbox_group.command("use", context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("name")
-def seedbox_use_command(name: str) -> int:
-    """Set a seedbox as default."""
-    return run_seedbox_use(name=name)
+@click.option("--profile", "profile_name", default=None, help="Bind default to a Framekit profile")
+def seedbox_use_command(name: str, profile_name: str | None) -> int:
+    """Set a seedbox as default (global or per profile)."""
+    return run_seedbox_use(name=name, profile_name=profile_name)
 
 
 @seedbox_group.command("push", context_settings={"help_option_names": ["-h", "--help"]})

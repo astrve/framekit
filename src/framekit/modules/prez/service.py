@@ -1849,7 +1849,7 @@ def _build_metadata_and_release_fields(
                 "files_count",
                 "prez.label.files_count",
                 "Files count",
-                str(len(release.episodes) or 1),
+                str(_release_files_count(release)),
             ),
         )
     )
@@ -1908,6 +1908,11 @@ def _build_video_fields(
             ),
         )
     )
+
+
+def _release_files_count(release: ReleaseNfoData) -> int:
+    episode_count = max(len(release.episodes), 1)
+    return episode_count * 2
 
 
 def _video_bitrate_labels(release: ReleaseNfoData) -> tuple[str, str]:
@@ -2002,7 +2007,7 @@ def _build_prez_data(
         release_name=_dash(release.release_title),
         team=_dash(release.team),
         file_size=base_meta["file_size"],
-        files_count=str(len(release.episodes) * 2 or 2),
+        files_count=str(_release_files_count(release)),
         source=_dash(release.source),
         resolution=_dash(_release_resolution(release, first)),
         video_codec=_dash(_release_video_codec(release, first)),

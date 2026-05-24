@@ -1,7 +1,8 @@
 """Pipeline step implementations.
 
 This module contains the individual step functions for each pipeline module:
-renamer, cleanmkv, nfo, torrent, prez, encoder, and upload.
+renamer, cleanmkv, metadata, nfo, torrent, prez, encode, screenshot, seedbox,
+rename-parent, and upload.
 """
 
 from __future__ import annotations
@@ -49,7 +50,9 @@ if TYPE_CHECKING:
     from framekit.modules.upload.models import TorrentMetadata
 
 
-def _renamer_step(root: Path, remove_terms: tuple[str, ...] = ()) -> int:
+def _renamer_step(
+    root: Path, remove_terms: tuple[str, ...] = (), *, auto_mode: bool = False
+) -> int:
     """Execute renamer step: standardize filenames.
 
     Args:
@@ -71,6 +74,7 @@ def _renamer_step(root: Path, remove_terms: tuple[str, ...] = ()) -> int:
         force_lang=False,
         remove_terms=remove_terms,
         select_terms=False,
+        interactive_conflict_resolution=not auto_mode,
     )
 
 
@@ -194,6 +198,57 @@ def _ensure_metadata_context(
     )
     context.metadata_context = result.context if result.status == "resolved" else {}
     return context.metadata_context
+
+
+def _metadata_step(
+    work_folder: Path,
+    nfo_locale: str | None,
+    context: PipelineContext | None = None,
+    settings: dict | None = None,
+    *,
+    metadata_enabled: bool = True,
+    auto_mode: bool = False,
+) -> int:
+    """Execute metadata step: resolve and cache metadata context."""
+    if not metadata_enabled:
+        if context is not None:
+            context.metadata_context = {}
+        print_info(
+            tr(
+                "pipeline.metadata.disabled",
+                default="Metadata disabled for this run.",
+            )
+        )
+        return 0
+
+    if context is None or settings is None:
+        return 0
+
+    release = _ensure_release_context(work_folder, context)
+    resolved_locale = _resolve_pipeline_locale(settings, nfo_locale)
+    metadata_context = _ensure_metadata_context(
+        release,
+        settings,
+        context,
+        resolved_locale,
+        metadata_enabled=True,
+        auto_mode=auto_mode,
+    )
+    if metadata_context:
+        print_success(
+            tr(
+                "pipeline.metadata.resolved",
+                default="Metadata context resolved.",
+            )
+        )
+    else:
+        print_warning(
+            tr(
+                "pipeline.metadata.empty",
+                default="No metadata resolved for this release.",
+            )
+        )
+    return 0
 
 
 def _formats_from_prez_setting(value: str | None) -> tuple[str, ...]:
@@ -330,6 +385,9 @@ def _execute_per_file_nfo_mode(
 def _assign_nfo_output_context(
     context: PipelineContext, written_global: Path | None, written_per_file: list[Path]
 ) -> None:
+    context.nfo_outputs = tuple(
+        path for path in ([written_global] if written_global else []) + written_per_file
+    )
     context.nfo_path = written_global or (written_per_file[0] if written_per_file else None)
 
 
@@ -466,6 +524,9 @@ def _nfo_step(
             rendered=rendered,
             output_folder=output_folder,
             dry_run=dry_run,
+        )
+        context.nfo_outputs = tuple(
+            path for path in (written_global, written_sidecar) if isinstance(path, Path)
         )
         context.nfo_path = written_global or written_sidecar
         return 0
@@ -678,6 +739,305 @@ def _prez_step(
         formats_tuple=formats_tuple,
         dry_run=effective_dry_run,
     )
+    return 0
+
+
+_PIPELINE_VIDEO_SUFFIXES = {".mkv", ".mp4", ".m4v", ".avi", ".mov", ".m2ts", ".ts"}
+
+
+def _clamp_int(value: object, default: int, *, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    return min(max(parsed, minimum), maximum)
+
+
+def _coerce_positive_int(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _coerce_float(value: object, default: float, *, minimum: float, maximum: float) -> float:
+    try:
+        parsed = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    return min(max(parsed, minimum), maximum)
+
+
+def _resolve_screenshot_pipeline_config(settings: dict) -> tuple[object, str, str]:
+    from framekit.core.models.screenshot import ScreenshotConfig
+
+    screenshot_settings = settings.get("modules", {}).get("screenshot", {})
+    if not isinstance(screenshot_settings, dict):
+        screenshot_settings = {}
+    fmt = str(screenshot_settings.get("format", "png") or "png").strip().lower()
+    if fmt == "jpeg":
+        fmt = "jpg"
+    if fmt not in {"png", "jpg"}:
+        fmt = "png"
+    output_dir_name = str(screenshot_settings.get("output_dir_name", "screens") or "screens").strip()
+    if not output_dir_name:
+        output_dir_name = "screens"
+    target = str(screenshot_settings.get("target", "prez") or "prez").strip().lower()
+    if target not in {"prez", "nfo", "both", "none"}:
+        target = "prez"
+    config = ScreenshotConfig(
+        count=_clamp_int(screenshot_settings.get("count"), 6, minimum=1, maximum=50),
+        width=_coerce_positive_int(screenshot_settings.get("width")),
+        height=_coerce_positive_int(screenshot_settings.get("height")),
+        quality=_clamp_int(screenshot_settings.get("quality"), 2, minimum=1, maximum=31),
+        format=fmt,
+        skip_start_seconds=_clamp_int(
+            screenshot_settings.get("skip_start_seconds"), 60, minimum=0, maximum=3600
+        ),
+        skip_end_seconds=_clamp_int(
+            screenshot_settings.get("skip_end_seconds"), 120, minimum=0, maximum=3600
+        ),
+        skip_start_percent=_coerce_float(
+            screenshot_settings.get("skip_start_percent"), 5.0, minimum=0.0, maximum=100.0
+        ),
+        skip_end_percent=_coerce_float(
+            screenshot_settings.get("skip_end_percent"), 5.0, minimum=0.0, maximum=100.0
+        ),
+        avoid_black_frames=bool(screenshot_settings.get("avoid_black_frames", True)),
+        black_threshold=_coerce_float(
+            screenshot_settings.get("black_threshold"), 0.05, minimum=0.0, maximum=1.0
+        ),
+        min_interval_seconds=_clamp_int(
+            screenshot_settings.get("min_interval_seconds"), 30, minimum=1, maximum=3600
+        ),
+    )
+    return config, output_dir_name, target
+
+
+def _pipeline_video_inputs(work_folder: Path, context: PipelineContext | None) -> list[Path]:
+    if context is not None and context.release is not None and context.release.episodes:
+        candidates = [
+            Path(episode.file_path)
+            for episode in context.release.episodes
+            if Path(episode.file_path).exists()
+        ]
+        unique = sorted({path.resolve(): path for path in candidates}.values(), key=lambda p: p.name.lower())
+        if unique:
+            return unique
+    if not work_folder.exists():
+        return []
+    return sorted(
+        path
+        for path in work_folder.iterdir()
+        if path.is_file() and path.suffix.lower() in _PIPELINE_VIDEO_SUFFIXES
+    )
+
+
+def _render_screenshot_nfo_block(screenshots: Sequence[Path]) -> str:
+    lines = ["", "<!-- Framekit Screenshots -->", "<screenshots>"]
+    for path in screenshots:
+        lines.append(f"  <shot>{path.name}</shot>")
+    lines.extend(["</screenshots>", ""])
+    return "\n".join(lines)
+
+
+def _render_screenshot_bbcode_block(screenshots: Sequence[Path]) -> str:
+    lines = ["", "[b]Screenshots[/b]"]
+    for path in screenshots:
+        lines.append(f"[img]{path.as_posix()}[/img]")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_screenshot_html_block(screenshots: Sequence[Path]) -> str:
+    lines = [
+        "",
+        "<section class=\"framekit-screenshots\">",
+        "  <h2>Screenshots</h2>",
+        "  <div class=\"framekit-screenshots-grid\">",
+    ]
+    for path in screenshots:
+        src = path.as_posix()
+        lines.append(f"    <img src=\"{src}\" alt=\"{path.name}\" loading=\"lazy\"/>")
+    lines.extend(["  </div>", "</section>", ""])
+    return "\n".join(lines)
+
+
+def _append_screenshot_block(path: Path, block: str, marker: str) -> None:
+    try:
+        existing = path.read_text(encoding="utf-8")
+    except Exception as exc:
+        print_warning(f"Failed to read {path.name} for screenshot injection: {exc}")
+        return
+    if marker in existing:
+        return
+    try:
+        path.write_text(existing.rstrip() + "\n" + block, encoding="utf-8")
+    except Exception as exc:
+        print_warning(f"Failed to inject screenshots into {path.name}: {exc}")
+
+
+def _inject_pipeline_screenshots_into_outputs(
+    *,
+    context: PipelineContext | None,
+    screenshots: Sequence[Path],
+    target: str,
+) -> None:
+    if context is None or not screenshots or target == "none":
+        return
+
+    if target in {"nfo", "both"}:
+        for nfo_path in context.nfo_outputs:
+            if nfo_path.exists() and nfo_path.suffix.lower() == ".nfo":
+                _append_screenshot_block(
+                    nfo_path,
+                    _render_screenshot_nfo_block(screenshots),
+                    "<!-- Framekit Screenshots -->",
+                )
+
+    if target in {"prez", "both"}:
+        for output in context.prez_outputs:
+            if not output.exists():
+                continue
+            suffix = output.suffix.lower()
+            if suffix == ".html":
+                _append_screenshot_block(
+                    output,
+                    _render_screenshot_html_block(screenshots),
+                    "<section class=\"framekit-screenshots\">",
+                )
+            elif output.name.lower().endswith(".bbcode.txt"):
+                _append_screenshot_block(
+                    output,
+                    _render_screenshot_bbcode_block(screenshots),
+                    "[b]Screenshots[/b]",
+                )
+
+
+def _screenshot_step(
+    work_folder: Path,
+    context: PipelineContext | None = None,
+    settings: dict | None = None,
+) -> int:
+    """Execute screenshot step: extract stills from release video files."""
+    from framekit.modules.screenshot.service import ScreenshotService
+
+    if context is not None and context.dry_run:
+        print_info(
+            tr(
+                "pipeline.dry_run.screenshot",
+                default="[dry-run] Would extract screenshots from release videos",
+            )
+        )
+        return 0
+
+    if settings is None:
+        settings = SettingsStore().load()
+    config, output_dir_name, target = _resolve_screenshot_pipeline_config(settings)
+    videos = _pipeline_video_inputs(work_folder, context)
+    if not videos:
+        print_info(
+            tr(
+                "pipeline.screenshot.no_videos",
+                default="No video files found for screenshot extraction.",
+            )
+        )
+        return 0
+
+    output_dir = work_folder / output_dir_name
+    service = ScreenshotService()
+    report = service.extract_screenshots(
+        video_paths=videos,
+        output_dir=output_dir,
+        config=config,
+        release_name=work_folder.name,
+    )
+    screenshots = tuple(
+        screenshot
+        for result in report.results
+        for screenshot in result.screenshots
+        if screenshot.exists()
+    )
+    if context is not None:
+        context.screenshot_outputs = screenshots
+    if report.total_failures and not screenshots:
+        print_error(
+            tr(
+                "pipeline.screenshot.failed",
+                default="Screenshot extraction failed for all inputs.",
+            )
+        )
+        return 1
+    if screenshots:
+        print_success(
+            tr(
+                "pipeline.screenshot.done",
+                default="Extracted {count} screenshot(s).",
+                count=len(screenshots),
+            )
+        )
+        _inject_pipeline_screenshots_into_outputs(
+            context=context,
+            screenshots=screenshots,
+            target=target,
+        )
+    return 0
+
+
+def _seedbox_step(
+    work_folder: Path,
+    settings: dict | None = None,
+    *,
+    auto_mode: bool = False,
+) -> int:
+    """Execute seedbox step before upload."""
+    from framekit.commands.seedbox import (
+        run_seedbox_push,
+        seedbox_ready_for_pipeline,
+    )
+
+    current_settings = settings if settings is not None else SettingsStore().load()
+    ready, message = seedbox_ready_for_pipeline(current_settings)
+    if not ready:
+        print_warning(message)
+        return 1
+    return run_seedbox_push(
+        path=str(work_folder),
+        seedbox_name=None,
+        remote_path=None,
+        category=None,
+        dry_run=False,
+        verbose=auto_mode,
+        allow_cwd=False,
+        non_interactive=True,
+    )
+
+
+def _rename_parent_step(root: Path, settings: dict | None = None, *, dry_run: bool = False) -> int:
+    """Execute rename-parent step as final pipeline action."""
+    from framekit.commands.tools import _derive_name_from_payload, _derive_name_from_renamer, _rename_folder
+
+    if not root.exists() or not root.is_dir():
+        return 1
+    current_settings = settings if settings is not None else SettingsStore().load()
+    default_lang = str(
+        (current_settings.get("modules") or {}).get("renamer", {}).get("default_language_tag")
+        or "MULTI"
+    )
+    new_name = _derive_name_from_payload(root) or _derive_name_from_renamer(root, default_lang)
+    if not new_name:
+        print_warning(
+            tr(
+                "tools.rename_parent.no_files",
+                default="Could not derive a folder name — no recognizable release files found in {folder}",
+                folder=root,
+            )
+        )
+        return 1
+    _rename_folder(root, new_name, apply=not dry_run)
     return 0
 
 
@@ -1111,12 +1471,18 @@ def _collect_pipeline_screenshots(
 
 
 def _screenshots_from_context(context: PipelineContext | None) -> list[Path]:
-    if context is None or not context.prez_outputs:
+    if context is None:
+        return []
+    screenshot_outputs = tuple(getattr(context, "screenshot_outputs", ()) or ())
+    if screenshot_outputs:
+        return [path for path in screenshot_outputs if isinstance(path, Path) and path.exists()]
+    prez_outputs = tuple(getattr(context, "prez_outputs", ()) or ())
+    if not prez_outputs:
         return []
     return [
         path
-        for path in context.prez_outputs
-        if path.is_file() and path.suffix.lower() in _SCREENSHOT_SUFFIXES
+        for path in prez_outputs
+        if isinstance(path, Path) and path.suffix.lower() in _SCREENSHOT_SUFFIXES
     ]
 
 
