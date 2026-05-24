@@ -71,9 +71,10 @@ Async jobs:
 - Rerun endpoint creates a new job from a previous job request payload.
 - UI exposes `limit`, `status` filter, text search, and incremental `Charger plus`.
 - UI exposes job detail route (`/modules/:jobId`) with timestamps, duration, outputs, command copy.
+- UI job detail includes live logs `follow/pause` mode and text filtering.
 - UI exposes guided launchers for `pipeline` and `batch` (args builder).
 - UI shows detailed API error messages (`HTTP code + detail`).
-- Dedicated pages available: `settings/setup`, `seedbox`, `upload`, and `module-studio` (watch/inspect/renamer/cleanmkv/torrent/nfo/prez/screenshot/encode/extract/sort/browse/metadata/validate/logs).
+- Dedicated pages available: `settings/setup`, `seedbox`, `upload`, `pipeline`, `batch`, studios index (`/studios`), dedicated module pages (`/module/:moduleSlug`), and module-studio (`/studio/:module`).
 
 ## Minimal Test Strategy (Required)
 
@@ -88,6 +89,7 @@ Async jobs:
   - modules path: async create + cancel + rerun.
   - modules detail path: open job detail route and validate result visibility.
   - dedicated pages path: settings/setup + seedbox + upload + module-studio basic execution.
+  - studios path: studios index + one dedicated module execution.
 
 ## Non-goals (V1)
 

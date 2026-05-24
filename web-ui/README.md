@@ -27,7 +27,9 @@ Frontend SPA for local Framekit dashboard.
 - Dedicated Settings/Setup page (`/settings-setup`)
 - Dedicated Seedbox core page (`/seedbox`)
 - Dedicated Upload core page (`/upload`)
+- Dedicated Studios index (`/studios`) + dedicated module pages (`/module/:moduleSlug`)
 - Module Studio dedicated launcher pages (`/studio/:module`) for watch/inspect/renamer/cleanmkv/torrent/nfo/prez/screenshot/encode/extract/sort/browse/metadata/validate/logs
+- Live logs in job detail with follow/pause + text filter
 - API errors rendered with HTTP status + backend detail
 
 ## Commands
