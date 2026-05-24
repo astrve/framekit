@@ -19,7 +19,7 @@ def rollback_command(run_id: str, dry_run: bool) -> None:
 
     The ID is shown in the terminal output after applying changes.
     You can also find it in the run ledger at:
-    ~/.config/framekit/runs/ledger.ndjson
+    <framekit-config>/runs/ledger.ndjson
     """
     result = rollback_run(run_id, dry_run=dry_run)
     if result.total == 0:

@@ -15,11 +15,17 @@ from framekit.modules.renamer.detector import (
     hdr_display_label,
     hdr_release_label,
 )
-from framekit.modules.renamer.profiles import RenamerProfile
+from framekit.modules.renamer.profiles import (
+    LanguageTagProfile,
+    RenamerProfile,
+    infer_language_tag,
+    language_tags_for_profile,
+)
 from framekit.modules.renamer.rules import (
     DEFAULT_LANG,
     SINGLE_LANG_TAGS,
     VIDEO_EXTENSIONS,
+    extract_existing_language_tag_with_candidates,
     normalize_name_part,
     split_team,
 )
@@ -34,10 +40,13 @@ class _RenameContext(NamedTuple):
     hdr_display: str
     existing_language_tag: str | None
     resulting_language_tag: str | None
+    calculated_language_tag: str | None
     parsed_episode_code: str | None
     parsed_episode_title: str | None
     normalized_name: str
     multi_language_detected: bool
+    language_tag_conflict: bool
+    resolution_conflict: bool
 
 
 def _clean_removed_term_separators(value: str) -> str:
@@ -143,6 +152,37 @@ def _detect_multi_language(info: MediaInfoSource) -> bool:
     return len(probe_media_file(info).audio_tracks) > 1
 
 
+def _audio_languages(info: MediaInfoSource) -> list[tuple[str | None, str | None]]:
+    from framekit.core.models.media import MediaFileInfo
+
+    media_info = info if isinstance(info, MediaFileInfo) else probe_media_file(info)
+    return [
+        (getattr(track, "language", None), getattr(track, "language_variant", None))
+        for track in media_info.audio_tracks
+    ]
+
+
+def _existing_resolution_token(stem: str) -> str | None:
+    for token in stem.replace("_", ".").split("."):
+        upper = token.upper()
+        if upper in {"2160P", "1440P", "1080P", "720P", "480P"}:
+            return upper
+        if upper == "HD":
+            return upper
+        if re.fullmatch(r"\d{3,4}P", upper):
+            return upper
+    return None
+
+
+def _is_non_bucket_resolution(token: str) -> bool:
+    upper = token.upper()
+    if upper == "HD":
+        return True
+    if re.fullmatch(r"\d{3,4}P", upper) and upper not in {"2160P", "1080P", "720P", "480P"}:
+        return True
+    return False
+
+
 def _build_rename_context(
     stem: str,
     *,
@@ -151,6 +191,7 @@ def _build_rename_context(
     remove_terms: tuple[str, ...],
     info: MediaInfoSource,
     profile: RenamerProfile | None,
+    language_profile: LanguageTagProfile | None = None,
 ) -> _RenameContext:
     inferred_video_tag = get_preferred_video_tag(info)
     inferred_audio_tag = get_preferred_audio_tag(info)
@@ -159,6 +200,16 @@ def _build_rename_context(
     hdr_canonical = get_hdr_canonical(info)
     hdr_release = hdr_release_label(hdr_canonical)
     hdr_display = hdr_display_label(hdr_canonical)
+
+    inferred_lang_tag = (
+        infer_language_tag(language_profile, _audio_languages(info))
+        if language_profile is not None
+        else default_lang
+    )
+
+    additional_language_tags: tuple[str, ...] = ()
+    if language_profile is not None:
+        additional_language_tags = tuple(language_tags_for_profile(language_profile))
 
     (
         normalized,
@@ -172,14 +223,35 @@ def _build_rename_context(
         preferred_audio_tag=inferred_audio_tag,
         preferred_resolution=inferred_resolution,
         preferred_hdr=hdr_release,
-        default_lang=default_lang,
+        default_lang=inferred_lang_tag or default_lang,
         force_lang=force_lang,
         profile=profile,
+        additional_language_tags=additional_language_tags,
     )
 
     normalized = _remove_terms_from_normalized_name(normalized, remove_terms)
+    if existing_language_tag is None and additional_language_tags:
+        existing_language_tag = extract_existing_language_tag_with_candidates(
+            stem.replace("_", ".").split("."),
+            candidates=set(additional_language_tags),
+        )
+
+    language_tag_conflict = bool(
+        existing_language_tag
+        and inferred_lang_tag
+        and existing_language_tag.upper() != inferred_lang_tag.upper()
+    )
     multi_detected = (
         _detect_multi_language(info) and (existing_language_tag or "") in SINGLE_LANG_TAGS
+    )
+    existing_resolution = _existing_resolution_token(stem)
+    resolution_conflict = bool(
+        (
+            existing_resolution
+            and inferred_resolution
+            and existing_resolution != inferred_resolution
+        )
+        or (existing_resolution and not inferred_resolution and _is_non_bucket_resolution(existing_resolution))
     )
     return _RenameContext(
         inferred_video_tag=inferred_video_tag,
@@ -190,10 +262,13 @@ def _build_rename_context(
         hdr_display=hdr_display,
         existing_language_tag=existing_language_tag,
         resulting_language_tag=resulting_language_tag,
+        calculated_language_tag=inferred_lang_tag or None,
         parsed_episode_code=parsed_episode_code,
         parsed_episode_title=parsed_episode_title,
         normalized_name=normalized,
         multi_language_detected=multi_detected,
+        language_tag_conflict=language_tag_conflict,
+        resolution_conflict=resolution_conflict,
     )
 
 
@@ -252,6 +327,7 @@ def build_rename_plan(
     remove_terms: tuple[str, ...] = (),
     insert_after_pairs: tuple[tuple[str, str], ...] = (),
     profile: RenamerProfile | None = None,
+    language_profile: LanguageTagProfile | None = None,
 ) -> list[RenamePlanItem]:
     """Build rename plan."""
     plan: list[RenamePlanItem] = []
@@ -272,6 +348,7 @@ def build_rename_plan(
             remove_terms=effective_remove_terms,
             info=info,
             profile=profile,
+            language_profile=language_profile,
         )
         normalized = _build_target_name(
             context.normalized_name,
@@ -311,9 +388,12 @@ def build_rename_plan(
                 hdr_display_label=context.hdr_display or None,
                 existing_language_tag=context.existing_language_tag,
                 resulting_language_tag=context.resulting_language_tag,
+                calculated_language_tag=context.calculated_language_tag,
                 parsed_episode_code=context.parsed_episode_code,
                 parsed_episode_title=context.parsed_episode_title,
                 multi_language_detected=context.multi_language_detected,
+                language_tag_conflict=context.language_tag_conflict,
+                resolution_conflict=context.resolution_conflict,
             )
         )
 

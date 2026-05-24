@@ -101,15 +101,11 @@ def get_preferred_resolution(source: MediaInfoSource) -> str:
     height = info.height
     if height >= 2160:
         return "2160P"
-    if height >= 1440:
-        return "1440P"
     if height >= 1080:
         return "1080P"
     if height >= 720:
         return "720P"
-    if height >= 480:
-        return "480P"
-    return f"{height}P"
+    return "480P"
 
 
 def get_hdr_canonical(source: MediaInfoSource) -> str:

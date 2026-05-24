@@ -16,7 +16,19 @@ from framekit.core.release_inspection import inspect_release_completeness
 from framekit.ui.console import console
 
 # Module constants from pipeline.py
-PIPELINE_MODULES = ("renamer", "cleanmkv", "nfo", "prez", "torrent", "upload", "encoder")
+PIPELINE_MODULES = (
+    "renamer",
+    "cleanmkv",
+    "metadata",
+    "nfo",
+    "torrent",
+    "prez",
+    "encode",
+    "screenshot",
+    "seedbox",
+    "upload",
+    "rename-parent",
+)
 
 
 def _module_label(module: str) -> str:
@@ -24,11 +36,15 @@ def _module_label(module: str) -> str:
     labels = {
         "renamer": tr("renamer.title", default="Renamer"),
         "cleanmkv": tr("cleanmkv.title", default="CleanMKV"),
+        "metadata": tr("metadata.title", default="Metadata"),
         "nfo": tr("nfo.title", default="NFO"),
         "torrent": tr("torrent.title", default="Torrent"),
         "prez": tr("prez.title", default="Prez"),
+        "encode": tr("encoder.title", default="Encode"),
+        "screenshot": tr("screenshot.title", default="Screenshot"),
+        "seedbox": tr("seedbox.title", default="Seedbox"),
+        "rename-parent": tr("tools.rename_parent.title", default="Rename parent"),
         "upload": tr("upload.title", default="Upload"),
-        "encoder": tr("encoder.title", default="Encoder"),
     }
     return labels.get(module, module.title())
 
@@ -65,17 +81,28 @@ def _metadata_label(enabled: bool) -> str:
 def _gather_renamer_preview(
     root: Path, settings: dict, remove_terms: tuple[str, ...]
 ) -> dict[str, list[dict[str, str | bool]]]:
+    from framekit.modules.renamer.profiles import load_renamer_profile, resolve_language_tag_profile
     from framekit.modules.renamer.service import RenamerService
 
     renamer_settings = settings.get("modules", {}).get("renamer", {})
-    default_lang = renamer_settings.get("default_lang", "en")
-    force_lang = renamer_settings.get("force_lang", False)
+    profile_name = str(renamer_settings.get("profile", "fr_tracker") or "fr_tracker")
+    profile = load_renamer_profile(profile_name)
+    language_profile = resolve_language_tag_profile(settings, profile_name=profile_name)
+    default_lang = str(
+        language_profile.tags.only_default
+        or profile.default_language_tag
+        or renamer_settings.get("default_language_tag", "")
+        or ""
+    )
+    force_lang = bool(renamer_settings.get("force_lang", False))
     service = RenamerService()
     plan = service.build_plan(
         root,
         default_lang=default_lang,
         force_lang=force_lang,
         remove_terms=remove_terms,
+        profile=profile,
+        language_profile=language_profile,
     )
     return {
         "files": [
@@ -84,6 +111,7 @@ def _gather_renamer_preview(
                 "renamed": item.target.name,
                 "changed": item.changed,
                 "collision": item.collision,
+                "language_tag_conflict": item.language_tag_conflict,
             }
             for item in plan
         ]

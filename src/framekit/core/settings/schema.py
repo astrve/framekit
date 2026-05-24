@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-SETTINGS_SCHEMA_VERSION = 14
+SETTINGS_SCHEMA_VERSION = 15
 ENCRYPTED_PLACEHOLDER = "<encrypted>"
 SUPPORTED_UI_LOCALES = frozenset({"en", "fr", "es"})
 SUPPORTED_NFO_LOCALES = frozenset({"auto", "en", "fr", "es"})
@@ -136,6 +136,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "renamer": {
             "default_folder": "",
             "default_language_tag": "MULTI.VFF",
+            "profile": "fr_tracker",
+            "language_profiles": {
+                "active": "fr_tracker",
+                "profiles": {},
+            },
         },
         "cleanmkv": {
             "default_folder": "",
@@ -172,10 +177,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "include_mediainfo": False,
             "with_metadata": True,
         },
+        "screenshot": {
+            "default_folder": "",
+            "target": "prez",
+        },
         "pipeline": {
             "default_folder": "",
             "stop_on_error": False,
-            "enabled_modules": ["renamer", "cleanmkv", "nfo", "torrent", "prez"],
+            "enabled_modules": ["renamer", "cleanmkv", "metadata", "nfo", "torrent", "prez"],
             "with_metadata": True,
             "auto_mode": False,
             "upload_on_failure": False,
@@ -205,7 +214,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "seedbox": {
         "default": "",
+        "default_by_profile": {},
         "history_enabled": True,
+        "max_concurrent_uploads": 3,
         "seedboxes": [],
     },
     "watch": {

@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import re
+import subprocess  # nosec B404
+import tempfile
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 from loguru import logger
 
 from framekit.core.path_validation import PathValidationError, validate_file_path
-from framekit.core.subprocess_safe import MissingToolError, SafeSubprocessError, run_safe
+from framekit.core.subprocess_safe import (
+    MissingToolError,
+    SafeSubprocessError,
+    popen_safe,
+    run_safe,
+)
 from framekit.core.tools import ToolRegistry
 from framekit.modules.extract.models import (
     ExtractionResult,
@@ -268,6 +277,8 @@ class VideoExtractor:
         output_path: Path,
         track: VideoTrack,
         options: VideoExtractionOptions,
+        progress_callback: Callable[[float], None] | None = None,
+        expected_duration_seconds: float | None = None,
     ) -> ExtractionResult:
         """Extract video stream from file.
 
@@ -289,12 +300,10 @@ class VideoExtractor:
             # Execute FFmpeg via subprocess_safe wrapper:
             # full-path resolution, shell=False, mandatory timeout, UTF-8.
             try:
-                result = run_safe(
+                result = self._execute_video_command(
                     cmd,
-                    timeout=3600,
-                    check=False,
-                    capture_output=True,
-                    log_label="ffmpeg video extract",
+                    progress_callback=progress_callback,
+                    expected_duration_seconds=expected_duration_seconds,
                 )
             except (MissingToolError, SafeSubprocessError) as exc:
                 error_msg = f"FFmpeg failed: {exc}"
@@ -394,3 +403,160 @@ class VideoExtractor:
                 codec_converted=False,
                 resolution_changed=False,
             )
+
+    def _execute_video_command(
+        self,
+        command: list[str],
+        *,
+        progress_callback: Callable[[float], None] | None = None,
+        expected_duration_seconds: float | None = None,
+    ):
+        if progress_callback is None:
+            return run_safe(
+                command,
+                timeout=3600,
+                check=False,
+                capture_output=True,
+                log_label="ffmpeg video extract",
+            )
+        self._run_video_with_progress(
+            command,
+            progress_callback=progress_callback,
+            expected_duration_seconds=expected_duration_seconds,
+            timeout=3600.0,
+        )
+
+        class _Completed:
+            returncode = 0
+            stderr = ""
+
+        return _Completed()
+
+    def _run_video_with_progress(
+        self,
+        command: list[str],
+        *,
+        progress_callback: Callable[[float], None],
+        expected_duration_seconds: float | None,
+        timeout: float,
+    ) -> None:
+        progress_file = tempfile.NamedTemporaryFile(
+            suffix=".progress",
+            prefix="framekit_extract_video_",
+            delete=False,
+        )
+        progress_path = Path(progress_file.name)
+        progress_file.close()
+        ffmpeg_command = [*command[:-1], "-nostats", "-progress", str(progress_path), command[-1]]
+        process = popen_safe(
+            ffmpeg_command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            log_label="ffmpeg video extract",
+        )
+
+        started = time.monotonic()
+        last_position = 0
+        try:
+            while process.poll() is None:
+                last_position = self._read_progress_file(
+                    progress_path=progress_path,
+                    last_position=last_position,
+                    expected_duration_seconds=expected_duration_seconds,
+                    progress_callback=progress_callback,
+                )
+                if (time.monotonic() - started) > timeout:
+                    process.kill()
+                    process.wait()
+                    raise SafeSubprocessError(
+                        f"ffmpeg video extract: timed out after {timeout:.0f}s",
+                        tool=str(ffmpeg_command[0]),
+                        argv=tuple(ffmpeg_command),
+                        returncode=None,
+                        stderr="",
+                    )
+                time.sleep(0.25)
+
+            last_position = self._read_progress_file(
+                progress_path=progress_path,
+                last_position=last_position,
+                expected_duration_seconds=expected_duration_seconds,
+                progress_callback=progress_callback,
+            )
+            stderr_output = ""
+            if process.stderr is not None:
+                stderr_output = process.stderr.read() or ""
+            if process.returncode != 0:
+                raise SafeSubprocessError(
+                    f"ffmpeg video extract: exited {process.returncode}",
+                    tool=str(ffmpeg_command[0]),
+                    argv=tuple(ffmpeg_command),
+                    returncode=process.returncode,
+                    stderr=stderr_output,
+                )
+        finally:
+            try:
+                progress_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def _read_progress_file(
+        self,
+        *,
+        progress_path: Path,
+        last_position: int,
+        expected_duration_seconds: float | None,
+        progress_callback: Callable[[float], None],
+    ) -> int:
+        try:
+            with progress_path.open(encoding="utf-8", errors="replace") as handle:
+                handle.seek(last_position)
+                content = handle.read()
+                new_position = handle.tell()
+        except FileNotFoundError:
+            return last_position
+        except OSError:
+            return last_position
+
+        for line in content.splitlines():
+            key, _sep, value = line.partition("=")
+            if not value:
+                continue
+            if key == "out_time_ms":
+                try:
+                    seconds = max(float(value) / 1_000_000.0, 0.0)
+                except ValueError:
+                    continue
+                self._emit_track_progress(progress_callback, seconds, expected_duration_seconds)
+                continue
+            if key == "out_time":
+                seconds = self._parse_ffmpeg_timestamp(value)
+                if seconds is not None:
+                    self._emit_track_progress(progress_callback, seconds, expected_duration_seconds)
+        return new_position
+
+    def _emit_track_progress(
+        self,
+        progress_callback: Callable[[float], None],
+        seconds: float,
+        expected_duration_seconds: float | None,
+    ) -> None:
+        if not expected_duration_seconds or expected_duration_seconds <= 0:
+            return
+        percentage = min(max((seconds / expected_duration_seconds) * 100.0, 0.0), 99.5)
+        progress_callback(percentage)
+
+    def _parse_ffmpeg_timestamp(self, value: str) -> float | None:
+        raw = value.strip()
+        if not raw:
+            return None
+        parts = raw.split(":")
+        if len(parts) != 3:
+            return None
+        try:
+            hours = float(parts[0])
+            minutes = float(parts[1])
+            seconds = float(parts[2])
+        except ValueError:
+            return None
+        return (hours * 3600.0) + (minutes * 60.0) + seconds

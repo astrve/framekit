@@ -85,10 +85,14 @@ def _pipeline_failure_summary(
 MODULE_LABELS: dict[str, str] = {
     "renamer": "Renaming files",
     "cleanmkv": "Remuxing MKV",
-    "encoder": "Encoding video",
+    "metadata": "Resolving metadata",
+    "encode": "Encoding video",
     "nfo": "Generating NFO",
     "torrent": "Creating torrent",
     "prez": "Generating presentation",
+    "screenshot": "Extracting screenshots",
+    "seedbox": "Uploading to seedbox",
+    "rename-parent": "Renaming parent folder",
     "upload": "Uploading release",
 }
 
@@ -358,9 +362,26 @@ class BatchService:
         if not item.enabled:
             if item.status not in (BatchStatus.COMPLETED, BatchStatus.SKIPPED):
                 item.status = BatchStatus.SKIPPED
+                item.error_message = tr(
+                    "batch.skip.disabled",
+                    default="Skipped: item disabled in batch queue.",
+                )
             results.append(BatchResult(item=item, exit_code=0, duration_seconds=0.0))
             return True
-        return item.status in (BatchStatus.COMPLETED, BatchStatus.SKIPPED)
+        if item.status == BatchStatus.COMPLETED:
+            item.error_message = tr(
+                "batch.skip.completed",
+                default="Skipped: already completed.",
+            )
+            return True
+        if item.status == BatchStatus.SKIPPED:
+            if not item.error_message:
+                item.error_message = tr(
+                    "batch.skip.previously_skipped",
+                    default="Skipped: previously marked as skipped.",
+                )
+            return True
+        return False
 
     def _confirm_item_processing(
         self,
@@ -388,6 +409,10 @@ class BatchService:
         if confirmed:
             return True
         item.status = BatchStatus.SKIPPED
+        item.error_message = tr(
+            "batch.skip.user_declined",
+            default="Skipped: user declined processing.",
+        )
         results.append(BatchResult(item=item, exit_code=0, duration_seconds=0.0))
         self._queue.auto_save()
         return False

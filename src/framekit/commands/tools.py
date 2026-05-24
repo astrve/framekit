@@ -141,9 +141,9 @@ def rename_parent_command(
     release files inside FOLDER (same logic as the renamer --rename-parent flag).
 
     Examples:
-        fk tools rename-parent /path/to/Release.2024
-        fk tools rename-parent --name "Movie.2024.2160p.BluRay.REMUX"
-        fk tools rename-parent /path/to/Release --dry-run
+        fk rename-parent /path/to/Release.2024
+        fk rename-parent --name "Movie.2024.2160p.BluRay.REMUX"
+        fk rename-parent /path/to/Release --dry-run
     """
     print_module_banner("Rename Parent")
 

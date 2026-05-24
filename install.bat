@@ -61,47 +61,92 @@ if errorlevel 1 (
 
 :: ── Optional dependencies ─────────────────────────────────────────────────────
 echo.
-echo  Optional dependencies (required for full functionality):
-echo    - MKVToolNix ^(mkvmerge^)  : MKV track manipulation  ^(required for CleanMKV^)
-echo    - FFmpeg                  : Video encoding / thumbnails
+echo  Optional dependencies (recommended):
+echo    - MKVToolNix ^(mkvmerge^) : required by CleanMKV
+echo    - FFmpeg                  : required by Encode/Screenshot
+echo    - MediaInfo               : required by metadata inspection
+echo    - rclone                  : required by Seedbox
 echo.
 echo  Install method:
-echo    [1] winget  ^(recommended — built into Windows 10/11^)
+echo    [1] winget  ^(recommended^)
 echo    [2] Chocolatey ^(choco^)
-echo    [3] Skip — I will install them manually
+echo    [3] Skip
 echo.
 set /p DEP_CHOICE=Your choice [1/2/3]:
 
+if "%DEP_CHOICE%"=="1" goto :deps_prompt
+if "%DEP_CHOICE%"=="2" goto :deps_prompt
+goto :verify_deps
+
+:deps_prompt
+set INSTALL_MKV=Y
+set INSTALL_FFMPEG=Y
+set INSTALL_MEDIAINFO=Y
+set INSTALL_RCLONE=Y
+set /p INSTALL_MKV=Install MKVToolNix (mkvmerge)? [Y/n]:
+set /p INSTALL_FFMPEG=Install FFmpeg? [Y/n]:
+set /p INSTALL_MEDIAINFO=Install MediaInfo? [Y/n]:
+set /p INSTALL_RCLONE=Install rclone? [Y/n]:
 if "%DEP_CHOICE%"=="1" goto :install_winget
-if "%DEP_CHOICE%"=="2" goto :install_choco
-goto :skip_deps
+goto :install_choco
 
 :install_winget
 echo.
-echo [..] Installing MKVToolNix via winget...
-winget install MKVToolNix.MKVToolNix --silent
-if errorlevel 1 echo [WARN] MKVToolNix install may have failed. Check manually.
-echo [..] Installing FFmpeg via winget...
-winget install Gyan.FFmpeg --silent
-if errorlevel 1 echo [WARN] FFmpeg install may have failed. Check manually.
-echo [OK] winget installs requested. Restart your terminal for PATH to update.
-goto :skip_deps
+if /I not "%INSTALL_MKV%"=="N" (
+    echo [..] Installing MKVToolNix via winget...
+    winget install MKVToolNix.MKVToolNix --silent
+    if errorlevel 1 echo [WARN] MKVToolNix install may have failed. Check manually.
+)
+if /I not "%INSTALL_FFMPEG%"=="N" (
+    echo [..] Installing FFmpeg via winget...
+    winget install Gyan.FFmpeg --silent
+    if errorlevel 1 echo [WARN] FFmpeg install may have failed. Check manually.
+)
+if /I not "%INSTALL_MEDIAINFO%"=="N" (
+    echo [..] Installing MediaInfo via winget...
+    winget install MediaArea.MediaInfo.GUI --silent
+    if errorlevel 1 echo [WARN] MediaInfo install may have failed. Check manually.
+)
+if /I not "%INSTALL_RCLONE%"=="N" (
+    echo [..] Installing rclone via winget...
+    winget install Rclone.Rclone --silent
+    if errorlevel 1 echo [WARN] rclone install may have failed. Check manually.
+)
+echo [OK] winget installs requested.
+goto :verify_deps
 
 :install_choco
 echo.
 choco --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Chocolatey not found. Install from https://chocolatey.org/install
-    goto :skip_deps
+    goto :verify_deps
 )
-echo [..] Installing MKVToolNix via choco...
-choco install mkvtoolnix -y
-echo [..] Installing FFmpeg via choco...
-choco install ffmpeg -y
-echo [OK] Chocolatey installs complete.
-goto :skip_deps
+if /I not "%INSTALL_MKV%"=="N" (
+    echo [..] Installing MKVToolNix via choco...
+    choco install mkvtoolnix -y
+)
+if /I not "%INSTALL_FFMPEG%"=="N" (
+    echo [..] Installing FFmpeg via choco...
+    choco install ffmpeg -y
+)
+if /I not "%INSTALL_MEDIAINFO%"=="N" (
+    echo [..] Installing MediaInfo via choco...
+    choco install mediainfo -y
+)
+if /I not "%INSTALL_RCLONE%"=="N" (
+    echo [..] Installing rclone via choco...
+    choco install rclone -y
+)
+echo [OK] Chocolatey installs requested.
 
-:skip_deps
+:verify_deps
+echo.
+echo  Dependency check:
+where mkvmerge >nul 2>&1 && echo [OK] mkvmerge found || echo [WARN] mkvmerge not found
+where ffmpeg >nul 2>&1 && echo [OK] ffmpeg found || echo [WARN] ffmpeg not found
+where mediainfo >nul 2>&1 && echo [OK] mediainfo found || echo [WARN] mediainfo not found
+where rclone >nul 2>&1 && echo [OK] rclone found || echo [WARN] rclone not found
 
 :: ── Summary ───────────────────────────────────────────────────────────────────
 echo.

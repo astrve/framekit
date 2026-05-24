@@ -11,9 +11,11 @@ from framekit.core.i18n import tr
 from framekit.core.paths import PathResolver
 from framekit.core.settings import SettingsStore
 from framekit.modules.renamer.profiles import (
+    LanguageTagProfile,
     RenamerProfile,
     list_renamer_profiles,
     load_renamer_profile,
+    resolve_language_tag_profile,
 )
 from framekit.modules.renamer.service import RenamerService
 from framekit.modules.renamer.term_selector import (
@@ -142,7 +144,7 @@ def _print_rename_preview(report, *, details: bool = False, applied: bool = Fals
 
 def _resolve_renamer_context(
     path: str | None, lang: str | None, profile_name: str | None
-) -> tuple[Path, RenamerService, str, RenamerProfile] | None:
+) -> tuple[Path, RenamerService, str, RenamerProfile, LanguageTagProfile] | None:
     store = SettingsStore()
     settings = store.load()
     resolver = PathResolver(settings)
@@ -158,11 +160,11 @@ def _resolve_renamer_context(
         )
         return None
     service = RenamerService()
-    profile = load_renamer_profile(
-        profile_name or str(settings["modules"]["renamer"].get("profile", "fr_tracker"))
-    )
-    default_lang = _default_language(settings, lang, profile)
-    return folder, service, default_lang, profile
+    resolved_profile_name = profile_name or str(settings["modules"]["renamer"].get("profile", "fr_tracker"))
+    profile = load_renamer_profile(resolved_profile_name)
+    language_profile = resolve_language_tag_profile(settings, profile_name=resolved_profile_name)
+    default_lang = _default_language(settings, lang, profile, language_profile)
+    return folder, service, default_lang, profile, language_profile
 
 
 def _run_renamer_preview_then_confirm(
@@ -177,6 +179,8 @@ def _run_renamer_preview_then_confirm(
     show_details: bool,
     apply_changes: bool,
     profile: RenamerProfile,
+    language_profile: LanguageTagProfile,
+    interactive_conflict_resolution: bool,
 ) -> int | None:
     first_error, _first_report = _run_renamer_once(
         service=service,
@@ -188,6 +192,8 @@ def _run_renamer_preview_then_confirm(
         insert_after_pairs=insert_after_pairs,
         show_details=show_details,
         profile=profile,
+        language_profile=language_profile,
+        interactive_conflict_resolution=interactive_conflict_resolution,
     )
     if first_error is not None:
         return first_error
@@ -219,6 +225,8 @@ def _run_renamer_preview_then_confirm(
         insert_after_pairs=insert_after_pairs,
         show_details=show_details,
         profile=profile,
+        language_profile=language_profile,
+        interactive_conflict_resolution=interactive_conflict_resolution,
     )
     return second_error
 
@@ -424,9 +432,15 @@ def _resolve_renamer_folder(path: str | None) -> tuple[PathResolver, Path] | tup
     return None, None
 
 
-def _default_language(settings: dict, lang: str | None, profile: RenamerProfile) -> str:
+def _default_language(
+    settings: dict,
+    lang: str | None,
+    profile: RenamerProfile,
+    language_profile: LanguageTagProfile,
+) -> str:
     configured = str(settings["modules"]["renamer"].get("default_language_tag", "") or "")
-    return str(lang or profile.default_language_tag or configured or "")
+    inferred_default = language_profile.tags.only_default or profile.default_language_tag
+    return str(lang or inferred_default or configured or "")
 
 
 def _should_run_picker(
@@ -529,7 +543,7 @@ def _report_errors_if_any(report) -> int | None:
 def _resolve_multi_language_tags_interactive(
     plan: list,
     *,
-    service: RenamerService,
+    _service: RenamerService,
 ) -> list:
     """Prompt for ambiguous single-language tags in interactive mode.
 
@@ -541,34 +555,39 @@ def _resolve_multi_language_tags_interactive(
     from framekit.modules.renamer.rules import replace_language_tag
 
     for i, item in enumerate(plan):
-        if not item.multi_language_detected or not item.changed:
+        if not item.changed:
+            continue
+        if not (item.multi_language_detected or item.language_tag_conflict):
             continue
 
-        existing = item.existing_language_tag or "VFF"
-        suggested = f"MULTI.{existing}"
+        existing = (item.existing_language_tag or "").upper()
+        suggested = (item.calculated_language_tag or item.resulting_language_tag or existing).upper()
+        if not suggested:
+            suggested = f"MULTI.{existing}" if existing else "MULTI"
+        keep = existing or suggested
 
         console.print(
             f"\n[yellow]WARNING[/yellow]  [bold]{item.source.name}[/bold]: "
-            f"multiple audio tracks detected — filename tag is [dim]{existing}[/dim]"
+            "detected language-tag mismatch between filename and audio tracks."
         )
         choice = (
             click.prompt(
-                f"  Language tag [{suggested} / {existing} / custom]",
+                f"  Language tag [{suggested} / {keep} / Custom]",
                 default=suggested,
             )
             .strip()
             .upper()
         )
 
-        if choice == existing.upper():
-            chosen_tag = existing
-        elif choice == suggested.upper():
+        if choice == keep:
+            chosen_tag = keep
+        elif choice == suggested:
             chosen_tag = suggested
         else:
-            chosen_tag = choice  # custom input
+            chosen_tag = choice.upper()  # custom input
 
-        if chosen_tag == existing:
-            # User chose to keep the single-language tag — no rename needed for this item.
+        if chosen_tag == keep and keep == existing:
+            # Keep current value: no change for this item.
             plan[i].changed = False
             continue
 
@@ -578,6 +597,7 @@ def _resolve_multi_language_tags_interactive(
         new_stem = ".".join(new_parts)
         plan[i].target = item.target.with_name(f"{new_stem}{item.target.suffix}")
         plan[i].resulting_language_tag = chosen_tag
+        plan[i].calculated_language_tag = suggested
 
     return plan
 
@@ -593,10 +613,12 @@ def _run_renamer_once(
     insert_after_pairs: tuple[tuple[str, str], ...],
     show_details: bool,
     profile: RenamerProfile,
+    language_profile: LanguageTagProfile,
+    interactive_conflict_resolution: bool,
 ) -> tuple[int | None, object]:
     # When applying in interactive mode, build the plan first so we can prompt
     # the user to resolve ambiguous single-language tags before committing.
-    if apply_changes and sys.stdin.isatty():
+    if apply_changes and sys.stdin.isatty() and interactive_conflict_resolution:
         plan = service.build_plan(
             folder,
             default_lang=default_lang,
@@ -604,8 +626,9 @@ def _run_renamer_once(
             remove_terms=remove_terms,
             insert_after_pairs=insert_after_pairs,
             profile=profile,
+            language_profile=language_profile,
         )
-        plan = _resolve_multi_language_tags_interactive(plan, service=service)
+        plan = _resolve_multi_language_tags_interactive(plan, _service=service)
         report = service.run_plan(plan, apply_changes=apply_changes)
     else:
         report = service.run(
@@ -616,6 +639,8 @@ def _run_renamer_once(
             remove_terms=remove_terms,
             insert_after_pairs=insert_after_pairs,
             profile=profile,
+            language_profile=language_profile,
+            strict_conflict_abort=apply_changes and not interactive_conflict_resolution,
         )
     _print_rename_preview(report, details=show_details, applied=apply_changes)
     _print_renamer_run_summary(report, folder=folder, apply_changes=apply_changes)
@@ -692,6 +717,7 @@ def run_renamer_command(
     select_terms: bool | None = None,
     rename_parent: bool = False,
     profile_name: str | None = None,
+    interactive_conflict_resolution: bool = True,
 ) -> int:
     """Run renamer command."""
     flags_error = _validate_renamer_flags(apply_changes=apply_changes, dry_run=dry_run)
@@ -702,7 +728,7 @@ def run_renamer_command(
     context = _resolve_renamer_context(path, lang, profile_name)
     if context is None:
         return 1
-    folder, service, default_lang, profile = context
+    folder, service, default_lang, profile, language_profile = context
 
     if lang and not force_lang:
         print_warning(
@@ -721,7 +747,7 @@ def run_renamer_command(
     if picker_error is not None:
         return picker_error
 
-    interactive_confirmation = not apply_changes and not dry_run
+    interactive_confirmation = bool(sys.stdin.isatty()) and not apply_changes and not dry_run
     run_error = _run_renamer_preview_then_confirm(
         interactive_confirmation=interactive_confirmation,
         service=service,
@@ -733,6 +759,8 @@ def run_renamer_command(
         insert_after_pairs=insert_after_pairs,
         show_details=show_details,
         profile=profile,
+        language_profile=language_profile,
+        interactive_conflict_resolution=interactive_conflict_resolution,
     )
     if run_error is not None:
         return run_error
@@ -747,6 +775,7 @@ def run_renamer_command(
             remove_terms=effective_remove_terms,
             insert_after_pairs=insert_after_pairs,
             profile=profile,
+            language_profile=language_profile,
         )
         parent_name = _derive_parent_name_from_report(preview_report)
         if parent_name:

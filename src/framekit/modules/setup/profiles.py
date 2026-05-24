@@ -18,9 +18,9 @@ class ProfileConfig:
 
 
 # Profile definitions
-BEGINNER_PROFILE = ProfileConfig(
-    name="beginner",
-    description="Simplified setup with sensible defaults, minimal questions",
+NORMAL_PROFILE = ProfileConfig(
+    name="normal",
+    description="Setup essentiel avec valeurs recommandees",
     questions=["language", "tmdb_token"],
     show_help=False,
     defaults={
@@ -88,18 +88,38 @@ BEGINNER_PROFILE = ProfileConfig(
         "modules.prez.mediainfo_mode": "none",
         "modules.prez.include_mediainfo": False,
         "modules.prez.with_metadata": True,
+        "modules.screenshot.target": "prez",
         "modules.pipeline.stop_on_error": True,
-        "modules.pipeline.enabled_modules": ["renamer", "cleanmkv", "nfo", "torrent", "prez"],
+        "modules.pipeline.enabled_modules": [
+            "renamer",
+            "cleanmkv",
+            "metadata",
+            "nfo",
+            "torrent",
+            "prez",
+        ],
         "modules.pipeline.with_metadata": True,
         "modules.renamer.default_language_tag": "MULTI.VFF",
+        "modules.renamer.language_profiles.active": "fr_tracker",
+        # Upload / Seedbox
+        "upload.enabled": False,
+        "upload.auto_upload": False,
+        "upload.max_parallel_uploads": 3,
+        "seedbox.history_enabled": True,
+        "seedbox.max_concurrent_uploads": 3,
+        # Security
+        "security.enabled": True,
+        "security.key_storage": "keyring",
+        "security.auto_migrate": True,
+        "security.backup_before_changes": True,
     },
 )
 
 ADVANCED_PROFILE = ProfileConfig(
     name="advanced",
-    description="Full control over all settings, detailed configuration",
+    description="Controle complet de la configuration",
     questions="all",
-    show_help=False,
+    show_help=True,
     defaults={
         # Minimal defaults - user configures everything
         "general.locale": "en",
@@ -108,25 +128,26 @@ ADVANCED_PROFILE = ProfileConfig(
         "backup.enabled": True,
         "logging.enabled": True,
         "performance.parallel_processing.enabled": True,
-    },
-)
-
-CUSTOM_PROFILE = ProfileConfig(
-    name="custom",
-    description="Step-by-step guided setup with explanations",
-    questions="all",
-    show_help=True,
-    defaults={
-        # Same as beginner but with help text shown
-        **BEGINNER_PROFILE.defaults,
+        "upload.max_parallel_uploads": 3,
+        "seedbox.max_concurrent_uploads": 3,
+        "security.enabled": True,
+        "security.key_storage": "keyring",
     },
 )
 
 # Profile registry
 PROFILES: dict[str, ProfileConfig] = {
-    "beginner": BEGINNER_PROFILE,
+    "normal": NORMAL_PROFILE,
     "advanced": ADVANCED_PROFILE,
-    "custom": CUSTOM_PROFILE,
+    # Legacy aliases
+    "beginner": NORMAL_PROFILE,
+    "custom": ProfileConfig(
+        name="normal",
+        description="Legacy custom alias mapped to normal mode",
+        questions=NORMAL_PROFILE.questions,
+        show_help=True,
+        defaults={**NORMAL_PROFILE.defaults},
+    ),
 }
 
 
@@ -134,7 +155,7 @@ def get_profile(name: str) -> ProfileConfig:
     """Get a profile by name.
 
     Args:
-        name: Profile name (beginner, advanced, custom)
+        name: Profile name (normal, advanced)
 
     Returns:
         ProfileConfig for the requested profile
@@ -176,31 +197,31 @@ WIZARD_QUESTIONS = {
     "language": {
         "step": 2,
         "required": True,
-        "profiles": ["beginner", "advanced", "custom"],
+        "profiles": ["normal", "advanced"],
     },
     "tmdb_token": {
         "step": 3,
         "required": True,
-        "profiles": ["beginner", "advanced", "custom"],
+        "profiles": ["normal", "advanced"],
     },
     "torrent_announce": {
         "step": 4,
         "required": False,
-        "profiles": ["advanced", "custom"],
+        "profiles": ["advanced"],
     },
     "presets": {
         "step": 5,
         "required": False,
-        "profiles": ["advanced", "custom"],
+        "profiles": ["advanced"],
     },
     "performance": {
         "step": 6,
         "required": False,
-        "profiles": ["advanced", "custom"],
+        "profiles": ["advanced"],
     },
     "security": {
         "step": 7,
         "required": False,
-        "profiles": ["advanced", "custom"],
+        "profiles": ["advanced"],
     },
 }

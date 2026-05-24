@@ -119,13 +119,19 @@ def _build_audio_tracks(info) -> list[TrackNfoData]:
             except (ValueError, IndexError):
                 channels_count = None
 
+        visual_impaired_flag = str(track.extra.get("flag_visual_impaired", "") or "").strip().lower()
+        ad_track = is_audio_description_track(
+            track.title,
+            flag_visual_impaired=visual_impaired_flag in {"1", "true", "yes", "on"},
+        )
+
         tracks.append(
             TrackNfoData(
                 display_id=f"#{index}",
                 kind="audio",
                 language_display=(
                     language_display_label(track.language, track.language_variant) + " (AD)"
-                    if is_audio_description_track(track.title)
+                    if ad_track
                     else language_display_label(track.language, track.language_variant)
                 ),
                 language_short=language_short_label(track.language, track.language_variant),
@@ -137,7 +143,7 @@ def _build_audio_tracks(info) -> list[TrackNfoData]:
                 title=track.title,
                 is_default=track.is_default,
                 is_forced=track.is_forced,
-                subtitle_variant="ad" if is_audio_description_track(track.title) else None,
+                subtitle_variant="ad" if ad_track else None,
                 bitrate=track.bitrate,
                 size_bytes=track.stream_size_bytes,
                 size_percent=track.stream_size_ratio,
@@ -182,7 +188,12 @@ def _build_subtitle_tracks(info) -> list[TrackNfoData]:
 def _audio_summary_from_probe(info) -> list[str]:
     results: list[str] = []
     for track in info.audio_tracks:
-        lang = language_display_label(track.language, track.language_variant)
+        visual_impaired_flag = str(track.extra.get("flag_visual_impaired", "") or "").strip().lower()
+        is_ad = is_audio_description_track(
+            track.title,
+            flag_visual_impaired=visual_impaired_flag in {"1", "true", "yes", "on"},
+        )
+        lang = language_display_label(track.language, track.language_variant) + (" (AD)" if is_ad else "")
         codec = track.codec or "Audio"
         channels = track.channels or ""
         if channels:

@@ -24,6 +24,97 @@ from framekit.ui.click_helper import click
 from framekit.ui.console import console, print_error, print_info, print_success, print_warning
 
 
+VIDEO_EXTENSIONS = {".mkv", ".mp4", ".m4v", ".avi", ".mov", ".m2ts", ".ts"}
+
+
+def _expand_extract_inputs(paths: tuple[Path, ...]) -> list[Path]:
+    expanded: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in paths:
+        path = candidate.resolve()
+        if path.is_file():
+            if path.suffix.lower() not in VIDEO_EXTENSIONS:
+                print_warning(f"Skipping unsupported file: {path}")
+                continue
+            if path not in seen:
+                seen.add(path)
+                expanded.append(path)
+            continue
+        if path.is_dir():
+            matches = sorted(
+                file_path
+                for file_path in path.rglob("*")
+                if file_path.is_file() and file_path.suffix.lower() in VIDEO_EXTENSIONS
+            )
+            if not matches:
+                print_warning(f"No video files found in folder: {path}")
+                continue
+            for file_path in matches:
+                resolved = file_path.resolve()
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
+                expanded.append(resolved)
+            continue
+        print_warning(f"Skipping invalid path: {path}")
+    return expanded
+
+
+def _handle_extract_runtime_error(exc: Exception) -> None:
+    message = str(exc).strip()
+    lowered = message.lower()
+    if "libmediainfo" in lowered or "mediainfo" in lowered:
+        print_error(
+            "MediaInfo/libmediainfo unavailable or incompatible. "
+            "Install MediaInfo CLI + libmediainfo, then retry."
+        )
+        if message:
+            print_warning(message)
+        return
+    print_error(message or f"{type(exc).__name__} during extraction.")
+
+
+def _phase_message(phase: str, current_file: str, current_track: int, total_tracks: int) -> str:
+    if phase == "analysis":
+        return f"Analyzing {current_file}..."
+    if phase == "selection":
+        return f"Selecting tracks for {current_file}..."
+    if phase == "extraction":
+        if total_tracks > 0:
+            return f"Extracting {current_file} ({current_track}/{total_tracks})..."
+        return f"Extracting {current_file}..."
+    if phase == "finalization":
+        return f"Finalizing {current_file}..."
+    return f"Processing {current_file}..."
+
+
+def _compute_extract_percent(
+    *,
+    total_files: int,
+    file_index: int,
+    phase: str,
+    total_tracks: int,
+    current_track: int,
+    track_progress: float,
+    files_done: int,
+) -> float:
+    if total_files <= 0:
+        return 0.0
+    if phase == "finalization":
+        return min((files_done / total_files) * 100.0, 100.0)
+
+    file_base = max(file_index - 1, 0) / total_files
+    if phase == "analysis":
+        return min(file_base * 100.0, 99.0)
+    if phase == "selection":
+        return min((file_base + (0.05 / total_files)) * 100.0, 99.0)
+    if phase == "extraction" and total_tracks > 0:
+        track_slot = (0.90 / total_files)
+        local = (max(current_track - 1, 0) + (track_progress / 100.0)) / total_tracks
+        return min((file_base + local * track_slot) * 100.0, 99.5)
+    return min(file_base * 100.0, 99.0)
+
+
 @click.group("extract", context_settings={"help_option_names": ["-h", "--help"]})
 def extract_command():
     """-[BETA]- Commands for extracting and converting media streams.
@@ -103,6 +194,10 @@ def extract_subtitle_command(
     configure_verbosity(verbose)
     if is_verbose():
         logger.info(f"Processing {len(files)} file(s) with verbosity level {verbose}")
+    files = tuple(_expand_extract_inputs(files))
+    if not files:
+        print_error("No valid video files found for extraction.")
+        raise SystemExit(1)
 
     # Initialize registry and service
     registry = ToolRegistry()
@@ -130,21 +225,45 @@ def extract_subtitle_command(
         TimeElapsedColumn(),
         console=console,
     ) as progress:
-        task = progress.add_task("Extracting subtitles...", total=len(files))
+        task = progress.add_task("Analyzing files...", total=100.0)
 
         def progress_callback(**kwargs):
-            files_done = kwargs.get("files", 0)
-            if files_done and is_verbose():
-                current_file = kwargs.get("current_file", "")
-                if current_file:
-                    log_file_processing(current_file, status="extracted")
-            progress.advance(task, files_done)
+            current_file = str(kwargs.get("current_file", "") or "")
+            if not current_file:
+                return
+            phase = str(kwargs.get("phase", "processing") or "processing")
+            file_index = int(kwargs.get("file_index", 1) or 1)
+            total_files = int(kwargs.get("total_files", len(files)) or len(files))
+            total_tracks = int(kwargs.get("total_tracks", 0) or 0)
+            current_track = int(kwargs.get("current_track", 1) or 1)
+            track_progress = float(kwargs.get("track_progress", 0.0) or 0.0)
+            files_done = int(kwargs.get("files_done", 0) or 0)
+            percent = _compute_extract_percent(
+                total_files=total_files,
+                file_index=file_index,
+                phase=phase,
+                total_tracks=total_tracks,
+                current_track=current_track,
+                track_progress=track_progress,
+                files_done=files_done,
+            )
+            progress.update(
+                task,
+                completed=percent,
+                description=_phase_message(phase, current_file, current_track, total_tracks),
+            )
+            if phase == "finalization" and is_verbose():
+                log_file_processing(current_file, status="extracted")
 
-        report, _results = service.extract_subtitles(
-            files=list(files),
-            options=options,
-            progress_callback=progress_callback,
-        )
+        try:
+            report, _results = service.extract_subtitles(
+                files=list(files),
+                options=options,
+                progress_callback=progress_callback,
+            )
+        except Exception as exc:
+            _handle_extract_runtime_error(exc)
+            raise SystemExit(1) from exc
 
     # Print results
     if report.ok:
@@ -226,6 +345,10 @@ def extract_audio_command(
     configure_verbosity(verbose)
     if is_verbose():
         logger.info(f"Processing {len(files)} file(s) with verbosity level {verbose}")
+    files = tuple(_expand_extract_inputs(files))
+    if not files:
+        print_error("No valid video files found for extraction.")
+        raise SystemExit(1)
 
     # Initialize registry and service
     registry = ToolRegistry()
@@ -253,21 +376,45 @@ def extract_audio_command(
         TimeElapsedColumn(),
         console=console,
     ) as progress:
-        task = progress.add_task("Extracting audio...", total=len(files))
+        task = progress.add_task("Analyzing files...", total=100.0)
 
         def progress_callback(**kwargs):
-            files_done = kwargs.get("files", 0)
-            if files_done and is_verbose():
-                current_file = kwargs.get("current_file", "")
-                if current_file:
-                    log_file_processing(current_file, status="extracted")
-            progress.advance(task, files_done)
+            current_file = str(kwargs.get("current_file", "") or "")
+            if not current_file:
+                return
+            phase = str(kwargs.get("phase", "processing") or "processing")
+            file_index = int(kwargs.get("file_index", 1) or 1)
+            total_files = int(kwargs.get("total_files", len(files)) or len(files))
+            total_tracks = int(kwargs.get("total_tracks", 0) or 0)
+            current_track = int(kwargs.get("current_track", 1) or 1)
+            track_progress = float(kwargs.get("track_progress", 0.0) or 0.0)
+            files_done = int(kwargs.get("files_done", 0) or 0)
+            percent = _compute_extract_percent(
+                total_files=total_files,
+                file_index=file_index,
+                phase=phase,
+                total_tracks=total_tracks,
+                current_track=current_track,
+                track_progress=track_progress,
+                files_done=files_done,
+            )
+            progress.update(
+                task,
+                completed=percent,
+                description=_phase_message(phase, current_file, current_track, total_tracks),
+            )
+            if phase == "finalization" and is_verbose():
+                log_file_processing(current_file, status="extracted")
 
-        report, _results = service.extract_audio(
-            files=list(files),
-            options=options,
-            progress_callback=progress_callback,
-        )
+        try:
+            report, _results = service.extract_audio(
+                files=list(files),
+                options=options,
+                progress_callback=progress_callback,
+            )
+        except Exception as exc:
+            _handle_extract_runtime_error(exc)
+            raise SystemExit(1) from exc
 
     # Print results
     if report.ok:
@@ -350,6 +497,10 @@ def extract_video_command(
     configure_verbosity(verbose)
     if is_verbose():
         logger.info(f"Processing {len(files)} file(s) with verbosity level {verbose}")
+    files = tuple(_expand_extract_inputs(files))
+    if not files:
+        print_error("No valid video files found for extraction.")
+        raise SystemExit(1)
 
     # Initialize registry and service
     registry = ToolRegistry()
@@ -377,21 +528,45 @@ def extract_video_command(
         TimeElapsedColumn(),
         console=console,
     ) as progress:
-        task = progress.add_task("Extracting video...", total=len(files))
+        task = progress.add_task("Analyzing files...", total=100.0)
 
         def progress_callback(**kwargs):
-            files_done = kwargs.get("files", 0)
-            if files_done and is_verbose():
-                current_file = kwargs.get("current_file", "")
-                if current_file:
-                    log_file_processing(current_file, status="extracted")
-            progress.advance(task, files_done)
+            current_file = str(kwargs.get("current_file", "") or "")
+            if not current_file:
+                return
+            phase = str(kwargs.get("phase", "processing") or "processing")
+            file_index = int(kwargs.get("file_index", 1) or 1)
+            total_files = int(kwargs.get("total_files", len(files)) or len(files))
+            total_tracks = int(kwargs.get("total_tracks", 1) or 1)
+            current_track = int(kwargs.get("current_track", 1) or 1)
+            track_progress = float(kwargs.get("track_progress", 0.0) or 0.0)
+            files_done = int(kwargs.get("files_done", 0) or 0)
+            percent = _compute_extract_percent(
+                total_files=total_files,
+                file_index=file_index,
+                phase=phase,
+                total_tracks=total_tracks,
+                current_track=current_track,
+                track_progress=track_progress,
+                files_done=files_done,
+            )
+            progress.update(
+                task,
+                completed=percent,
+                description=_phase_message(phase, current_file, current_track, total_tracks),
+            )
+            if phase == "finalization" and is_verbose():
+                log_file_processing(current_file, status="extracted")
 
-        report, _results = service.extract_video(
-            files=list(files),
-            options=options,
-            progress_callback=progress_callback,
-        )
+        try:
+            report, _results = service.extract_video(
+                files=list(files),
+                options=options,
+                progress_callback=progress_callback,
+            )
+        except Exception as exc:
+            _handle_extract_runtime_error(exc)
+            raise SystemExit(1) from exc
 
     # Print results
     if report.ok:

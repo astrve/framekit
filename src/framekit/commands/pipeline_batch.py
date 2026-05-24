@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from framekit.core.i18n import tr
+from framekit.modules.batch.models import BatchStatus
 from framekit.modules.batch.models import BatchConfig
 from framekit.modules.batch.service import BatchService
 from framekit.ui.branding import print_module_banner
@@ -190,7 +191,7 @@ def _run_batch_queue(
         return 1
 
     summary_callback(service)
-    failed_count = sum(1 for result in results if not result.success)
+    failed_count = sum(1 for result in results if result.item.status == BatchStatus.FAILED)
     return 1 if failed_count > 0 else 0
 
 

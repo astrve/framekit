@@ -169,7 +169,7 @@ class BatchStatistics:
         completed = sum(1 for r in results if r.success)
         failed = sum(1 for r in results if not r.success and r.item.status == BatchStatus.FAILED)
         skipped = sum(1 for r in results if r.item.status == BatchStatus.SKIPPED)
-        failed_items = [r.item for r in results if not r.success]
+        failed_items = [r.item for r in results if r.item.status == BatchStatus.FAILED]
         return cls(
             total=len(results),
             completed=completed,

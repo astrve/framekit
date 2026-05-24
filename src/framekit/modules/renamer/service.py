@@ -10,7 +10,7 @@ from framekit.core.models.renamer import RenamePlanItem
 from framekit.core.reporting import OperationReport
 from framekit.core.runs.ledger import new_run_id, record_move
 from framekit.modules.renamer.planner import build_rename_plan
-from framekit.modules.renamer.profiles import RenamerProfile
+from framekit.modules.renamer.profiles import LanguageTagProfile, RenamerProfile
 
 
 class RenamerService:
@@ -25,6 +25,7 @@ class RenamerService:
         remove_terms: tuple[str, ...] = (),
         insert_after_pairs: tuple[tuple[str, str], ...] = (),
         profile: RenamerProfile | None = None,
+        language_profile: LanguageTagProfile | None = None,
     ) -> list[RenamePlanItem]:
         """Build plan."""
         return build_rename_plan(
@@ -34,6 +35,7 @@ class RenamerService:
             remove_terms=remove_terms,
             insert_after_pairs=insert_after_pairs,
             profile=profile,
+            language_profile=language_profile,
         )
 
     def _apply_case_only_rename(self, source: Path, target: Path) -> None:
@@ -176,6 +178,8 @@ class RenamerService:
         remove_terms: tuple[str, ...] = (),
         insert_after_pairs: tuple[tuple[str, str], ...] = (),
         profile: RenamerProfile | None = None,
+        language_profile: LanguageTagProfile | None = None,
+        strict_conflict_abort: bool = False,
     ) -> OperationReport:
         """Handle run."""
         run_id = new_run_id("renamer")
@@ -186,30 +190,73 @@ class RenamerService:
             remove_terms=remove_terms,
             insert_after_pairs=insert_after_pairs,
             profile=profile,
+            language_profile=language_profile,
         )
         report = OperationReport(tool="renamer")
         report.scanned = len(plan)
 
-        # Headless mode: warn and suppress renames that would upgrade a
-        # single-language tag to MULTI.* — the user must resolve interactively.
-        if apply_changes and not sys.stdin.isatty():
+        # Headless/strict mode: explicit conflicts must be resolved interactively.
+        if apply_changes and (strict_conflict_abort or not sys.stdin.isatty()):
             from framekit.ui.console import print_warning
 
-            for i, item in enumerate(plan):
-                if item.multi_language_detected and item.changed:
-                    print_warning(
-                        tr(
-                            "renamer.warn.multi_lang_ambiguous",
-                            default=(
-                                "{file}: multiple audio tracks detected but filename tag is"
-                                " '{tag}'. Skipping rename — run interactively to resolve."
-                            ),
-                            file=item.source.name,
-                            tag=item.existing_language_tag or "?",
+            blocking_items = [
+                item
+                for item in plan
+                if item.changed
+                and (item.language_tag_conflict or item.multi_language_detected or item.resolution_conflict)
+            ]
+            if blocking_items:
+                report.processed = len(plan)
+                for item in blocking_items:
+                    if item.language_tag_conflict or item.multi_language_detected:
+                        print_warning(
+                            tr(
+                                "renamer.warn.language_tag_conflict",
+                                default=(
+                                    "{file}: language tag conflict (name='{existing}', tracks='{calculated}'). "
+                                    "Run interactively to choose between Calculated/Current/Custom."
+                                ),
+                                file=item.source.name,
+                                existing=item.existing_language_tag or "-",
+                                calculated=item.calculated_language_tag or "-",
+                            )
                         )
-                    )
-                    # Suppress the rename for this item — leave file unchanged.
-                    plan[i].changed = False
+                        report.add_error(
+                            "language_tag_conflict",
+                            tr(
+                                "renamer.error.language_tag_conflict",
+                                default=(
+                                    "{file}: language tag conflict requires interactive resolution."
+                                ),
+                                file=item.source.name,
+                            ),
+                            source=str(item.source),
+                            target=str(item.target),
+                        )
+                    if item.resolution_conflict:
+                        print_warning(
+                            tr(
+                                "renamer.warn.resolution_conflict",
+                                default=(
+                                    "{file}: resolution tag is ambiguous or mismatched. "
+                                    "MediaInfo is required for safe normalization."
+                                ),
+                                file=item.source.name,
+                            )
+                        )
+                        report.add_error(
+                            "resolution_conflict",
+                            tr(
+                                "renamer.error.resolution_conflict",
+                                default=(
+                                    "{file}: resolution conflict requires interactive resolution."
+                                ),
+                                file=item.source.name,
+                            ),
+                            source=str(item.source),
+                            target=str(item.target),
+                        )
+                return report
 
         for item in plan:
             report.processed += 1

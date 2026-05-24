@@ -448,8 +448,17 @@ def _resolve_cleanmkv_preset(
             tr("cleanmkv.warning.selection_cancelled", default="Interactive selection cancelled.")
         )
         return 1, None, None
+    except RuntimeError as exc:
+        print_error(str(exc) or "CleanMKV scan failed.")
+        return 1, None, None
     except Exception as exc:
-        print_exception_error(exc)
+        print_error(
+            tr(
+                "cleanmkv.error.scan_or_preset_failed",
+                default="CleanMKV setup failed: {error}",
+                error=str(exc),
+            )
+        )
         return 1, None, None
 
     return None, preset, scans

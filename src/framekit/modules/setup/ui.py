@@ -350,19 +350,16 @@ def show_profile_comparison() -> None:
     )
 
     table.add_column(tr("wizard.profiles.feature", default="Feature"), style="white")
-    table.add_column(tr("wizard.profiles.beginner", default="Beginner"), style="green")
+    table.add_column(tr("wizard.profiles.normal", default="Normal"), style="green")
     table.add_column(tr("wizard.profiles.advanced", default="Advanced"), style="yellow")
-    table.add_column(tr("wizard.profiles.custom", default="Custom"), style=ACCENT)
 
     table.add_row(
         tr("wizard.profiles.questions", default="Questions"),
         tr("wizard.profiles.minimal", default="Minimal"),
         tr("wizard.profiles.all", default="All"),
-        tr("wizard.profiles.all", default="All"),
     )
     table.add_row(
         tr("wizard.profiles.help_text", default="Help Text"),
-        "✗",
         "✗",
         "✓",
     )
@@ -370,13 +367,11 @@ def show_profile_comparison() -> None:
         tr("wizard.profiles.defaults", default="Defaults"),
         tr("wizard.profiles.sensible", default="Sensible"),
         tr("wizard.profiles.minimal_defaults", default="Minimal"),
-        tr("wizard.profiles.sensible", default="Sensible"),
     )
     table.add_row(
         tr("wizard.profiles.time", default="Setup Time"),
         tr("wizard.profiles.fast", default="~2 min"),
         tr("wizard.profiles.medium", default="~5 min"),
-        tr("wizard.profiles.detailed", default="~5 min"),
     )
 
     console.print()

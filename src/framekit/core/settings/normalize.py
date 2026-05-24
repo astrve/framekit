@@ -233,6 +233,59 @@ def _normalize_renamer_module(modules: dict[str, Any]) -> None:
     renamer["language_insertion"] = str(
         renamer.get("language_insertion", "after_episode_or_start") or "after_episode_or_start"
     ).strip()
+    _normalize_renamer_language_profiles(renamer)
+
+
+def _normalize_renamer_language_profiles(renamer: dict[str, Any]) -> None:
+    profiles_cfg = renamer.setdefault("language_profiles", {})
+    if not isinstance(profiles_cfg, dict):
+        renamer["language_profiles"] = {"active": "fr_tracker", "profiles": {}}
+        return
+
+    active = str(profiles_cfg.get("active", "fr_tracker") or "fr_tracker").strip()
+    profiles_cfg["active"] = active or "fr_tracker"
+
+    raw_profiles = profiles_cfg.get("profiles", {})
+    if not isinstance(raw_profiles, dict):
+        profiles_cfg["profiles"] = {}
+        return
+
+    normalized_profiles: dict[str, dict[str, Any]] = {}
+    for name, value in raw_profiles.items():
+        if not isinstance(value, dict):
+            continue
+        profile_name = str(name or "").strip()
+        if not profile_name:
+            continue
+        default_language = str(value.get("default_language", "") or "").strip()
+        variant_languages = value.get("variant_languages", [])
+        if not isinstance(variant_languages, list):
+            variant_languages = []
+        tags = value.get("tags", {})
+        if not isinstance(tags, dict):
+            tags = {}
+        normalized_profiles[profile_name] = {
+            "default_language": default_language,
+            "variant_languages": [str(item).strip() for item in variant_languages if str(item).strip()],
+            "tags": {
+                "only_default": str(tags.get("only_default", "") or "").strip().upper(),
+                "default_plus_others": str(tags.get("default_plus_others", "") or "")
+                .strip()
+                .upper(),
+                "default_plus_variants_only": str(tags.get("default_plus_variants_only", "") or "")
+                .strip()
+                .upper(),
+                "default_plus_variants_and_others": str(
+                    tags.get("default_plus_variants_and_others", "") or ""
+                )
+                .strip()
+                .upper(),
+                "none_default_multi": str(tags.get("none_default_multi", "MULTI") or "MULTI")
+                .strip()
+                .upper(),
+            },
+        }
+    profiles_cfg["profiles"] = normalized_profiles
 
 
 def _normalize_nfo_module(modules: dict[str, Any]) -> None:
@@ -292,7 +345,19 @@ def _normalize_pipeline_module(modules: dict[str, Any]) -> None:
     raw_enabled = pipeline.get(
         "enabled_modules", DEFAULT_SETTINGS["modules"]["pipeline"]["enabled_modules"]
     )
-    allowed = {"renamer", "cleanmkv", "nfo", "torrent", "prez", "upload"}
+    allowed = {
+        "renamer",
+        "cleanmkv",
+        "metadata",
+        "nfo",
+        "torrent",
+        "prez",
+        "encode",
+        "screenshot",
+        "seedbox",
+        "upload",
+        "rename-parent",
+    }
     if isinstance(raw_enabled, list):
         enabled = [
             str(item).strip().lower()
@@ -324,6 +389,16 @@ def _normalize_prez_module(modules: dict[str, Any]) -> None:
     prez["with_metadata"] = _as_bool(prez.get("with_metadata"), True)
 
 
+def _normalize_screenshot_module(modules: dict[str, Any]) -> None:
+    screenshot = modules.setdefault("screenshot", {})
+    if not isinstance(screenshot, dict):
+        modules["screenshot"] = {"default_folder": "", "target": "prez"}
+        return
+    screenshot["default_folder"] = str(screenshot.get("default_folder", "") or "").strip()
+    target = str(screenshot.get("target", "prez") or "prez").strip().lower()
+    screenshot["target"] = target if target in {"prez", "nfo", "both", "none"} else "prez"
+
+
 def _normalize_prez_format(raw_format: Any) -> str:
     format_value = str(raw_format or "both").strip().lower()
     if format_value in {"html", "bbcode", "both", "mediainfo"}:
@@ -348,6 +423,7 @@ def _normalize_modules(normalized: dict[str, Any]) -> None:
     _normalize_torrent_module(modules)
     _normalize_pipeline_module(modules)
     _normalize_prez_module(modules)
+    _normalize_screenshot_module(modules)
 
 
 def _normalize_upload(normalized: dict[str, Any]) -> None:
@@ -369,9 +445,57 @@ def _normalize_seedbox(normalized: dict[str, Any]) -> None:
         normalized["seedbox"] = deepcopy(DEFAULT_SETTINGS["seedbox"])
         return
     seedbox["default"] = str(seedbox.get("default", "") or "").strip()
+    raw_profile_defaults = seedbox.get("default_by_profile", {})
+    if isinstance(raw_profile_defaults, dict):
+        seedbox["default_by_profile"] = {
+            str(profile).strip(): str(seedbox_name).strip()
+            for profile, seedbox_name in raw_profile_defaults.items()
+            if str(profile).strip() and str(seedbox_name).strip()
+        }
+    else:
+        seedbox["default_by_profile"] = {}
     seedbox["history_enabled"] = _as_bool(seedbox.get("history_enabled"), True)
+    seedbox["max_concurrent_uploads"] = _as_int(
+        seedbox.get("max_concurrent_uploads"),
+        3,
+        minimum=1,
+    )
     raw_seedboxes = seedbox.get("seedboxes", [])
-    seedbox["seedboxes"] = raw_seedboxes if isinstance(raw_seedboxes, list) else []
+    if not isinstance(raw_seedboxes, list):
+        seedbox["seedboxes"] = []
+        return
+
+    normalized_seedboxes: list[dict[str, Any]] = []
+    for entry in raw_seedboxes:
+        if not isinstance(entry, dict):
+            continue
+        normalized_seedboxes.append(
+            {
+                "name": str(entry.get("name", "") or "").strip(),
+                "rclone_remote": str(entry.get("rclone_remote", "") or "").strip(),
+                "remote_base_path": str(entry.get("remote_base_path", "/") or "/").strip()
+                or "/",
+                "bandwidth_limit": str(entry.get("bandwidth_limit", "") or "").strip(),
+                "disk_check_enabled": _as_bool(entry.get("disk_check_enabled"), True),
+                "min_free_gb": entry.get("min_free_gb", 5),
+                "post_upload_command": str(entry.get("post_upload_command", "") or "").strip(),
+                "max_concurrent_uploads": _as_int(
+                    entry.get("max_concurrent_uploads"),
+                    seedbox["max_concurrent_uploads"],
+                    minimum=1,
+                ),
+                "category_paths": (
+                    {
+                        str(category).strip(): str(path).strip()
+                        for category, path in (entry.get("category_paths", {}) or {}).items()
+                        if str(category).strip() and str(path).strip()
+                    }
+                    if isinstance(entry.get("category_paths", {}), dict)
+                    else {}
+                ),
+            }
+        )
+    seedbox["seedboxes"] = normalized_seedboxes
 
 
 def _normalize_plugins(normalized: dict[str, Any]) -> None:

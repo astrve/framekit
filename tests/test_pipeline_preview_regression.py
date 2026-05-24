@@ -21,6 +21,7 @@ from __future__ import annotations
 import inspect
 
 from framekit.commands import pipeline as pipeline_module
+from framekit.commands import pipeline_preview as pipeline_preview_module
 
 
 def test_handle_preview_accepts_dry_run_kwarg() -> None:
@@ -74,3 +75,35 @@ def test_run_pipeline_command_exposes_dry_run() -> None:
     sig = inspect.signature(pipeline_module.run_pipeline_command)
     assert "dry_run" in sig.parameters
     assert sig.parameters["dry_run"].default is False
+
+
+def test_preview_renamer_uses_language_profile_default(monkeypatch, tmp_path) -> None:
+    """Pipeline preview should compute default lang from active language profile."""
+    from framekit.modules.renamer.service import RenamerService
+
+    captured: dict[str, str] = {}
+
+    def _fake_build_plan(self, folder, **kwargs):
+        _ = self, folder
+        captured["default_lang"] = str(kwargs.get("default_lang", ""))
+        return []
+
+    monkeypatch.setattr(RenamerService, "build_plan", _fake_build_plan)
+
+    settings = {
+        "general": {"locale": "en"},
+        "modules": {
+            "renamer": {
+                "profile": "fr_tracker",
+                "default_language_tag": "MULTI.VFF",
+                "language_profiles": {
+                    "active": "fr_tracker",
+                    "profiles": {},
+                },
+            }
+        },
+    }
+
+    preview = pipeline_preview_module._gather_renamer_preview(tmp_path, settings, ())
+    assert preview == {"files": []}
+    assert captured["default_lang"] == "VFF"

@@ -24,6 +24,7 @@ BANNERS_BRANCH = "feature/banners"
 
 BANNER_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/{BANNERS_BRANCH}"
 BANNER_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents"
+TREE_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/git/trees/{BANNERS_BRANCH}"
 
 # Sections rendered in the BBCode presentation.
 BANNER_SECTIONS: tuple[str, ...] = (
@@ -77,13 +78,32 @@ CACHE_TTL_SECONDS = 24 * 60 * 60
 CACHE_FILE_NAME = "prez_banners_index.json"
 CACHE_SCHEMA_VERSION = 2
 HTTP_TIMEOUT = 6.0
+_LAST_CATALOG_STATUS = "unknown"
+_LAST_CATALOG_DURATION = 0.0
 
 
 def _cache_path() -> Path:
     return get_cache_dir() / CACHE_FILE_NAME
 
 
-def _load_cache() -> dict[str, Any] | None:
+def _set_catalog_metrics(status: str, started: float) -> None:
+    global _LAST_CATALOG_STATUS, _LAST_CATALOG_DURATION
+    _LAST_CATALOG_STATUS = status
+    _LAST_CATALOG_DURATION = max(time.perf_counter() - started, 0.0)
+
+
+def _cache_looks_usable(data: dict[str, Any]) -> bool:
+    if data.get("schema_version") != CACHE_SCHEMA_VERSION:
+        return False
+    if data.get("branch") != BANNERS_BRANCH:
+        return False
+    designs = data.get("designs")
+    if not isinstance(designs, dict):
+        return False
+    return len(designs) >= len(FALLBACK_DESIGNS)
+
+
+def _load_cache_payload() -> dict[str, Any] | None:
     path = _cache_path()
     if not path.exists():
         return None
@@ -93,19 +113,19 @@ def _load_cache() -> dict[str, Any] | None:
         return None
     if not isinstance(data, dict):
         return None
-    if data.get("schema_version") != CACHE_SCHEMA_VERSION:
+    return data
+
+
+def _load_cache() -> dict[str, Any] | None:
+    data = _load_cache_payload()
+    if data is None:
         return None
-    if data.get("branch") != BANNERS_BRANCH:
+    if not _cache_looks_usable(data):
         return None
     fetched_at = data.get("fetched_at")
     if not isinstance(fetched_at, (int, float)):
         return None
     if (time.time() - float(fetched_at)) > CACHE_TTL_SECONDS:
-        return None
-    designs = data.get("designs")
-    if not isinstance(designs, dict):
-        return None
-    if len(designs) < len(FALLBACK_DESIGNS):
         return None
     return data
 
@@ -158,6 +178,10 @@ def _fetch_remote_index() -> dict[str, dict[str, list[str]]] | None:
 
     Returns None if the root listing cannot be retrieved.
     """
+    from_tree = _fetch_remote_index_from_tree()
+    if from_tree:
+        return from_tree
+
     root = _github_list("")
     if root is None:
         return None
@@ -168,6 +192,59 @@ def _fetch_remote_index() -> dict[str, dict[str, list[str]]] | None:
         if languages:
             designs[design_name] = languages
     return designs or None
+
+
+def _fetch_remote_index_from_tree() -> dict[str, dict[str, list[str]]] | None:
+    import httpx  # local import keeps prez startup fast
+
+    try:
+        response = httpx.get(
+            TREE_API_URL,
+            params={"recursive": 1},
+            timeout=HTTP_TIMEOUT,
+            headers={"Accept": "application/vnd.github+json"},
+        )
+    except httpx.HTTPError:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    tree = payload.get("tree")
+    if not isinstance(tree, list):
+        return None
+
+    designs: dict[str, dict[str, set[str]]] = {}
+    for item in tree:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "blob":
+            continue
+        path = item.get("path")
+        if not isinstance(path, str) or not path.endswith(".png"):
+            continue
+        parts = path.split("/")
+        if len(parts) != 3:
+            continue
+        design, language, filename = parts
+        if language not in SUPPORTED_LANGUAGES:
+            continue
+        if design.startswith((".", "_")):
+            continue
+        section = filename[:-4]
+        if section not in BANNER_SECTIONS:
+            continue
+        by_language = designs.setdefault(design, {})
+        by_language.setdefault(language, set()).add(section)
+
+    normalized: dict[str, dict[str, list[str]]] = {}
+    for design, by_language in designs.items():
+        normalized[design] = {
+            language: sorted(sections) for language, sections in by_language.items() if sections
+        }
+    return normalized or None
 
 
 def _iter_design_names(entries: list[dict[str, Any]]) -> list[str]:
@@ -222,21 +299,33 @@ def get_banner_index(*, refresh: bool = False) -> dict[str, dict[str, list[str]]
       3. Static fallback (every design assumed to expose all sections in all
          supported languages).
     """
+    started = time.perf_counter()
+    stale_cache: dict[str, Any] | None = None
     if not refresh:
         cached = _load_cache()
         if cached is not None:
+            _set_catalog_metrics("cache_hit", started)
             return cached["designs"]
+        payload = _load_cache_payload()
+        if payload is not None and _cache_looks_usable(payload):
+            stale_cache = payload
 
     remote = _fetch_remote_index()
     if remote:
         _save_cache(remote)
+        _set_catalog_metrics("remote_refresh", started)
         return remote
+
+    if stale_cache is not None:
+        _set_catalog_metrics("cache_stale", started)
+        return stale_cache["designs"]
 
     # Last resort: fallback list (no remote and no cache).
     fallback: dict[str, dict[str, list[str]]] = {
         design: {lang: list(BANNER_SECTIONS) for lang in SUPPORTED_LANGUAGES}
         for design in FALLBACK_DESIGNS
     }
+    _set_catalog_metrics("fallback", started)
     return fallback
 
 
@@ -347,7 +436,8 @@ def select_banner_design(
     )
 
     with Live(spinner, console=console, transient=True):
-        available = get_available_designs(language)
+        index = get_banner_index()
+        available = sorted(design for design, langs in index.items() if langs.get(language))
 
     if available:
         print_info(
@@ -355,6 +445,20 @@ def select_banner_design(
                 "prez.banner.fetch_success",
                 default="✓ Banner catalog loaded successfully ({count} designs available)",
                 count=len(available),
+            )
+        )
+        status_map = {
+            "cache_hit": "cache hit",
+            "cache_stale": "cache stale (offline fallback)",
+            "remote_refresh": "cache miss/stale -> refreshed online",
+            "fallback": "offline fallback list",
+        }
+        print_info(
+            tr(
+                "prez.banner.fetch_source",
+                default="Source: {source} ({duration:.2f}s)",
+                source=status_map.get(_LAST_CATALOG_STATUS, _LAST_CATALOG_STATUS),
+                duration=_LAST_CATALOG_DURATION,
             )
         )
     else:

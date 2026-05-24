@@ -258,7 +258,7 @@ class TestExtractionService:
 
             call = mock_audio_extractor.extract_audio.call_args
             assert call is not None
-            assert call.kwargs["output_path"].name == "movie.a0.aac"
+            assert call.kwargs["output_path"].name == "movie.EN.aac"
 
     def test_extract_video_single_file(self, mock_registry, mock_video_extractor, tmp_path):
         """Test extracting video from a single file."""
@@ -288,6 +288,122 @@ class TestExtractionService:
             assert len(results) == 1
             assert results[0].success
             mock_video_extractor.extract_video.assert_called_once()
+
+    def test_extract_audio_uses_lang_role_index_naming(
+        self, mock_registry, mock_audio_extractor, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Audio output names should use LANG/ROLE and add index on collisions."""
+        from framekit.modules.extract.models import AudioExtractionOptions
+        from framekit.modules.extract.service import ExtractionService
+
+        test_file = tmp_path / "movie.mkv"
+        test_file.touch()
+
+        fake_info = SimpleNamespace(
+            audio_tracks=[
+                SimpleNamespace(
+                    id=1,
+                    codec="AAC",
+                    format_name="AAC",
+                    codec_id="A_AAC",
+                    language="eng",
+                    title="Main",
+                    is_default=True,
+                    bitrate=128_000,
+                ),
+                SimpleNamespace(
+                    id=2,
+                    codec="AAC",
+                    format_name="AAC",
+                    codec_id="A_AAC",
+                    language="eng",
+                    title="Main alt",
+                    is_default=False,
+                    bitrate=128_000,
+                ),
+            ],
+            subtitle_tracks=[],
+            video_codec="H264",
+            video_format_name="AVC",
+            width=1920,
+            height=1080,
+            video_frame_rate=23.976,
+            video_bitrate=4_000_000,
+            hdr_format=None,
+            duration_ms=1000,
+        )
+        monkeypatch.setattr("framekit.modules.extract.service.probe_media_file", lambda _: fake_info)
+        mock_audio_extractor.detect_audio_format.return_value = AudioFormat.AAC
+
+        with patch(
+            "framekit.modules.extract.service.AudioExtractor",
+            return_value=mock_audio_extractor,
+        ):
+            service = ExtractionService(mock_registry)
+            options = AudioExtractionOptions(output_format=AudioFormat.ORIGINAL, extract_all=True)
+            service.extract_audio(files=[test_file], options=options)
+
+        names = [call.kwargs["output_path"].name for call in mock_audio_extractor.extract_audio.call_args_list]
+        assert names == ["movie.EN.aac", "movie.EN.2.aac"]
+
+    def test_extract_subtitles_uses_lang_role_naming(
+        self, mock_registry, mock_subtitle_extractor, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Subtitle output names should use LANG and role labels."""
+        from framekit.modules.extract.models import ExtractionOptions
+        from framekit.modules.extract.service import ExtractionService
+
+        test_file = tmp_path / "movie.mkv"
+        test_file.touch()
+
+        fake_info = SimpleNamespace(
+            audio_tracks=[],
+            subtitle_tracks=[
+                SimpleNamespace(
+                    id=2,
+                    codec="SubRip",
+                    format_name="SubRip",
+                    codec_id="S_TEXT/UTF8",
+                    language="fra",
+                    title="Forced",
+                    is_forced=True,
+                    is_default=True,
+                    subtitle_variant="forced",
+                ),
+                SimpleNamespace(
+                    id=3,
+                    codec="SubRip",
+                    format_name="SubRip",
+                    codec_id="S_TEXT/UTF8",
+                    language="fra",
+                    title="SDH",
+                    is_forced=False,
+                    is_default=False,
+                    subtitle_variant="sdh",
+                ),
+            ],
+            video_codec="H264",
+            video_format_name="AVC",
+            width=1920,
+            height=1080,
+            video_frame_rate=23.976,
+            video_bitrate=4_000_000,
+            hdr_format=None,
+            duration_ms=1000,
+        )
+        monkeypatch.setattr("framekit.modules.extract.service.probe_media_file", lambda _: fake_info)
+        mock_subtitle_extractor.detect_subtitle_format.return_value = SubtitleFormat.SRT
+
+        with patch(
+            "framekit.modules.extract.service.SubtitleExtractor",
+            return_value=mock_subtitle_extractor,
+        ):
+            service = ExtractionService(mock_registry)
+            options = ExtractionOptions(output_format=SubtitleFormat.ORIGINAL, extract_all=True)
+            service.extract_subtitles(files=[test_file], options=options)
+
+        names = [call.kwargs["output_path"].name for call in mock_subtitle_extractor.extract_subtitle.call_args_list]
+        assert names == ["movie.FR.FORCED.srt", "movie.FR.SDH.srt"]
 
     def test_progress_callback_invoked(self, mock_registry, mock_subtitle_extractor, tmp_path):
         """Test that progress callback is invoked during extraction."""

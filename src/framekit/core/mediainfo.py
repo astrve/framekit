@@ -171,6 +171,9 @@ def _build_audio_track(track) -> MediaTrack:
     lang, variant = _track_language(track)
     channels_count = _to_int(_track_text(track, "channel_s", "channels"))
     codec_text = _track_text(track, "format") or ""
+    is_visual_impaired = _track_flag(track, "visual_impaired") or _track_flag(
+        track, "flag_visual_impaired"
+    )
 
     return MediaTrack(
         id=_track_stream_id(track),
@@ -190,7 +193,10 @@ def _build_audio_track(track) -> MediaTrack:
         stream_size_ratio=_stream_size_ratio(track),
         frame_rate=None,
         bit_depth=None,
-        extra={"channels_count": str(channels_count) if channels_count is not None else ""},
+        extra={
+            "channels_count": str(channels_count) if channels_count is not None else "",
+            "flag_visual_impaired": "1" if is_visual_impaired else "",
+        },
     )
 
 

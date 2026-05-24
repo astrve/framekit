@@ -53,6 +53,58 @@ else
 fi
 
 echo ""
+echo "Optional dependencies:"
+echo "  - MKVToolNix (mkvmerge)"
+echo "  - FFmpeg"
+echo "  - MediaInfo"
+echo "  - rclone"
+echo ""
+read -r -p "Install optional dependencies now? [Y/n] " INSTALL_DEPS
+INSTALL_DEPS=${INSTALL_DEPS:-Y}
+
+if [[ ! "${INSTALL_DEPS}" =~ ^[Nn]$ ]]; then
+    PKG_MANAGER=""
+    if command -v brew &>/dev/null; then
+        PKG_MANAGER="brew"
+    elif command -v apt-get &>/dev/null; then
+        PKG_MANAGER="apt"
+    fi
+
+    if [[ -z "$PKG_MANAGER" ]]; then
+        echo "[WARN] No supported package manager detected (brew/apt-get). Install deps manually."
+    else
+        echo "[..] Using package manager: $PKG_MANAGER"
+        read -r -p "Install MKVToolNix? [Y/n] " INSTALL_MKV
+        read -r -p "Install FFmpeg? [Y/n] " INSTALL_FFMPEG
+        read -r -p "Install MediaInfo? [Y/n] " INSTALL_MEDIAINFO
+        read -r -p "Install rclone? [Y/n] " INSTALL_RCLONE
+        INSTALL_MKV=${INSTALL_MKV:-Y}
+        INSTALL_FFMPEG=${INSTALL_FFMPEG:-Y}
+        INSTALL_MEDIAINFO=${INSTALL_MEDIAINFO:-Y}
+        INSTALL_RCLONE=${INSTALL_RCLONE:-Y}
+
+        if [[ "$PKG_MANAGER" == "brew" ]]; then
+            [[ ! "$INSTALL_MKV" =~ ^[Nn]$ ]] && brew install mkvtoolnix || true
+            [[ ! "$INSTALL_FFMPEG" =~ ^[Nn]$ ]] && brew install ffmpeg || true
+            [[ ! "$INSTALL_MEDIAINFO" =~ ^[Nn]$ ]] && brew install mediainfo || true
+            [[ ! "$INSTALL_RCLONE" =~ ^[Nn]$ ]] && brew install rclone || true
+        else
+            [[ ! "$INSTALL_MKV" =~ ^[Nn]$ ]] && sudo apt-get install -y mkvtoolnix || true
+            [[ ! "$INSTALL_FFMPEG" =~ ^[Nn]$ ]] && sudo apt-get install -y ffmpeg || true
+            [[ ! "$INSTALL_MEDIAINFO" =~ ^[Nn]$ ]] && sudo apt-get install -y mediainfo || true
+            [[ ! "$INSTALL_RCLONE" =~ ^[Nn]$ ]] && sudo apt-get install -y rclone || true
+        fi
+    fi
+fi
+
+echo ""
+echo "Dependency check:"
+command -v mkvmerge >/dev/null && echo "[OK] mkvmerge found" || echo "[WARN] mkvmerge not found"
+command -v ffmpeg >/dev/null && echo "[OK] ffmpeg found" || echo "[WARN] ffmpeg not found"
+command -v mediainfo >/dev/null && echo "[OK] mediainfo found" || echo "[WARN] mediainfo not found"
+command -v rclone >/dev/null && echo "[OK] rclone found" || echo "[WARN] rclone not found"
+
+echo ""
 echo "  Installation complete!"
 echo ""
 echo "  Usage:"

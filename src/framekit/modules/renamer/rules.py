@@ -11,7 +11,7 @@ VIDEO_EXTENSIONS = {".mkv"}
 
 REMOVE_TOKENS = {"PMTP", "CP", "CR", "AMZN"}
 
-LANGUAGE_TAGS = {
+BASE_LANGUAGE_TAGS = {
     "MULTI",
     "MULTI.VFF",
     "MULTI.VF2",
@@ -24,6 +24,9 @@ LANGUAGE_TAGS = {
     "EN",
     "ES",
 }
+
+# Backward-compatible alias consumed by term_selector and older integrations.
+LANGUAGE_TAGS = BASE_LANGUAGE_TAGS
 
 # Tags that indicate a single-language track; if multiple audio tracks are
 # detected in the media file, these should be upgraded to MULTI.<tag>.
@@ -129,23 +132,40 @@ def split_team(stem: str) -> tuple[str, str | None]:
 
 def extract_existing_language_tag(parts: list[str]) -> str | None:
     """Handle extract existing language tag."""
+    return extract_existing_language_tag_with_candidates(parts, candidates=BASE_LANGUAGE_TAGS)
+
+
+def _language_tag_candidates(
+    additional_tags: tuple[str, ...] | set[str] = (),
+) -> set[str]:
+    extras = {str(tag or "").strip().upper() for tag in additional_tags if str(tag or "").strip()}
+    return set(BASE_LANGUAGE_TAGS) | extras
+
+
+def extract_existing_language_tag_with_candidates(
+    parts: list[str], *, candidates: set[str]
+) -> str | None:
+    """Extract first language tag using explicit candidate tags."""
     for part in parts:
-        if part in LANGUAGE_TAGS:
+        if part in candidates:
             return part
     return None
 
 
-def replace_language_tag(parts: list[str], lang_tag: str) -> list[str]:
+def replace_language_tag(
+    parts: list[str], lang_tag: str, *, additional_tags: tuple[str, ...] = ()
+) -> list[str]:
     """Handle replace language tag."""
+    candidates = _language_tag_candidates(additional_tags)
     if not lang_tag:
         # Empty tag means remove any existing language tag
-        return [p for p in parts if p not in LANGUAGE_TAGS]
+        return [p for p in parts if p not in candidates]
 
     replaced = False
     new_parts: list[str] = []
 
     for part in parts:
-        if part in LANGUAGE_TAGS:
+        if part in candidates:
             if not replaced:
                 new_parts.append(lang_tag)
                 replaced = True
@@ -155,14 +175,20 @@ def replace_language_tag(parts: list[str], lang_tag: str) -> list[str]:
     if replaced:
         return new_parts
 
-    return ensure_language_tag(new_parts, lang_tag)
+    return ensure_language_tag(new_parts, lang_tag, additional_tags=additional_tags)
 
 
-def ensure_language_tag(parts: list[str], default_lang: str) -> list[str]:
+def ensure_language_tag(
+    parts: list[str],
+    default_lang: str,
+    *,
+    additional_tags: tuple[str, ...] = (),
+) -> list[str]:
     """Ensure language tag."""
+    candidates = _language_tag_candidates(additional_tags)
     if not default_lang:
         return parts
-    if any(part in LANGUAGE_TAGS for part in parts):
+    if any(part in candidates for part in parts):
         return parts
 
     for index, part in enumerate(parts):
@@ -319,14 +345,25 @@ def _merge_multi_language_tokens(
 
 
 def _apply_language_rules(
-    parts: list[str], *, default_lang: str, force_lang: bool
+    parts: list[str],
+    *,
+    default_lang: str,
+    force_lang: bool,
+    additional_language_tags: tuple[str, ...] = (),
 ) -> tuple[list[str], str | None, str | None]:
-    existing_language_tag = extract_existing_language_tag(parts)
+    candidates = _language_tag_candidates(additional_language_tags)
+    existing_language_tag = extract_existing_language_tag_with_candidates(parts, candidates=candidates)
     if force_lang:
-        updated_parts = replace_language_tag(parts, default_lang)
+        updated_parts = replace_language_tag(
+            parts, default_lang, additional_tags=additional_language_tags
+        )
     else:
-        updated_parts = ensure_language_tag(parts, default_lang)
-    resulting_language_tag = extract_existing_language_tag(updated_parts)
+        updated_parts = ensure_language_tag(
+            parts, default_lang, additional_tags=additional_language_tags
+        )
+    resulting_language_tag = extract_existing_language_tag_with_candidates(
+        updated_parts, candidates=candidates
+    )
     return updated_parts, existing_language_tag, resulting_language_tag
 
 
@@ -353,6 +390,33 @@ def _apply_preferred_resolution(parts: list[str], preferred_resolution: str) -> 
         lambda part: part.upper() in resolution_tokens,
         preferred_resolution,
     )
+
+
+def _is_resolution_token(token: str) -> bool:
+    upper = token.upper()
+    if upper in {"2160P", "1440P", "1080P", "720P", "480P", "HD"}:
+        return True
+    return bool(re.fullmatch(r"\d{3,4}P", upper))
+
+
+def _normalize_resolution_tokens(parts: list[str], preferred_resolution: str) -> list[str]:
+    """Normalize existing resolution-like tokens using preferred bucket value.
+
+    Examples:
+        HD -> 1080P (if preferred is 1080P)
+        1012P -> 1080P (if preferred is 1080P)
+        1012P + 1080P -> 1080P
+    """
+    indices = [idx for idx, token in enumerate(parts) if _is_resolution_token(token)]
+    if not indices:
+        return parts
+    if not preferred_resolution:
+        return parts
+
+    first_index = indices[0]
+    normalized = [token for idx, token in enumerate(parts) if idx not in set(indices)]
+    normalized.insert(first_index, preferred_resolution)
+    return normalized
 
 
 def _apply_quality_aliases(
@@ -389,7 +453,13 @@ def _insert_missing_resolution(
     if any(part.upper() in resolution_tokens for part in parts):
         return parts
 
-    language_index = next((i for i, part in enumerate(parts) if part in LANGUAGE_TAGS), None)
+    language_candidates = _language_tag_candidates(
+        tuple(profile.language_aliases.values()) if profile else ()
+    )
+    language_index = next(
+        (i for i, part in enumerate(parts) if part in language_candidates),
+        None,
+    )
     if language_index is not None:
         return [*parts[: language_index + 1], preferred_resolution, *parts[language_index + 1 :]]
 
@@ -454,6 +524,7 @@ def normalize_name_part(
     default_lang: str = DEFAULT_LANG,
     force_lang: bool = False,
     profile: RenamerProfile | None = None,
+    additional_language_tags: tuple[str, ...] = (),
 ) -> tuple[str, str | None, str | None, str | None, str | None]:
     """Normalise name part."""
     original_for_metadata = base
@@ -470,9 +541,13 @@ def normalize_name_part(
         preferred_resolution=preferred_resolution,
         profile=profile,
     )
+    parts = _normalize_resolution_tokens(parts, preferred_resolution)
 
     parts, existing_language_tag, resulting_language_tag = _apply_language_rules(
-        parts, default_lang=default_lang, force_lang=force_lang
+        parts,
+        default_lang=default_lang,
+        force_lang=force_lang,
+        additional_language_tags=additional_language_tags,
     )
     parts = _apply_preferred_resolution(parts, preferred_resolution)
     parts = _insert_missing_resolution(
