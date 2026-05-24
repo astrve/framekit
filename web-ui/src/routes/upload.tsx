@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { CloudUpload } from "lucide-react";
+import { CloudUpload, Copy } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,8 @@ export function UploadPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [dryRun, setDryRun] = useState(true);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const runMutation = useMutation({
     mutationFn: runModule,
@@ -53,6 +55,21 @@ export function UploadPage() {
 
   const result: RunModuleResult | null = runMutation.data ?? null;
 
+  const validateAction = (): string | null => {
+    if (action === "show-tracker" && !tracker.trim()) {
+      return "show-tracker requiert le nom tracker.";
+    }
+    if (action === "run") {
+      if (!torrentPath.trim()) {
+        return "run requiert torrent/release path.";
+      }
+      if (!tracker.trim()) {
+        return "run requiert --tracker.";
+      }
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
@@ -78,6 +95,11 @@ export function UploadPage() {
                 value={action}
                 onChange={(event) => {
                   setAction(event.target.value as UploadAction);
+                  if (event.target.value !== "run") {
+                    setName("");
+                    setDescription("");
+                    setDryRun(true);
+                  }
                 }}
               >
                 <option value="setup">setup</option>
@@ -116,20 +138,60 @@ export function UploadPage() {
             framekit upload {buildArgs()}
           </pre>
 
-          <Button
-            type="button"
-            onClick={() => {
-              runMutation.mutate({
-                module: "upload",
-                args_text: buildArgs(),
-                dry_run: false,
-                auto_yes: false,
-                confirm_destructive: true,
-              });
-            }}
-          >
-            Exécuter
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => {
+                const issue = validateAction();
+                setLocalError(issue);
+                if (issue) {
+                  return;
+                }
+                runMutation.mutate({
+                  module: "upload",
+                  args_text: buildArgs(),
+                  dry_run: false,
+                  auto_yes: false,
+                  confirm_destructive: true,
+                });
+              }}
+            >
+              Exécuter
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                await navigator.clipboard.writeText(`framekit upload ${buildArgs()}`.trim());
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1000);
+              }}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              {copied ? "Copié" : "Copier commande"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAction("list-trackers");
+                setTracker("");
+                setTorrentPath("");
+                setName("");
+                setDescription("");
+                setDryRun(true);
+                setLocalError(null);
+              }}
+            >
+              Reset
+            </Button>
+          </div>
+
+          {localError ? (
+            <p className="rounded-md border border-rose-400/60 bg-rose-500/10 p-3 text-sm text-rose-800">
+              {localError}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

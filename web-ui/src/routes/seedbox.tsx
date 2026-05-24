@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { HardDriveDownload } from "lucide-react";
+import { Copy, HardDriveDownload } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,8 @@ export function SeedboxPage() {
   const [category, setCategory] = useState("");
   const [dryRun, setDryRun] = useState(true);
   const [verbose, setVerbose] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const runMutation = useMutation({
     mutationFn: runModule,
@@ -54,6 +56,16 @@ export function SeedboxPage() {
 
   const result: RunModuleResult | null = runMutation.data ?? null;
 
+  const validateAction = (): string | null => {
+    if (action === "push" && !pathA.trim()) {
+      return "Push requiert Path A (source local).";
+    }
+    if (action === "pull" && !pathA.trim()) {
+      return "Pull requiert Path A (remote path).";
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
@@ -79,6 +91,11 @@ export function SeedboxPage() {
                 value={action}
                 onChange={(event) => {
                   setAction(event.target.value as SeedboxAction);
+                  if (event.target.value === "list") {
+                    setPathA("");
+                    setPathB("");
+                    setCategory("");
+                  }
                 }}
               >
                 <option value="list">list</option>
@@ -122,20 +139,61 @@ export function SeedboxPage() {
             framekit seedbox {buildArgs()}
           </pre>
 
-          <Button
-            type="button"
-            onClick={() => {
-              runMutation.mutate({
-                module: "seedbox",
-                args_text: buildArgs(),
-                dry_run: false,
-                auto_yes: false,
-                confirm_destructive: true,
-              });
-            }}
-          >
-            Exécuter
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => {
+                const issue = validateAction();
+                setLocalError(issue);
+                if (issue) {
+                  return;
+                }
+                runMutation.mutate({
+                  module: "seedbox",
+                  args_text: buildArgs(),
+                  dry_run: false,
+                  auto_yes: false,
+                  confirm_destructive: true,
+                });
+              }}
+            >
+              Exécuter
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                await navigator.clipboard.writeText(`framekit seedbox ${buildArgs()}`.trim());
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1000);
+              }}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              {copied ? "Copié" : "Copier commande"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAction("status");
+                setPathA("");
+                setPathB("");
+                setSeedboxName("");
+                setCategory("");
+                setDryRun(true);
+                setVerbose(false);
+                setLocalError(null);
+              }}
+            >
+              Reset
+            </Button>
+          </div>
+
+          {localError ? (
+            <p className="rounded-md border border-rose-400/60 bg-rose-500/10 p-3 text-sm text-rose-800">
+              {localError}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
