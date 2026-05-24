@@ -53,6 +53,9 @@ export function HomePage() {
             <Link to="/batch" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
               Ouvrir Batch
             </Link>
+            <Link to="/studios" className="inline-flex rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
+              Ouvrir Studios
+            </Link>
             <Link
               to="/studio/$module"
               params={{ module: "watch" }}

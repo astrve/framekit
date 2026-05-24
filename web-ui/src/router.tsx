@@ -61,6 +61,18 @@ const moduleStudioRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/module-studio"), "ModuleStudioPage"),
 });
 
+const studiosRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/studios",
+  component: lazyRouteComponent(() => import("@/routes/studios"), "StudiosPage"),
+});
+
+const dedicatedModuleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/module/$moduleSlug",
+  component: lazyRouteComponent(() => import("@/routes/dedicated-module"), "DedicatedModulePage"),
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   doctorRoute,
@@ -72,6 +84,8 @@ const routeTree = rootRoute.addChildren([
   pipelineRoute,
   batchRoute,
   moduleStudioRoute,
+  studiosRoute,
+  dedicatedModuleRoute,
 ]);
 
 export const router = createRouter({

@@ -21,6 +21,7 @@ const navItems = [
   { to: "/upload", label: "Upload" },
   { to: "/pipeline", label: "Pipeline" },
   { to: "/batch", label: "Batch" },
+  { to: "/studios", label: "Studios" },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
