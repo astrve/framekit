@@ -1,7 +1,7 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Copy, LoaderCircle, OctagonX } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,12 @@ function formatDuration(startedAt: string | null | undefined, finishedAt: string
 export function ModuleJobDetailPage() {
   const { jobId } = useParams({ from: "/modules/$jobId" });
   const [copied, setCopied] = useState(false);
+  const [followLogs, setFollowLogs] = useState(true);
+  const [logFilter, setLogFilter] = useState("");
+  const [pausedSnapshot, setPausedSnapshot] = useState<{ stdout: string; stderr: string }>({
+    stdout: "",
+    stderr: "",
+  });
   const jobQuery = useQuery({
     queryKey: ["module-job-detail", jobId],
     queryFn: () => getModuleJob(jobId),
@@ -59,6 +65,29 @@ export function ModuleJobDetailPage() {
   const commandText = job?.result?.argv.join(" ") ?? "";
   const liveStdout = job?.status === "pending" || job?.status === "running" ? (job.live_stdout ?? "") : "";
   const liveStderr = job?.status === "pending" || job?.status === "running" ? (job.live_stderr ?? "") : "";
+  const stdoutView = followLogs ? liveStdout : pausedSnapshot.stdout;
+  const stderrView = followLogs ? liveStderr : pausedSnapshot.stderr;
+
+  const filteredStdout = useMemo(() => {
+    const pattern = logFilter.trim().toLowerCase();
+    if (!pattern) {
+      return stdoutView;
+    }
+    return stdoutView
+      .split("\n")
+      .filter((line) => line.toLowerCase().includes(pattern))
+      .join("\n");
+  }, [logFilter, stdoutView]);
+  const filteredStderr = useMemo(() => {
+    const pattern = logFilter.trim().toLowerCase();
+    if (!pattern) {
+      return stderrView;
+    }
+    return stderrView
+      .split("\n")
+      .filter((line) => line.toLowerCase().includes(pattern))
+      .join("\n");
+  }, [logFilter, stderrView]);
 
   return (
     <div className="space-y-6">
@@ -159,13 +188,40 @@ export function ModuleJobDetailPage() {
 
               {job && (job.status === "pending" || job.status === "running") ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Logs live</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium">Logs live</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (followLogs) {
+                          setPausedSnapshot({ stdout: liveStdout, stderr: liveStderr });
+                          setFollowLogs(false);
+                          return;
+                        }
+                        setFollowLogs(true);
+                      }}
+                    >
+                      {followLogs ? "Pause follow" : "Reprendre follow"}
+                    </Button>
+                  </div>
+                  <label className="space-y-1 text-sm" htmlFor="logs-filter">
+                    Filtre
+                    <input
+                      id="logs-filter"
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      value={logFilter}
+                      onChange={(event) => setLogFilter(event.target.value)}
+                      placeholder="contient..."
+                    />
+                  </label>
                   <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
-                    {liveStdout || "(stdout en attente)"}
+                    {filteredStdout || "(stdout en attente)"}
                   </pre>
-                  {liveStderr ? (
+                  {filteredStderr ? (
                     <pre className="max-h-72 overflow-auto rounded-md border border-rose-300 bg-rose-100 p-3 text-xs text-rose-800">
-                      {liveStderr}
+                      {filteredStderr}
                     </pre>
                   ) : null}
                 </div>
