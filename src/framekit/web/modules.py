@@ -403,6 +403,95 @@ def list_seedboxes_summary() -> list[dict[str, Any]]:
     return result
 
 
+def create_seedbox_profile(
+    *,
+    name: str,
+    rclone_remote: str,
+    remote_base_path: str,
+    max_concurrent_uploads: int | None = None,
+    bandwidth_limit: str = "",
+    set_default: bool = False,
+) -> list[dict[str, Any]]:
+    """Create one seedbox profile in settings and return updated summary."""
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError("seedbox name is required")
+    normalized_remote = rclone_remote.strip()
+    if not normalized_remote:
+        raise ValueError("rclone_remote is required")
+    normalized_base = remote_base_path.strip() or "/"
+    store = SettingsStore()
+    settings = store.load()
+    seedbox_cfg = settings.setdefault("seedbox", {})
+    seedboxes_raw = seedbox_cfg.get("seedboxes", [])
+    seedboxes: list[dict[str, Any]] = list(seedboxes_raw) if isinstance(seedboxes_raw, list) else []
+    if any(str(item.get("name", "") or "").strip() == normalized_name for item in seedboxes if isinstance(item, dict)):
+        raise ValueError(f"seedbox '{normalized_name}' already exists")
+    profile: dict[str, Any] = {
+        "name": normalized_name,
+        "rclone_remote": normalized_remote,
+        "remote_base_path": normalized_base,
+    }
+    if max_concurrent_uploads is not None:
+        profile["max_concurrent_uploads"] = max(1, int(max_concurrent_uploads))
+    if bandwidth_limit.strip():
+        profile["bandwidth_limit"] = bandwidth_limit.strip()
+    seedboxes.append(profile)
+    seedbox_cfg["seedboxes"] = seedboxes
+    if set_default or not str(seedbox_cfg.get("default", "") or "").strip():
+        seedbox_cfg["default"] = normalized_name
+    settings["seedbox"] = seedbox_cfg
+    store.save(settings)
+    return list_seedboxes_summary()
+
+
+def remove_seedbox_profile(name: str) -> list[dict[str, Any]]:
+    """Remove one seedbox profile and return updated summary."""
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError("seedbox name is required")
+    store = SettingsStore()
+    settings = store.load()
+    seedbox_cfg = settings.setdefault("seedbox", {})
+    seedboxes_raw = seedbox_cfg.get("seedboxes", [])
+    seedboxes: list[dict[str, Any]] = list(seedboxes_raw) if isinstance(seedboxes_raw, list) else []
+    filtered = [
+        item
+        for item in seedboxes
+        if not (isinstance(item, dict) and str(item.get("name", "") or "").strip() == normalized_name)
+    ]
+    if len(filtered) == len(seedboxes):
+        raise ValueError(f"seedbox '{normalized_name}' not found")
+    seedbox_cfg["seedboxes"] = filtered
+    current_default = str(seedbox_cfg.get("default", "") or "").strip()
+    if current_default == normalized_name:
+        seedbox_cfg["default"] = str(filtered[0].get("name", "") or "").strip() if filtered else ""
+    settings["seedbox"] = seedbox_cfg
+    store.save(settings)
+    return list_seedboxes_summary()
+
+
+def set_default_seedbox(name: str) -> list[dict[str, Any]]:
+    """Set seedbox default profile and return updated summary."""
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError("seedbox name is required")
+    store = SettingsStore()
+    settings = store.load()
+    seedbox_cfg = settings.setdefault("seedbox", {})
+    seedboxes_raw = seedbox_cfg.get("seedboxes", [])
+    seedboxes: list[dict[str, Any]] = list(seedboxes_raw) if isinstance(seedboxes_raw, list) else []
+    if not any(
+        isinstance(item, dict) and str(item.get("name", "") or "").strip() == normalized_name
+        for item in seedboxes
+    ):
+        raise ValueError(f"seedbox '{normalized_name}' not found")
+    seedbox_cfg["default"] = normalized_name
+    settings["seedbox"] = seedbox_cfg
+    store.save(settings)
+    return list_seedboxes_summary()
+
+
 def list_upload_trackers_summary() -> list[dict[str, Any]]:
     """Return configured upload trackers summary from settings."""
     store = SettingsStore()

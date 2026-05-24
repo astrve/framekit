@@ -65,6 +65,37 @@ export async function getSeedboxList(): Promise<SeedboxList> {
   return fetchValidated("/api/v1/seedbox/list", SeedboxListSchema);
 }
 
+export async function addSeedbox(payload: {
+  name: string;
+  rclone_remote: string;
+  remote_base_path: string;
+  max_concurrent_uploads?: number;
+  bandwidth_limit?: string;
+  set_default?: boolean;
+}): Promise<SeedboxList> {
+  return fetchValidated("/api/v1/seedbox/add", SeedboxListSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function useSeedbox(name: string): Promise<SeedboxList> {
+  return fetchValidated("/api/v1/seedbox/use", SeedboxListSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function removeSeedbox(name: string): Promise<SeedboxList> {
+  return fetchValidated("/api/v1/seedbox/remove", SeedboxListSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function getUploadTrackers(): Promise<UploadTrackers> {
   return fetchValidated("/api/v1/upload/trackers", UploadTrackersSchema);
 }

@@ -54,6 +54,9 @@ Reference for Framekit web interface technical baseline.
 - `GET /api/v1/settings/summary`
 - `POST /api/v1/settings/patch`
 - `GET /api/v1/seedbox/list`
+- `POST /api/v1/seedbox/add`
+- `POST /api/v1/seedbox/use`
+- `POST /api/v1/seedbox/remove`
 - `GET /api/v1/seedbox/history`
 - `GET /api/v1/upload/trackers`
 - `GET /api/v1/upload/state`

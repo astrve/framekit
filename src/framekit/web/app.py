@@ -14,7 +14,10 @@ from framekit.web.modules import (
     enqueue_module_job,
     get_module_job,
     get_settings_summary,
+    create_seedbox_profile,
     patch_settings_values,
+    remove_seedbox_profile,
+    set_default_seedbox,
     get_upload_state,
     list_seedbox_history,
     list_module_jobs,
@@ -36,6 +39,19 @@ class UploadStateRequest(BaseModel):
 
 class SettingsPatchRequest(BaseModel):
     changes: dict[str, Any]
+
+
+class SeedboxCreateRequest(BaseModel):
+    name: str
+    rclone_remote: str
+    remote_base_path: str
+    max_concurrent_uploads: int | None = None
+    bandwidth_limit: str = ""
+    set_default: bool = False
+
+
+class SeedboxNameRequest(BaseModel):
+    name: str
 
 
 def _resolve_version() -> str:
@@ -97,6 +113,36 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/seedbox/list")
     def seedbox_list() -> dict[str, Any]:
         return {"seedboxes": list_seedboxes_summary()}
+
+    @app.post("/api/v1/seedbox/add")
+    def seedbox_add(request: SeedboxCreateRequest) -> dict[str, Any]:
+        try:
+            return {
+                "seedboxes": create_seedbox_profile(
+                    name=request.name,
+                    rclone_remote=request.rclone_remote,
+                    remote_base_path=request.remote_base_path,
+                    max_concurrent_uploads=request.max_concurrent_uploads,
+                    bandwidth_limit=request.bandwidth_limit,
+                    set_default=request.set_default,
+                )
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/seedbox/use")
+    def seedbox_use(request: SeedboxNameRequest) -> dict[str, Any]:
+        try:
+            return {"seedboxes": set_default_seedbox(request.name)}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/seedbox/remove")
+    def seedbox_remove(request: SeedboxNameRequest) -> dict[str, Any]:
+        try:
+            return {"seedboxes": remove_seedbox_profile(request.name)}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/v1/upload/trackers")
     def upload_trackers() -> dict[str, Any]:

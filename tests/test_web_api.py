@@ -128,6 +128,71 @@ def test_seedbox_list_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert payload["seedboxes"][0]["is_default"] is True
 
 
+def test_seedbox_add_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.create_seedbox_profile",
+        lambda **kwargs: [
+            {
+                "name": kwargs["name"],
+                "rclone_remote": kwargs["rclone_remote"],
+                "remote_base_path": kwargs["remote_base_path"],
+                "max_concurrent_uploads": kwargs.get("max_concurrent_uploads", 3),
+                "bandwidth_limit": kwargs.get("bandwidth_limit", ""),
+                "is_default": kwargs.get("set_default", False),
+            }
+        ],
+    )
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/seedbox/add",
+        json={
+            "name": "main",
+            "rclone_remote": "main-remote",
+            "remote_base_path": "/downloads",
+            "max_concurrent_uploads": 3,
+            "set_default": True,
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["seedboxes"][0]["name"] == "main"
+    assert payload["seedboxes"][0]["is_default"] is True
+
+
+def test_seedbox_use_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.set_default_seedbox",
+        lambda name: [
+            {
+                "name": name,
+                "rclone_remote": "remote",
+                "remote_base_path": "/",
+                "max_concurrent_uploads": 3,
+                "bandwidth_limit": "",
+                "is_default": True,
+            }
+        ],
+    )
+    client = TestClient(create_app())
+    response = client.post("/api/v1/seedbox/use", json={"name": "main"})
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["seedboxes"][0]["name"] == "main"
+    assert payload["seedboxes"][0]["is_default"] is True
+
+
+def test_seedbox_remove_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr("framekit.web.app.remove_seedbox_profile", lambda name: [])
+    client = TestClient(create_app())
+    response = client.post("/api/v1/seedbox/remove", json={"name": "legacy"})
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["seedboxes"] == []
+
+
 def test_upload_trackers_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         "framekit.web.app.list_upload_trackers_summary",

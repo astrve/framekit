@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { getSeedboxHistory, runModule } from "@/lib/api/endpoints";
+import { addSeedbox, getSeedboxHistory, getSeedboxList, removeSeedbox, runModule, useSeedbox } from "@/lib/api/endpoints";
 import type { RunModuleResult } from "@/lib/api/schemas";
 
 type SeedboxAction = "list" | "status" | "doctor" | "history" | "push" | "pull";
@@ -21,13 +21,42 @@ export function SeedboxPage() {
   const [verbose, setVerbose] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addRemote, setAddRemote] = useState("");
+  const [addBasePath, setAddBasePath] = useState("/");
+  const [addTransfers, setAddTransfers] = useState("3");
 
   const runMutation = useMutation({
     mutationFn: runModule,
   });
+  const listQuery = useQuery({
+    queryKey: ["seedbox-list-page"],
+    queryFn: getSeedboxList,
+  });
   const historyQuery = useQuery({
     queryKey: ["seedbox-history", seedboxName],
     queryFn: () => getSeedboxHistory(50, seedboxName),
+  });
+  const addMutation = useMutation({
+    mutationFn: addSeedbox,
+    onSuccess: () => {
+      listQuery.refetch().catch(() => undefined);
+      setLocalError(null);
+    },
+  });
+  const useMutationSeedbox = useMutation({
+    mutationFn: useSeedbox,
+    onSuccess: () => {
+      listQuery.refetch().catch(() => undefined);
+      setLocalError(null);
+    },
+  });
+  const removeMutationSeedbox = useMutation({
+    mutationFn: removeSeedbox,
+    onSuccess: () => {
+      listQuery.refetch().catch(() => undefined);
+      setLocalError(null);
+    },
   });
 
   const buildArgs = (): string => {
@@ -220,6 +249,82 @@ export function SeedboxPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Manage seedboxes</CardTitle>
+          <CardDescription>Parité core: add / use / remove.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm" htmlFor="seedbox-add-name">
+              Name
+              <Input id="seedbox-add-name" value={addName} onChange={(event) => setAddName(event.target.value)} />
+            </label>
+            <label className="space-y-1 text-sm" htmlFor="seedbox-add-remote">
+              rclone remote
+              <Input id="seedbox-add-remote" value={addRemote} onChange={(event) => setAddRemote(event.target.value)} />
+            </label>
+            <label className="space-y-1 text-sm" htmlFor="seedbox-add-base">
+              remote base path
+              <Input id="seedbox-add-base" value={addBasePath} onChange={(event) => setAddBasePath(event.target.value)} />
+            </label>
+            <label className="space-y-1 text-sm" htmlFor="seedbox-add-transfers">
+              max transfers
+              <Input id="seedbox-add-transfers" value={addTransfers} onChange={(event) => setAddTransfers(event.target.value)} />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!addName.trim() || !addRemote.trim()) {
+                  setLocalError("Name + remote requis pour add.");
+                  return;
+                }
+                addMutation.mutate({
+                  name: addName.trim(),
+                  rclone_remote: addRemote.trim(),
+                  remote_base_path: addBasePath.trim() || "/",
+                  max_concurrent_uploads: Number.parseInt(addTransfers, 10) || 3,
+                });
+              }}
+            >
+              Add
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!addName.trim()) {
+                  setLocalError("Name requis pour use.");
+                  return;
+                }
+                useMutationSeedbox.mutate(addName.trim());
+              }}
+            >
+              Use default
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!addName.trim()) {
+                  setLocalError("Name requis pour remove.");
+                  return;
+                }
+                removeMutationSeedbox.mutate(addName.trim());
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+          <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+            {JSON.stringify(listQuery.data?.seedboxes ?? [], null, 2)}
+          </pre>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
