@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ActivitySquare,
@@ -24,6 +25,7 @@ import {
 import type React from "react";
 import { useEffect, useState } from "react";
 
+import { getSettingsProfiles } from "@/lib/api/endpoints";
 import { useAuth } from "@/lib/auth";
 
 import {
@@ -184,6 +186,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user: authUser, logout } = useAuth();
   const [dark, setDark] = useState(() => localStorage.getItem("theme") === "dark");
+  const profilesQuery = useQuery({
+    queryKey: ["settings-profiles-nav"],
+    queryFn: getSettingsProfiles,
+    staleTime: 30_000,
+  });
+  const activeProfile = profilesQuery.data?.active ?? null;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -273,6 +281,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Settings className="h-3.5 w-3.5" />
               Settings
             </Link>
+
+            {activeProfile ? (
+              <Link
+                to="/settings-setup"
+                title="Active settings profile — click to manage"
+                className="shrink-0 inline-flex items-center rounded-full border border-border bg-secondary/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                {activeProfile}
+              </Link>
+            ) : null}
           </nav>
 
           <div className="flex-1 md:hidden" />
