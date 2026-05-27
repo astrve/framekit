@@ -1,17 +1,15 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { Copy, Play } from "lucide-react";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from "react";
 
-import { RunTimeline } from "@/components/modules/run-timeline";
+import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
-import { createModuleJob, getModuleJob, getModulesResources, getSettingsSummary, runModule } from "@/lib/api/endpoints";
+import { createModuleJob, getModulesResources, getSettingsSummary, runModule } from "@/lib/api/endpoints";
 import type { ModuleJob, RunModuleResult } from "@/lib/api/schemas";
-import { runTimeline } from "@/lib/progress";
 
 const PIPELINE_MODULES = [
   "renamer",
@@ -39,7 +37,6 @@ function quoteArg(value: string): string {
 }
 
 export function PipelinePage() {
-  const navigate = useNavigate();
   const resourcesQuery = useQuery({ queryKey: ["modules-resources"], queryFn: getModulesResources });
   const settingsQuery = useQuery({ queryKey: ["settings-summary"], queryFn: getSettingsSummary });
   const [releasePath, setReleasePath] = useState("");
@@ -70,22 +67,15 @@ export function PipelinePage() {
   const [confirmDestructive, setConfirmDestructive] = useState(true);
   const [asyncRun, setAsyncRun] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [lastJob, setLastJob] = useState<ModuleJob | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const runMutation = useMutation({ mutationFn: runModule });
-  const createJobMutation = useMutation({ mutationFn: createModuleJob, onSuccess: (job) => setLastJob(job) });
-  const result: RunModuleResult | null = runMutation.data ?? null;
-  const jobPollQuery = useQuery({
-    queryKey: ["module-job", lastJob?.id],
-    queryFn: ({ queryKey }) => getModuleJob(queryKey[1] as string),
-    enabled: !!lastJob,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return !status || ["completed", "failed", "cancelled"].includes(status) ? false : 1500;
-    },
+  const createJobMutation = useMutation({
+    mutationFn: createModuleJob,
+    onSuccess: (job) => setJobId(job.id),
   });
-  const timelineSource = jobPollQuery.data ?? lastJob;
+  const result: RunModuleResult | null = runMutation.data ?? null;
 
   const argsText = useMemo(() => {
     const args: string[] = [];
@@ -169,16 +159,6 @@ export function PipelinePage() {
         <h1 className="text-2xl font-semibold tracking-tight">Pipeline</h1>
         <p className="mt-1 text-sm text-muted-foreground">Process a release end-to-end with your chosen steps.</p>
       </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Progress</CardTitle>
-          <CardDescription>Queued · Running · Done</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RunTimeline items={runTimeline(timelineSource)} />
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -335,16 +315,19 @@ export function PipelinePage() {
               Copy Command
             </Button>
             {copied ? <Badge variant="success">Copied</Badge> : null}
-            {lastJob ? (
-              <Button type="button" variant="outline" onClick={() => void navigate({ to: "/modules/$jobId", params: { jobId: lastJob.id } })}>
-                View Job
-              </Button>
-            ) : null}
           </div>
         </CardContent>
       </Card>
 
-      {result ? (
+      {asyncRun && jobId !== null ? (
+        <InlineJobPanel
+          jobId={jobId}
+          moduleName="pipeline"
+          onRerun={(newJob: ModuleJob) => setJobId(newJob.id)}
+        />
+      ) : null}
+
+      {!asyncRun && result ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

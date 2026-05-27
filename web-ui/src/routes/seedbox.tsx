@@ -1,17 +1,15 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { Copy, HardDriveDownload } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { RunTimeline } from "@/components/modules/run-timeline";
+import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Input } from "@/components/ui/input";
-import { addSeedbox, createModuleJob, getModuleJob, getSettingsProfiles, getSeedboxHistory, getSeedboxList, removeSeedbox, runModule, useSeedbox } from "@/lib/api/endpoints";
+import { addSeedbox, createModuleJob, getSettingsProfiles, getSeedboxHistory, getSeedboxList, removeSeedbox, runModule, useSeedbox } from "@/lib/api/endpoints";
 import type { ModuleJob, RunModuleResult } from "@/lib/api/schemas";
-import { runTimeline } from "@/lib/progress";
 
 type SeedboxAction = "list" | "status" | "doctor" | "history" | "push" | "pull";
 
@@ -35,7 +33,6 @@ function compact(value: unknown): string {
 }
 
 export function SeedboxPage() {
-  const navigate = useNavigate();
   const [action, setAction] = useState<SeedboxAction>("status");
   const [seedboxName, setSeedboxName] = useState("");
   const [sourcePath, setSourcePath] = useState("");
@@ -50,7 +47,7 @@ export function SeedboxPage() {
   const [asyncRun, setAsyncRun] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [lastJob, setLastJob] = useState<ModuleJob | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const [addName, setAddName] = useState("");
   const [addRemote, setAddRemote] = useState("");
@@ -61,7 +58,10 @@ export function SeedboxPage() {
   const [bindSeedbox, setBindSeedbox] = useState("");
 
   const runMutation = useMutation({ mutationFn: runModule });
-  const createJobMutation = useMutation({ mutationFn: createModuleJob, onSuccess: (job) => setLastJob(job) });
+  const createJobMutation = useMutation({
+    mutationFn: createModuleJob,
+    onSuccess: (job) => setJobId(job.id),
+  });
   const listQuery = useQuery({ queryKey: ["seedbox-list-page"], queryFn: getSeedboxList });
   const historyQuery = useQuery({ queryKey: ["seedbox-history", seedboxName, limit], queryFn: () => getSeedboxHistory(limit, seedboxName) });
   const profilesQuery = useQuery({ queryKey: ["settings-profiles"], queryFn: getSettingsProfiles });
@@ -128,17 +128,6 @@ export function SeedboxPage() {
   const previewCommand = useMemo(() => `framekit seedbox ${argsText}`.trim(), [argsText]);
   const result: RunModuleResult | null = runMutation.data ?? null;
 
-  const jobPollQuery = useQuery({
-    queryKey: ["seedbox-job", lastJob?.id],
-    queryFn: ({ queryKey }) => getModuleJob(queryKey[1] as string),
-    enabled: !!lastJob,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return !status || ["completed", "failed", "cancelled"].includes(status) ? false : 1500;
-    },
-  });
-  const timelineSource = jobPollQuery.data ?? lastJob ?? null;
-
   function validateAction(): string | null {
     if (action === "push" && !sourcePath.trim()) {
       return "Source Path Required For Push.";
@@ -175,16 +164,6 @@ export function SeedboxPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Seedbox</h1>
         <p className="mt-1 text-sm text-muted-foreground">Send and receive files from your remote seedbox.</p>
       </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Run Timeline</CardTitle>
-          <CardDescription>Queue, Running, Result.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RunTimeline items={runTimeline(timelineSource)} />
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -269,7 +248,7 @@ export function SeedboxPage() {
           <div className="flex flex-wrap gap-4 text-sm">
             {([
               [confirmDestructive, setConfirmDestructive, "Allow file changes", "Permit overwrite and delete operations during the transfer"],
-              [asyncRun, setAsyncRun, "Run in background", "Queue as async job — result appears in the Jobs tab without blocking the UI"],
+              [asyncRun, setAsyncRun, "Run in background", "Queue as async job — result appears inline without blocking the UI"],
             ] as Array<[boolean, (v: boolean) => void, string, string]>).map(([checked, setter, label, tooltip]) => (
               <label key={label} className="inline-flex cursor-pointer items-center gap-2 text-sm">
                 <button
@@ -313,16 +292,19 @@ export function SeedboxPage() {
               Copy Command
             </Button>
             {copied ? <Badge variant="success">Copied</Badge> : null}
-            {lastJob ? (
-              <Button type="button" variant="outline" onClick={() => void navigate({ to: "/modules/$jobId", params: { jobId: lastJob.id } })}>
-                View Job
-              </Button>
-            ) : null}
           </div>
         </CardContent>
       </Card>
 
-      {result ? (
+      {asyncRun && jobId !== null ? (
+        <InlineJobPanel
+          jobId={jobId}
+          moduleName="seedbox"
+          onRerun={(newJob: ModuleJob) => setJobId(newJob.id)}
+        />
+      ) : null}
+
+      {!asyncRun && result ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

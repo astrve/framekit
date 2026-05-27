@@ -1,17 +1,15 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { Copy, Play } from "lucide-react";
 import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
 
-import { RunTimeline } from "@/components/modules/run-timeline";
+import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
-import { createModuleJob, getModuleJob, getModulesResources, runModule } from "@/lib/api/endpoints";
+import { createModuleJob, getModulesResources, runModule } from "@/lib/api/endpoints";
 import type { ModuleJob, RunModuleResult } from "@/lib/api/schemas";
-import { runTimeline } from "@/lib/progress";
 
 const BATCH_MODULES = [
   "renamer",
@@ -38,7 +36,6 @@ function quoteArg(value: string): string {
 }
 
 export function BatchPage() {
-  const navigate = useNavigate();
   const resourcesQuery = useQuery({ queryKey: ["modules-resources"], queryFn: getModulesResources });
   const [parentPath, setParentPath] = useState("");
   const [pipelinePreset, setPipelinePreset] = useState("");
@@ -53,23 +50,15 @@ export function BatchPage() {
   const [confirmDestructive, setConfirmDestructive] = useState(true);
   const [asyncRun, setAsyncRun] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [lastJob, setLastJob] = useState<ModuleJob | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const runMutation = useMutation({ mutationFn: runModule });
-  const createJobMutation = useMutation({ mutationFn: createModuleJob, onSuccess: (job) => setLastJob(job) });
-  const result: RunModuleResult | null = runMutation.data ?? null;
-
-  const jobPollQuery = useQuery({
-    queryKey: ["batch-job", lastJob?.id],
-    queryFn: ({ queryKey }) => getModuleJob(queryKey[1] as string),
-    enabled: !!lastJob,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return !status || ["completed", "failed", "cancelled"].includes(status) ? false : 1500;
-    },
+  const createJobMutation = useMutation({
+    mutationFn: createModuleJob,
+    onSuccess: (job) => setJobId(job.id),
   });
-  const timelineSource = jobPollQuery.data ?? lastJob ?? null;
+  const result: RunModuleResult | null = runMutation.data ?? null;
 
   const argsText = useMemo(() => {
     const args: string[] = [];
@@ -143,16 +132,6 @@ export function BatchPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Batch Processing</h1>
         <p className="mt-1 text-sm text-muted-foreground">Run the full pipeline across an entire folder of releases.</p>
       </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Progress</CardTitle>
-          <CardDescription>Queued · Running · Done</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RunTimeline items={runTimeline(timelineSource)} />
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -274,16 +253,19 @@ export function BatchPage() {
               Copy Command
             </Button>
             {copied ? <Badge variant="success">Copied</Badge> : null}
-            {lastJob ? (
-              <Button type="button" variant="outline" onClick={() => void navigate({ to: "/modules/$jobId", params: { jobId: lastJob.id } })}>
-                View Job
-              </Button>
-            ) : null}
           </div>
         </CardContent>
       </Card>
 
-      {result ? (
+      {asyncRun && jobId !== null ? (
+        <InlineJobPanel
+          jobId={jobId}
+          moduleName="batch"
+          onRerun={(newJob: ModuleJob) => setJobId(newJob.id)}
+        />
+      ) : null}
+
+      {!asyncRun && result ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

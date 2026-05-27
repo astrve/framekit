@@ -1,17 +1,15 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { CloudUpload, Copy } from "lucide-react";
 import { useState } from "react";
 
-import { RunTimeline } from "@/components/modules/run-timeline";
+import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Input } from "@/components/ui/input";
-import { createModuleJob, getModuleJob, getUploadHistory, getUploadState, getUploadTrackerInfo, getUploadTrackers, runModule, setUploadState } from "@/lib/api/endpoints";
+import { createModuleJob, getUploadHistory, getUploadState, getUploadTrackerInfo, getUploadTrackers, runModule, setUploadState } from "@/lib/api/endpoints";
 import type { ModuleJob, RunModuleResult, UploadState } from "@/lib/api/schemas";
-import { runTimeline } from "@/lib/progress";
 
 type UploadAction = "setup" | "list-trackers" | "show-tracker" | "run" | "history";
 
@@ -24,7 +22,6 @@ const ACTION_BUTTONS: Array<{ value: UploadAction; label: string }> = [
 ];
 
 export function UploadPage() {
-  const navigate = useNavigate();
   const [action, setAction] = useState<UploadAction>("list-trackers");
   const [tracker, setTracker] = useState("");
   const [torrentPath, setTorrentPath] = useState("");
@@ -33,10 +30,13 @@ export function UploadPage() {
   const [dryRun, setDryRun] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [lastJob, setLastJob] = useState<ModuleJob | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const runMutation = useMutation({ mutationFn: runModule });
-  const createJobMutation = useMutation({ mutationFn: createModuleJob, onSuccess: (job) => setLastJob(job) });
+  const createJobMutation = useMutation({
+    mutationFn: createModuleJob,
+    onSuccess: (job) => setJobId(job.id),
+  });
   const stateQuery = useQuery({ queryKey: ["upload-state"], queryFn: getUploadState });
   const historyQuery = useQuery({ queryKey: ["upload-history"], queryFn: () => getUploadHistory(20) });
   const trackersQuery = useQuery({ queryKey: ["upload-trackers-page"], queryFn: getUploadTrackers });
@@ -53,16 +53,7 @@ export function UploadPage() {
     },
   });
 
-  const jobPollQuery = useQuery({
-    queryKey: ["upload-job", lastJob?.id],
-    queryFn: ({ queryKey }) => getModuleJob(queryKey[1] as string),
-    enabled: !!lastJob,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return !status || ["completed", "failed", "cancelled"].includes(status) ? false : 1500;
-    },
-  });
-  const timelineSource = jobPollQuery.data ?? lastJob ?? null;
+  const result: RunModuleResult | null = runMutation.data ?? null;
 
   const buildArgs = (): string => {
     const args: string[] = [action];
@@ -79,8 +70,6 @@ export function UploadPage() {
     if (action === "history") args.push("--limit", "20");
     return args.join(" ");
   };
-
-  const result: RunModuleResult | null = runMutation.data ?? null;
 
   const validateAction = (): string | null => {
     if (action === "show-tracker" && !tracker.trim()) return "Tracker name required.";
@@ -100,18 +89,6 @@ export function UploadPage() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">Push releases to configured trackers and manage upload history.</p>
       </section>
-
-      {timelineSource ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Run Timeline</CardTitle>
-            <CardDescription>Upload job progress.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RunTimeline items={runTimeline(timelineSource)} />
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Card>
         <CardHeader>
@@ -251,14 +228,34 @@ export function UploadPage() {
               Copy Command
             </Button>
             {copied ? <Badge variant="success">Copied</Badge> : null}
-            {lastJob ? (
-              <Button type="button" variant="outline" onClick={() => void navigate({ to: "/modules/$jobId", params: { jobId: lastJob.id } })}>
-                View Job
-              </Button>
-            ) : null}
           </div>
         </CardContent>
       </Card>
+
+      {jobId !== null ? (
+        <InlineJobPanel
+          jobId={jobId}
+          moduleName="upload"
+          onRerun={(newJob: ModuleJob) => setJobId(newJob.id)}
+        />
+      ) : null}
+
+      {result ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Badge variant={result.ok ? "success" : "danger"}>{result.ok ? "Completed" : "Failed"}</Badge>
+              Upload result
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">{result.stdout || "(no output)"}</pre>
+            {result.stderr ? (
+              <pre className="max-h-72 overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">{result.stderr}</pre>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -297,23 +294,6 @@ export function UploadPage() {
           ) : null}
         </CardContent>
       </Card>
-
-      {result ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Badge variant={result.ok ? "success" : "danger"}>{result.ok ? "Completed" : "Failed"}</Badge>
-              Upload result
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">{result.stdout || "(no output)"}</pre>
-            {result.stderr ? (
-              <pre className="max-h-72 overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">{result.stderr}</pre>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Card>
         <CardHeader>
