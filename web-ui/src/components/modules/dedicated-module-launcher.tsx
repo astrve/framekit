@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { Copy, Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -7,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CliCommandForm } from "@/components/modules/cli-command-form";
+import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Input } from "@/components/ui/input";
 import { createModuleJob, getModulesCliSpec, runModule } from "@/lib/api/endpoints";
-import type { CliCommandSpec, ModuleJob, RunModuleResult } from "@/lib/api/schemas";
+import type { CliCommandSpec, RunModuleResult } from "@/lib/api/schemas";
 import { buildArgsFromState, initValuesFromSpec } from "@/lib/cli-form";
 
 export type ModulePreset = {
@@ -28,16 +28,19 @@ export function DedicatedModuleLauncher(props: {
   requiredText?: string[];
 }) {
   const { moduleName, title, description, presets, requiredFlags = [], requiredText = [] } = props;
-  const navigate = useNavigate();
   const [argsText, setArgsText] = useState<string>(presets[0]?.args ?? "");
   const [asyncRun, setAsyncRun] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [lastJob, setLastJob] = useState<ModuleJob | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [commandValues, setCommandValues] = useState<Record<string, unknown>>({});
+  const [confirmPending, setConfirmPending] = useState(false);
 
   const runMutation = useMutation({ mutationFn: runModule });
-  const createJobMutation = useMutation({ mutationFn: createModuleJob, onSuccess: (job) => setLastJob(job) });
+  const createJobMutation = useMutation({
+    mutationFn: createModuleJob,
+    onSuccess: (job) => setJobId(job.id),
+  });
   const specQuery = useQuery({
     queryKey: ["cli-spec", moduleName],
     queryFn: getModulesCliSpec,
@@ -46,17 +49,26 @@ export function DedicatedModuleLauncher(props: {
     const modules = specQuery.data?.modules ?? [];
     return modules.find((item) => item.name === moduleName) ?? null;
   }, [moduleName, specQuery.data?.modules]);
+
   useEffect(() => {
     if (!cliCommand) {
       return;
     }
     const initial = initValuesFromSpec(cliCommand);
+    // Default dry-run ON for destructive modules that support it
+    if (cliCommand.destructive && cliCommand.supports_dry_run) {
+      initial["dry_run"] = true;
+    }
     setCommandValues(initial);
     setArgsText(buildArgsFromState(cliCommand, initial));
   }, [cliCommand, moduleName]);
 
   const previewCommand = useMemo(() => `framekit ${moduleName} ${argsText.trim()}`.trim(), [argsText, moduleName]);
   const runResult: RunModuleResult | null = runMutation.data ?? null;
+
+  // Derive dry-run state from form values (commandValues) or raw args fallback
+  const isDryRun = commandValues["dry_run"] === true || argsText.includes("--dry-run");
+  const isDestructive = cliCommand?.destructive ?? false;
 
   function validateArgs(value: string): string | null {
     const trimmed = value.trim();
@@ -71,6 +83,37 @@ export function DedicatedModuleLauncher(props: {
       }
     }
     return null;
+  }
+
+  function submitJob(confirmedDestructive: boolean) {
+    const payload = {
+      module: moduleName,
+      args_text: argsText.trim(),
+      dry_run: isDryRun,
+      auto_yes: false,
+      confirm_destructive: confirmedDestructive,
+    };
+    setConfirmPending(false);
+    if (asyncRun) {
+      createJobMutation.mutate(payload);
+    } else {
+      runMutation.mutate(payload);
+    }
+  }
+
+  function handleRun() {
+    const validationError = validateArgs(argsText);
+    if (validationError) {
+      setLocalError(validationError);
+      return;
+    }
+    setLocalError(null);
+    // Destructive module with dry-run disabled → require explicit confirmation
+    if (isDestructive && !isDryRun) {
+      setConfirmPending(true);
+      return;
+    }
+    submitJob(false);
   }
 
   return (
@@ -108,6 +151,9 @@ export function DedicatedModuleLauncher(props: {
               }}
               onReset={() => {
                 const initial = initValuesFromSpec(cliCommand);
+                if (cliCommand.destructive && cliCommand.supports_dry_run) {
+                  initial["dry_run"] = true;
+                }
                 setCommandValues(initial);
                 setArgsText(buildArgsFromState(cliCommand, initial));
               }}
@@ -130,7 +176,7 @@ export function DedicatedModuleLauncher(props: {
               {asyncRun ? <span className="text-[10px] font-bold leading-none">✓</span> : null}
             </button>
             Run in background
-            <InfoTooltip text="Queue as async job — result appears in the Jobs tab without blocking the UI" />
+            <InfoTooltip text="Queue as async job — result appears inline without blocking the UI" />
           </label>
 
           <details className="rounded-md border border-border">
@@ -142,29 +188,38 @@ export function DedicatedModuleLauncher(props: {
 
           {localError ? <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">{localError}</p> : null}
 
+          {confirmPending ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-2">
+              <p className="text-sm text-destructive font-medium">
+                This module is destructive and dry-run is disabled. Files may be modified or overwritten. Proceed?
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => submitJob(true)}
+                  disabled={createJobMutation.isPending || runMutation.isPending}
+                >
+                  Confirm and Run
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmPending(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              onClick={() => {
-                const validationError = validateArgs(argsText);
-                if (validationError) {
-                  setLocalError(validationError);
-                  return;
-                }
-                setLocalError(null);
-                const payload = {
-                  module: moduleName,
-                  args_text: argsText.trim(),
-                  dry_run: false,
-                  auto_yes: false,
-                  confirm_destructive: true,
-                };
-                if (asyncRun) {
-                  createJobMutation.mutate(payload);
-                } else {
-                  runMutation.mutate(payload);
-                }
-              }}
+              onClick={handleRun}
+              disabled={createJobMutation.isPending || runMutation.isPending || confirmPending}
             >
               Run
             </Button>
@@ -180,20 +235,40 @@ export function DedicatedModuleLauncher(props: {
               <Copy className="mr-2 h-4 w-4" />
               Copy Command
             </Button>
-            <Button type="button" variant="ghost" onClick={() => setArgsText(presets[0]?.args ?? "")}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                if (cliCommand) {
+                  const initial = initValuesFromSpec(cliCommand);
+                  if (cliCommand.destructive && cliCommand.supports_dry_run) {
+                    initial["dry_run"] = true;
+                  }
+                  setCommandValues(initial);
+                  setArgsText(buildArgsFromState(cliCommand, initial));
+                } else {
+                  setArgsText(presets[0]?.args ?? "");
+                }
+              }}
+            >
               Reset
             </Button>
             {copied ? <Badge variant="success">Copied</Badge> : null}
-            {lastJob ? (
-              <Button type="button" variant="outline" onClick={() => void navigate({ to: "/modules/$jobId", params: { jobId: lastJob.id } })}>
-                View Job
-              </Button>
-            ) : null}
           </div>
         </CardContent>
       </Card>
 
-      {runResult ? (
+      {/* Inline job tracking — shown when an async job has been created */}
+      {asyncRun && jobId !== null ? (
+        <InlineJobPanel
+          jobId={jobId}
+          moduleName={moduleName}
+          onRerun={(newJob) => setJobId(newJob.id)}
+        />
+      ) : null}
+
+      {/* Sync run result — shown when async is disabled and a synchronous run completed */}
+      {!asyncRun && runResult ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import sqlite3
 import subprocess  # nosec B404
@@ -91,6 +92,22 @@ _DB_LOCK = Lock()
 _MODULE_SPEC_CACHE: dict[str, Any] | None = None
 _MODULE_SPEC_CACHE_LOCK = Lock()
 _PRESETS_LOCK = Lock()
+
+# Environment injected into every web-launched subprocess so that:
+#   NO_COLOR=1           → Rich/Click never emit ANSI escape codes into the captured pipe
+#   FRAMEKIT_WEB_JOB=1  → print_module_banner() returns early (no ASCII logo in output)
+_WEB_JOB_ENV: dict[str, str] = {"NO_COLOR": "1", "FRAMEKIT_WEB_JOB": "1"}
+
+# Matches all standard ANSI/VT100 escape sequences (SGR colors, cursor movement, erase, etc.).
+# Applied as a stripping fallback on captured job output even when NO_COLOR is set,
+# because third-party tools (ffmpeg, mkvmerge) or Rich Progress bars on stderr
+# may still emit their own sequences regardless of environment variables.
+_ANSI_ESCAPE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
+
+def _clean_web_job_output(text: str) -> str:
+    """Strip ANSI escape sequences from captured subprocess output."""
+    return _ANSI_ESCAPE.sub("", text)
 
 
 class RunModuleRequest(BaseModel):
@@ -1534,6 +1551,7 @@ def run_module_command(request: RunModuleRequest) -> RunModuleResponse:
             timeout=request.timeout_seconds,
             check=False,
             capture_output=True,
+            extra_env=_WEB_JOB_ENV,
         )
     except SafeSubprocessError as exc:
         return RunModuleResponse(
@@ -1544,14 +1562,16 @@ def run_module_command(request: RunModuleRequest) -> RunModuleResponse:
             stderr=str(exc),
         )
 
-    parsed_kind, parsed_payload = _parse_json_payload(completed.stdout)
+    clean_stdout = _clean_web_job_output(completed.stdout)
+    clean_stderr = _clean_web_job_output(completed.stderr)
+    parsed_kind, parsed_payload = _parse_json_payload(clean_stdout)
 
     return RunModuleResponse(
         ok=completed.returncode == 0,
         argv=argv,
         returncode=completed.returncode,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
+        stdout=clean_stdout,
+        stderr=clean_stderr,
         parsed_kind=parsed_kind,
         parsed_payload=parsed_payload,
     )
@@ -1623,6 +1643,7 @@ def _run_module_command_cancellable(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=1,
+            extra_env=_WEB_JOB_ENV,
         )
         with _JOBS_LOCK:
             _JOB_PROCESSES[job_id] = process
@@ -1654,8 +1675,8 @@ def _run_module_command_cancellable(
                 stdout_thread.join(timeout=2.0)
                 stderr_thread.join(timeout=2.0)
                 _drain_queue()
-                stdout_text = "".join(stdout_buffer)
-                stderr_text = "".join(stderr_buffer)
+                stdout_text = _clean_web_job_output("".join(stdout_buffer))
+                stderr_text = _clean_web_job_output("".join(stderr_buffer))
                 return RunModuleResponse(
                     ok=False,
                     argv=argv,
@@ -1674,8 +1695,8 @@ def _run_module_command_cancellable(
                 stdout_thread.join(timeout=2.0)
                 stderr_thread.join(timeout=2.0)
                 _drain_queue()
-                stdout_text = "".join(stdout_buffer)
-                stderr_text = "".join(stderr_buffer)
+                stdout_text = _clean_web_job_output("".join(stdout_buffer))
+                stderr_text = _clean_web_job_output("".join(stderr_buffer))
                 return RunModuleResponse(
                     ok=False,
                     argv=argv,
@@ -1689,8 +1710,8 @@ def _run_module_command_cancellable(
                 stdout_thread.join(timeout=2.0)
                 stderr_thread.join(timeout=2.0)
                 _drain_queue()
-                stdout_text = "".join(stdout_buffer)
-                stderr_text = "".join(stderr_buffer)
+                stdout_text = _clean_web_job_output("".join(stdout_buffer))
+                stderr_text = _clean_web_job_output("".join(stderr_buffer))
                 parsed_kind, parsed_payload = _parse_json_payload(stdout_text)
 
                 return RunModuleResponse(
@@ -1753,8 +1774,8 @@ def enqueue_module_job(request: RunModuleRequest) -> ModuleJob:
                     return
                 updated = current.model_copy(
                     update={
-                        "live_stdout": stdout_text,
-                        "live_stderr": stderr_text,
+                        "live_stdout": _clean_web_job_output(stdout_text),
+                        "live_stderr": _clean_web_job_output(stderr_text),
                     }
                 )
                 _JOBS[job.id] = updated

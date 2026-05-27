@@ -825,3 +825,19 @@ def test_webhook_test_payload_returns_ok_with_mocked_http(monkeypatch: MonkeyPat
     )
     assert response.status_code == 200
     assert response.json()["ok"] is True
+
+
+def test_clean_web_job_output_strips_ansi() -> None:
+    """_clean_web_job_output removes ANSI escape sequences and leaves plain text intact."""
+    from framekit.web.modules import _clean_web_job_output
+
+    # SGR color reset and bold — produced by Rich when NO_COLOR is not effective
+    assert _clean_web_job_output("\x1b[1m[\x1b[0m\x1b[1mERR\x1b[0m\x1b[1m]\x1b[0m message") == "[ERR] message"
+    # 256-colour foreground code
+    assert _clean_web_job_output("\x1b[1;38;5;180mFramekit\x1b[0m") == "Framekit"
+    # Plain text is untouched
+    assert _clean_web_job_output("[INFO] Processing 3 files...") == "[INFO] Processing 3 files..."
+    # Empty string is safe
+    assert _clean_web_job_output("") == ""
+    # Mixed: ANSI before and after plain content
+    assert _clean_web_job_output("\x1b[32mok\x1b[0m \x1b[31merr\x1b[0m") == "ok err"

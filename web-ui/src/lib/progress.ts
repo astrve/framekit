@@ -17,6 +17,10 @@ const MODULE_PATTERNS: Record<string, RegExp[]> = {
   // EN: "Hashing torrent payload" | FR: "Hachage de la charge utile du torrent" | ES: "Hashing del payload del torrent"
   torrent: [/(?:Hashing\s+torrent|Hachage\s+de\s+la\s+charge|Hashing\s+del\s+payload)/i],
   upload: [/^upload/i, /^tracker/i],
+  // EN: "Extracting 6 screenshots per video" | "Extracting 3 screenshots at specific timestamps"
+  screenshot: [/Extracting\s+\d+\s+screenshots?/i],
+  // EN: "Processing N file(s)..." — emitted by all extract sub-commands (subtitle/audio/video)
+  extract: [/Processing\s+\d+\s+file/i],
 };
 
 export function parseSubSteps(moduleName: string, stdout: string, stderr: string): ParsedStep[] {

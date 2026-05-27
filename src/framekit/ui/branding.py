@@ -261,7 +261,15 @@ def build_banner(module_name: str | None = None) -> Group:
 
 
 def print_module_banner(module_name: str | None = None) -> None:
-    """Print the Framekit banner with optional module name."""
+    """Print the Framekit banner with optional module name.
+
+    Suppressed when ``FRAMEKIT_WEB_JOB=1`` is set in the environment so that
+    web-runner subprocesses produce clean output without the ASCII logo header.
+    """
+    import os
+
+    if os.environ.get("FRAMEKIT_WEB_JOB"):
+        return
     from framekit.ui.console import console
 
     console.print(build_banner(module_name=module_name))
