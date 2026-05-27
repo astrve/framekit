@@ -2,26 +2,31 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Clock3, Play, RotateCcw, Square } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch, type UseFormSetValue } from "react-hook-form";
 import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { RunTimeline } from "@/components/modules/run-timeline";
 import { Input } from "@/components/ui/input";
+import { CliCommandForm } from "@/components/modules/cli-command-form";
 import { ApiError } from "@/lib/api/client";
 import {
   cancelModuleJob,
   createModuleJob,
   getModuleJob,
   getModulesCatalog,
+  getModulesCliSpec,
   getModulesPresets,
   listModuleJobs,
   rerunModuleJob,
   runModule,
 } from "@/lib/api/endpoints";
-import type { ModuleJob, RunModuleResult } from "@/lib/api/schemas";
+import type { CliCommandSpec, ModuleJob, RunModuleResult } from "@/lib/api/schemas";
+import { buildArgsFromState, initValuesFromSpec } from "@/lib/cli-form";
+import { runTimeline } from "@/lib/progress";
 
 const formSchema = z.object({
   module: z.string().min(1),
@@ -164,9 +169,9 @@ function buildBatchArgs(input: {
   if (input.allModules) {
     args.push("--all");
   }
-  const modulesCsv = input.modulesCsv.trim();
-  if (modulesCsv) {
-    args.push("--modules", quoteArg(modulesCsv));
+  const batchModules = input.modulesCsv.split(",").map((m) => m.trim()).filter(Boolean);
+  for (const moduleName of batchModules) {
+    args.push("--modules", quoteArg(moduleName));
   }
   return args.join(" ").trim();
 }
@@ -292,7 +297,7 @@ function mutationErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
-  return "Erreur inconnue.";
+  return "Unknown error.";
 }
 
 export function ModulesPage() {
@@ -328,6 +333,10 @@ export function ModulesPage() {
   const presetsQuery = useQuery({
     queryKey: ["modules-presets"],
     queryFn: getModulesPresets,
+  });
+  const cliSpecQuery = useQuery({
+    queryKey: ["modules-cli-spec"],
+    queryFn: getModulesCliSpec,
   });
   const jobsQuery = useQuery({
     queryKey: ["modules-jobs", jobsLimit],
@@ -445,13 +454,32 @@ export function ModulesPage() {
   }, [jobsQuery.data?.jobs, searchText, statusFilter]);
   const mutationError =
     runMutation.error ?? createJobMutation.error ?? cancelJobMutation.error ?? rerunJobMutation.error;
+  const moduleName = form.watch("module");
+  const selectedCommand = useMemo<CliCommandSpec | null>(() => {
+    return (cliSpecQuery.data?.modules ?? []).find((item) => item.name === moduleName) ?? null;
+  }, [cliSpecQuery.data?.modules, moduleName]);
+  const [commandValues, setCommandValues] = useState<Record<string, unknown>>({});
+  useEffect(() => {
+    if (!selectedCommand) {
+      return;
+    }
+    const next = initValuesFromSpec(selectedCommand);
+    setCommandValues(next);
+    form.setValue("args_text", buildArgsFromState(selectedCommand, next));
+  }, [selectedCommand, form]);
+
+  const canBuildFromSpec = selectedCommand !== null && selectedCommand.parameters.length > 0;
+
+  const dryRunWatched = form.watch("dry_run");
+  const autoYesWatched = form.watch("auto_yes");
+  const confirmDestructiveWatched = form.watch("confirm_destructive");
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Modules Workbench</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Configuration</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Exécution backend quasi complète via <code>python -m framekit &lt;module&gt; ...</code>.
+          Advanced command builder and execution center. Use this page to configure and run any CLI module when dedicated pages are not enough.
         </p>
       </section>
 
@@ -459,134 +487,99 @@ export function ModulesPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Play className="h-4 w-4 text-primary" />
-            Assistants pipeline / batch
+            Pipeline &amp; Batch Builders
           </CardTitle>
-          <CardDescription>Construit les args pour les workflows lourds sans retenir tous les flags.</CardDescription>
+          <CardDescription>Build command arguments for complex workflows without memorizing flags.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-3 rounded-lg border border-border p-4">
             <p className="text-sm font-medium">Pipeline</p>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm md:col-span-2" htmlFor="pipeline-path">
-                Path release
+                Release folder
                 <Input
                   id="pipeline-path"
                   placeholder="C:/Releases/My.Release"
                   value={pipelinePath}
-                  onChange={(event) => {
-                    setPipelinePath(event.target.value);
-                  }}
+                  onChange={(event) => { setPipelinePath(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm" htmlFor="pipeline-preset">
-                Pipeline preset
+                Workflow profile
                 <Input
                   id="pipeline-preset"
                   placeholder="films"
                   value={pipelinePreset}
-                  onChange={(event) => {
-                    setPipelinePreset(event.target.value);
-                  }}
+                  onChange={(event) => { setPipelinePreset(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm" htmlFor="pipeline-prez-preset">
-                Prez preset
+                Presentation profile
                 <Input
                   id="pipeline-prez-preset"
                   placeholder="default"
                   value={pipelinePrezPreset}
-                  onChange={(event) => {
-                    setPipelinePrezPreset(event.target.value);
-                  }}
+                  onChange={(event) => { setPipelinePrezPreset(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm" htmlFor="pipeline-locale">
-                NFO locale
+                NFO language
                 <Input
                   id="pipeline-locale"
                   placeholder="fr"
                   value={pipelineLocale}
-                  onChange={(event) => {
-                    setPipelineLocale(event.target.value);
-                  }}
+                  onChange={(event) => { setPipelineLocale(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm" htmlFor="pipeline-announce">
-                Announce
+                Announce URL
                 <Input
                   id="pipeline-announce"
                   placeholder="https://tracker/announce"
                   value={pipelineAnnounce}
-                  onChange={(event) => {
-                    setPipelineAnnounce(event.target.value);
-                  }}
+                  onChange={(event) => { setPipelineAnnounce(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm md:col-span-2" htmlFor="pipeline-modules-csv">
-                Modules explicites (csv)
+                Steps to run (comma-separated)
                 <Input
                   id="pipeline-modules-csv"
                   placeholder={PIPELINE_BATCH_MODULES.join(",")}
                   value={pipelineModulesCsv}
-                  onChange={(event) => {
-                    setPipelineModulesCsv(event.target.value);
-                  }}
+                  onChange={(event) => { setPipelineModulesCsv(event.target.value); }}
                 />
               </label>
             </div>
             <div className="flex flex-wrap gap-4 text-sm">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={pipelinePreview}
-                  onChange={(event) => {
-                    setPipelinePreview(event.target.checked);
-                  }}
-                />
-                preview
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={pipelineDryRun}
-                  onChange={(event) => {
-                    setPipelineDryRun(event.target.checked);
-                  }}
-                />
-                dry-run
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={pipelineAuto}
-                  onChange={(event) => {
-                    setPipelineAuto(event.target.checked);
-                  }}
-                />
-                auto
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={pipelineAllModules}
-                  onChange={(event) => {
-                    setPipelineAllModules(event.target.checked);
-                  }}
-                />
-                all modules
-              </label>
-              <label className="inline-flex items-center gap-2">
+              {([
+                [pipelinePreview, setPipelinePreview, "Preview only"],
+                [pipelineDryRun, setPipelineDryRun, "Simulation (no file writes)"],
+                [pipelineAuto, setPipelineAuto, "Automatic"],
+                [pipelineAllModules, setPipelineAllModules, "All modules"],
+              ] as Array<[boolean, (v: boolean) => void, string]>).map(([checked, setter, label]) => (
+                <label key={label} className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    onClick={() => setter(!checked)}
+                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${checked ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:border-primary/60"}`}
+                  >
+                    {checked ? <span className="text-[10px] font-bold leading-none">✓</span> : null}
+                  </button>
+                  {label}
+                </label>
+              ))}
+              <label className="inline-flex items-center gap-2 text-sm">
                 Metadata
                 <select
                   className="h-8 rounded-md border border-input bg-background px-2 text-sm"
                   value={pipelineWithMetadata}
-                  onChange={(event) => {
-                    setPipelineWithMetadata(event.target.value as MetadataMode);
-                  }}
+                  onChange={(event) => { setPipelineWithMetadata(event.target.value as MetadataMode); }}
                 >
-                  <option value="inherit">inherit</option>
-                  <option value="enable">with-metadata</option>
-                  <option value="disable">no-metadata</option>
+                  <option value="inherit">Default</option>
+                  <option value="enable">Include metadata</option>
+                  <option value="disable">Exclude metadata</option>
                 </select>
               </label>
             </div>
@@ -613,7 +606,7 @@ export function ModulesPage() {
                 form.setValue("dry_run", pipelineDryRun);
               }}
             >
-              Remplir formulaire pipeline
+              Fill Pipeline Form
             </Button>
           </div>
 
@@ -621,104 +614,80 @@ export function ModulesPage() {
             <p className="text-sm font-medium">Batch</p>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm md:col-span-2" htmlFor="batch-parent-path">
-                Parent path
+                Releases folder
                 <Input
                   id="batch-parent-path"
                   placeholder="C:/Releases"
                   value={batchParentPath}
-                  onChange={(event) => {
-                    setBatchParentPath(event.target.value);
-                  }}
+                  onChange={(event) => { setBatchParentPath(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm" htmlFor="batch-pipeline-preset">
-                Pipeline preset
+                Workflow profile
                 <Input
                   id="batch-pipeline-preset"
                   placeholder="films"
                   value={batchPipelinePreset}
-                  onChange={(event) => {
-                    setBatchPipelinePreset(event.target.value);
-                  }}
+                  onChange={(event) => { setBatchPipelinePreset(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm" htmlFor="batch-locale">
-                Locale
+                NFO language
                 <Input
                   id="batch-locale"
                   placeholder="auto | en | fr | es"
                   value={batchLocale}
-                  onChange={(event) => {
-                    setBatchLocale(event.target.value);
-                  }}
+                  onChange={(event) => { setBatchLocale(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm" htmlFor="batch-announce">
-                Announce
+                Announce URL
                 <Input
                   id="batch-announce"
                   placeholder="https://tracker/announce"
                   value={batchAnnounce}
-                  onChange={(event) => {
-                    setBatchAnnounce(event.target.value);
-                  }}
+                  onChange={(event) => { setBatchAnnounce(event.target.value); }}
                 />
               </label>
               <label className="space-y-1 text-sm" htmlFor="batch-modules-csv">
-                Modules csv
+                Steps to run (comma-separated)
                 <Input
                   id="batch-modules-csv"
                   placeholder={PIPELINE_BATCH_MODULES.join(",")}
                   value={batchModulesCsv}
-                  onChange={(event) => {
-                    setBatchModulesCsv(event.target.value);
-                  }}
+                  onChange={(event) => { setBatchModulesCsv(event.target.value); }}
                 />
               </label>
             </div>
             <div className="flex flex-wrap gap-4 text-sm">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={batchAuto}
-                  onChange={(event) => {
-                    setBatchAuto(event.target.checked);
-                  }}
-                />
-                auto
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={batchManual}
-                  onChange={(event) => {
-                    setBatchManual(event.target.checked);
-                  }}
-                />
-                manual
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={batchAllModules}
-                  onChange={(event) => {
-                    setBatchAllModules(event.target.checked);
-                  }}
-                />
-                all modules
-              </label>
-              <label className="inline-flex items-center gap-2">
-                Dashboard
+              {([
+                [batchAuto, setBatchAuto, "Automatic"],
+                [batchManual, setBatchManual, "Manual confirmation"],
+                [batchAllModules, setBatchAllModules, "All modules"],
+              ] as Array<[boolean, (v: boolean) => void, string]>).map(([checked, setter, label]) => (
+                <label key={label} className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    onClick={() => setter(!checked)}
+                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${checked ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:border-primary/60"}`}
+                  >
+                    {checked ? <span className="text-[10px] font-bold leading-none">✓</span> : null}
+                  </button>
+                  {label}
+                </label>
+              ))}
+              <label className="inline-flex items-center gap-2 text-sm">
+                Live dashboard
                 <select
                   className="h-8 rounded-md border border-input bg-background px-2 text-sm"
                   value={batchDashboard}
-                  onChange={(event) => {
-                    setBatchDashboard(event.target.value as "inherit" | "enable" | "disable");
-                  }}
+                  onChange={(event) => { setBatchDashboard(event.target.value as "inherit" | "enable" | "disable"); }}
                 >
-                  <option value="inherit">inherit</option>
-                  <option value="enable">dashboard</option>
-                  <option value="disable">no-dashboard</option>
+                  <option value="inherit">Default</option>
+                  <option value="enable">Show</option>
+                  <option value="disable">Hide</option>
                 </select>
               </label>
             </div>
@@ -742,7 +711,7 @@ export function ModulesPage() {
                 form.setValue("confirm_destructive", true);
               }}
             >
-              Remplir formulaire batch
+              Fill Batch Form
             </Button>
           </div>
         </CardContent>
@@ -754,7 +723,7 @@ export function ModulesPage() {
             <Play className="h-4 w-4 text-primary" />
             Presets
           </CardTitle>
-          <CardDescription>Préremplissage rapide pour commandes fréquentes.</CardDescription>
+          <CardDescription>Quick presets for common operations.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {(presetsQuery.data?.presets ?? []).map((preset) => (
@@ -768,6 +737,10 @@ export function ModulesPage() {
                 form.setValue("dry_run", preset.dry_run);
                 form.setValue("auto_yes", preset.auto_yes);
                 form.setValue("confirm_destructive", preset.confirm_destructive);
+                const nextCommand = (cliSpecQuery.data?.modules ?? []).find((item) => item.name === preset.module);
+                if (nextCommand) {
+                  setCommandValues(initValuesFromSpec(nextCommand));
+                }
               }}
             >
               {preset.label}
@@ -782,14 +755,27 @@ export function ModulesPage() {
             <Play className="h-4 w-4 text-primary" />
             Run module
           </CardTitle>
-          <CardDescription>Mode async recommandé pour runs longs.</CardDescription>
+          <CardDescription>Background mode recommended for long operations.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm" htmlFor="module">
                 Module
-                <Input id="module" list="modules-list" {...form.register("module")} />
+                <Input
+                  id="module"
+                  list="modules-list"
+                  {...form.register("module")}
+                  onChange={(event) => {
+                    form.setValue("module", event.target.value);
+                    const nextCommand = (cliSpecQuery.data?.modules ?? []).find((item) => item.name === event.target.value);
+                    if (nextCommand) {
+                      const initial = initValuesFromSpec(nextCommand);
+                      setCommandValues(initial);
+                      form.setValue("args_text", buildArgsFromState(nextCommand, initial));
+                    }
+                  }}
+                />
               </label>
               <datalist id="modules-list">
                 {(catalogQuery.data?.modules ?? []).map((item) => (
@@ -797,38 +783,64 @@ export function ModulesPage() {
                 ))}
               </datalist>
 
-              <label className="space-y-1 text-sm md:col-span-2" htmlFor="args_text">
-                Arguments (texte brut)
-                <Input
-                  id="args_text"
-                  placeholder={'ex: "C:/Releases/My.Release"'}
-                  {...form.register("args_text")}
-                />
-              </label>
+              {canBuildFromSpec ? (
+                <div className="space-y-2 md:col-span-2">
+                  <p className="text-sm font-medium">Command Options</p>
+                  {selectedCommand ? (
+                    <CliCommandForm
+                      command={selectedCommand}
+                      values={commandValues}
+                      onChange={(name, value) => {
+                        const next = { ...commandValues, [name]: value };
+                        setCommandValues(next);
+                        form.setValue("args_text", buildArgsFromState(selectedCommand, next));
+                      }}
+                      onReset={() => {
+                        const initial = initValuesFromSpec(selectedCommand);
+                        setCommandValues(initial);
+                        form.setValue("args_text", buildArgsFromState(selectedCommand, initial));
+                      }}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              <details className="rounded-md border border-border md:col-span-2">
+                <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+                  Advanced — raw arguments
+                </summary>
+                <label className="mt-2 block space-y-1 px-4 pb-3 text-sm" htmlFor="args_text">
+                  Arguments
+                  <Input id="args_text" placeholder={'ex: "C:/Releases/My.Release"'} {...form.register("args_text")} />
+                </label>
+              </details>
             </div>
 
             <div className="flex flex-wrap gap-4 text-sm">
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" {...form.register("dry_run")} />
-                Dry-run
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" {...form.register("auto_yes")} />
-                Auto-yes
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" {...form.register("confirm_destructive")} />
-                Confirm destructive
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" {...form.register("async_run")} />
-                Async job queue
-              </label>
+              {([
+                [dryRunWatched, "dry_run", "Simulation (no file writes)"],
+                [autoYesWatched, "auto_yes", "Confirm automatically"],
+                [confirmDestructiveWatched, "confirm_destructive", "Allow destructive actions"],
+                [asyncRunValue, "async_run", "Run in background"],
+              ] as Array<[boolean, keyof FormValues, string]>).map(([checked, field, label]) => (
+                <label key={field} className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    onClick={() => form.setValue(field, !checked)}
+                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${checked ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:border-primary/60"}`}
+                  >
+                    {checked ? <span className="text-[10px] font-bold leading-none">✓</span> : null}
+                  </button>
+                  {label}
+                </label>
+              ))}
             </div>
 
             <Button type="submit" disabled={runMutation.isPending || createJobMutation.isPending}>
               <Play className="mr-2 h-4 w-4" />
-              Exécuter
+              Run
             </Button>
           </form>
         </CardContent>
@@ -838,9 +850,9 @@ export function ModulesPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock3 className="h-4 w-4 text-primary" />
-            Jobs récents
+            Recent Jobs
           </CardTitle>
-          <CardDescription>Suivi live des exécutions asynchrones.</CardDescription>
+          <CardDescription>Live tracking of background jobs.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="grid gap-2 md:grid-cols-[120px_160px_1fr_auto]">
@@ -850,9 +862,7 @@ export function ModulesPage() {
                 id="jobs-limit"
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={jobsLimit}
-                onChange={(event) => {
-                  setJobsLimit(Number(event.target.value));
-                }}
+                onChange={(event) => { setJobsLimit(Number(event.target.value)); }}
               >
                 <option value={10}>10</option>
                 <option value={20}>20</option>
@@ -866,32 +876,28 @@ export function ModulesPage() {
                 id="jobs-status"
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={statusFilter}
-                onChange={(event) => {
-                  setStatusFilter(event.target.value as JobStatusFilter);
-                }}
+                onChange={(event) => { setStatusFilter(event.target.value as JobStatusFilter); }}
               >
-                <option value="all">all</option>
-                <option value="pending">pending</option>
-                <option value="running">running</option>
-                <option value="completed">completed</option>
-                <option value="failed">failed</option>
-                <option value="cancelled">cancelled</option>
+                <option value="all">All</option>
+                <option value="pending">Pending</option>
+                <option value="running">Running</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="cancelled">Cancelled</option>
               </select>
             </label>
             <label className="space-y-1 text-sm md:col-span-2" htmlFor="jobs-search">
-              Recherche
+              Search
               <Input
                 id="jobs-search"
                 value={searchText}
-                onChange={(event) => {
-                  setSearchText(event.target.value);
-                }}
+                onChange={(event) => { setSearchText(event.target.value); }}
                 placeholder="id / module / status"
               />
             </label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Affichage: {filteredJobs.length} / {jobsQuery.data?.jobs.length ?? 0}
+            Showing: {filteredJobs.length} / {jobsQuery.data?.jobs.length ?? 0}
           </p>
 
           {filteredJobs.map((job) => (
@@ -899,13 +905,7 @@ export function ModulesPage() {
               key={job.id}
               className="grid w-full gap-2 rounded-md border border-border p-3 text-left md:grid-cols-[1fr_auto_auto_auto]"
             >
-              <button
-                type="button"
-                className="text-left"
-                onClick={() => {
-                  setSelectedJobId(job.id);
-                }}
-              >
+              <button type="button" className="text-left" onClick={() => { setSelectedJobId(job.id); }}>
                 <p className="text-xs text-muted-foreground">{job.id}</p>
               </button>
               <p className="font-medium">{String((job.request["module"] as string) ?? "-")}</p>
@@ -923,14 +923,9 @@ export function ModulesPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  void navigate({
-                    to: "/modules/$jobId",
-                    params: { jobId: job.id },
-                  });
-                }}
+                onClick={() => { void navigate({ to: "/modules/$jobId", params: { jobId: job.id } }); }}
               >
-                Détail
+                Details
               </Button>
             </div>
           ))}
@@ -938,11 +933,9 @@ export function ModulesPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                setJobsLimit((value) => Math.min(100, value + 10));
-              }}
+              onClick={() => { setJobsLimit((value) => Math.min(100, value + 10)); }}
             >
-              Charger plus
+              Load more
             </Button>
           ) : null}
         </CardContent>
@@ -951,10 +944,11 @@ export function ModulesPage() {
       {activeJobId ? (
         <Card>
           <CardHeader>
-            <CardTitle>Active job</CardTitle>
+            <CardTitle>Active Job</CardTitle>
             <CardDescription>{activeJobId}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
+            <RunTimeline items={runTimeline(jobStatusQuery.data)} />
             <Badge
               variant={
                 jobStatusQuery.data?.status === "completed"
@@ -973,9 +967,7 @@ export function ModulesPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  void cancelJobMutation.mutateAsync(jobStatusQuery.data.id);
-                }}
+                onClick={() => { void cancelJobMutation.mutateAsync(jobStatusQuery.data.id); }}
                 disabled={cancelJobMutation.isPending}
               >
                 <Square className="mr-2 h-4 w-4" />
@@ -987,30 +979,21 @@ export function ModulesPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    void navigate({
-                      to: "/modules/$jobId",
-                      params: { jobId: jobStatusQuery.data.id },
-                    });
-                  }}
+                  onClick={() => { void navigate({ to: "/modules/$jobId", params: { jobId: jobStatusQuery.data.id } }); }}
                 >
-                  Ouvrir détail
+                  View Details
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    applyJobRequestToForm(jobStatusQuery.data, form.setValue);
-                  }}
+                  onClick={() => { applyJobRequestToForm(jobStatusQuery.data, form.setValue); }}
                 >
-                  Refill form
+                  Restore to Form
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    void rerunJobMutation.mutateAsync(jobStatusQuery.data.id);
-                  }}
+                  onClick={() => { void rerunJobMutation.mutateAsync(jobStatusQuery.data.id); }}
                   disabled={rerunJobMutation.isPending}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
@@ -1019,7 +1002,7 @@ export function ModulesPage() {
               </div>
             ) : null}
             {jobStatusQuery.data?.error ? (
-              <pre className="max-h-72 overflow-auto rounded-md border border-rose-300 bg-rose-100 p-3 text-xs text-rose-800">
+              <pre className="max-h-72 overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
                 {jobStatusQuery.data.error}
               </pre>
             ) : null}
@@ -1030,13 +1013,12 @@ export function ModulesPage() {
       {selectedResult ? (
         <Card>
           <CardHeader>
-            <CardTitle>Execution result</CardTitle>
-            <CardDescription>Return code: {selectedResult.returncode}</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Badge variant={selectedResult.ok ? "success" : "danger"}>{selectedResult.ok ? "Completed" : "Failed"}</Badge>
+              Execution result
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Badge variant={selectedResult.ok ? "success" : "danger"}>
-              {selectedResult.ok ? "success" : "failed"}
-            </Badge>
             {structuredResult ? (
               <div className="rounded-md border border-border bg-card p-3">
                 <p className="mb-2 text-sm font-medium">Structured result</p>
@@ -1044,13 +1026,10 @@ export function ModulesPage() {
               </div>
             ) : null}
             <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
-              {selectedResult.argv.join(" ")}
-            </pre>
-            <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
-              {selectedResult.stdout || "(stdout empty)"}
+              {selectedResult.stdout || "(no output)"}
             </pre>
             {selectedResult.stderr ? (
-              <pre className="max-h-72 overflow-auto rounded-md border border-rose-300 bg-rose-100 p-3 text-xs text-rose-800">
+              <pre className="max-h-72 overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
                 {selectedResult.stderr}
               </pre>
             ) : null}
@@ -1059,7 +1038,7 @@ export function ModulesPage() {
       ) : null}
 
       {mutationError ? (
-        <p className="rounded-md border border-rose-400/60 bg-rose-500/10 p-3 text-sm text-rose-800">
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           {mutationErrorMessage(mutationError)}
         </p>
       ) : null}

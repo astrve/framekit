@@ -1,14 +1,17 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Copy, Play } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CliCommandForm } from "@/components/modules/cli-command-form";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Input } from "@/components/ui/input";
-import { createModuleJob, runModule } from "@/lib/api/endpoints";
-import type { ModuleJob, RunModuleResult } from "@/lib/api/schemas";
+import { createModuleJob, getModulesCliSpec, runModule } from "@/lib/api/endpoints";
+import type { CliCommandSpec, ModuleJob, RunModuleResult } from "@/lib/api/schemas";
+import { buildArgsFromState, initValuesFromSpec } from "@/lib/cli-form";
 
 export type ModulePreset = {
   id: string;
@@ -31,9 +34,26 @@ export function DedicatedModuleLauncher(props: {
   const [localError, setLocalError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [lastJob, setLastJob] = useState<ModuleJob | null>(null);
+  const [commandValues, setCommandValues] = useState<Record<string, unknown>>({});
 
   const runMutation = useMutation({ mutationFn: runModule });
   const createJobMutation = useMutation({ mutationFn: createModuleJob, onSuccess: (job) => setLastJob(job) });
+  const specQuery = useQuery({
+    queryKey: ["cli-spec", moduleName],
+    queryFn: getModulesCliSpec,
+  });
+  const cliCommand: CliCommandSpec | null = useMemo(() => {
+    const modules = specQuery.data?.modules ?? [];
+    return modules.find((item) => item.name === moduleName) ?? null;
+  }, [moduleName, specQuery.data?.modules]);
+  useEffect(() => {
+    if (!cliCommand) {
+      return;
+    }
+    const initial = initValuesFromSpec(cliCommand);
+    setCommandValues(initial);
+    setArgsText(buildArgsFromState(cliCommand, initial));
+  }, [cliCommand, moduleName]);
 
   const previewCommand = useMemo(() => `framekit ${moduleName} ${argsText.trim()}`.trim(), [argsText, moduleName]);
   const runResult: RunModuleResult | null = runMutation.data ?? null;
@@ -42,12 +62,12 @@ export function DedicatedModuleLauncher(props: {
     const trimmed = value.trim();
     for (const flag of requiredFlags) {
       if (!trimmed.includes(flag)) {
-        return `Argument requis: ${flag}`;
+        return `Required flag missing: ${flag}`;
       }
     }
     for (const text of requiredText) {
       if (!trimmed.includes(text)) {
-        return `Contenu requis: ${text}`;
+        return `Required argument missing: ${text}`;
       }
     }
     return null;
@@ -64,9 +84,9 @@ export function DedicatedModuleLauncher(props: {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Play className="h-4 w-4 text-primary" />
-            Lancement
+            Launch
           </CardTitle>
-          <CardDescription>Commande dédiée au module {moduleName}</CardDescription>
+          <CardDescription>Configure and run the {title} module.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-2">
@@ -77,19 +97,50 @@ export function DedicatedModuleLauncher(props: {
             ))}
           </div>
 
-          <label className="space-y-1 text-sm" htmlFor={`${moduleName}-args`}>
-            Arguments
-            <Input id={`${moduleName}-args`} value={argsText} onChange={(e) => setArgsText(e.target.value)} />
+          {cliCommand ? (
+            <CliCommandForm
+              command={cliCommand}
+              values={commandValues}
+              onChange={(name, value) => {
+                const next = { ...commandValues, [name]: value };
+                setCommandValues(next);
+                setArgsText(buildArgsFromState(cliCommand, next));
+              }}
+              onReset={() => {
+                const initial = initValuesFromSpec(cliCommand);
+                setCommandValues(initial);
+                setArgsText(buildArgsFromState(cliCommand, initial));
+              }}
+            />
+          ) : (
+            <label className="space-y-1 text-sm" htmlFor={`${moduleName}-args`}>
+              Arguments
+              <Input id={`${moduleName}-args`} value={argsText} onChange={(e) => setArgsText(e.target.value)} />
+            </label>
+          )}
+
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={asyncRun}
+              onClick={() => setAsyncRun(!asyncRun)}
+              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${asyncRun ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:border-primary/60"}`}
+            >
+              {asyncRun ? <span className="text-[10px] font-bold leading-none">✓</span> : null}
+            </button>
+            Run in background
+            <InfoTooltip text="Queue as async job — result appears in the Jobs tab without blocking the UI" />
           </label>
 
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={asyncRun} onChange={(e) => setAsyncRun(e.target.checked)} />
-            async job
-          </label>
+          <details className="rounded-md border border-border">
+            <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+              Advanced — show generated command
+            </summary>
+            <pre className="max-h-40 overflow-auto border-t border-border bg-muted p-3 text-xs">{previewCommand}</pre>
+          </details>
 
-          <pre className="max-h-40 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">{previewCommand}</pre>
-
-          {localError ? <p className="rounded-md border border-rose-300 bg-rose-100 p-2 text-sm text-rose-800">{localError}</p> : null}
+          {localError ? <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">{localError}</p> : null}
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -115,7 +166,7 @@ export function DedicatedModuleLauncher(props: {
                 }
               }}
             >
-              Exécuter
+              Run
             </Button>
             <Button
               type="button"
@@ -127,15 +178,15 @@ export function DedicatedModuleLauncher(props: {
               }}
             >
               <Copy className="mr-2 h-4 w-4" />
-              Copier commande
+              Copy Command
             </Button>
             <Button type="button" variant="ghost" onClick={() => setArgsText(presets[0]?.args ?? "")}>
-              Reset preset
+              Reset
             </Button>
-            {copied ? <Badge variant="success">Copié</Badge> : null}
+            {copied ? <Badge variant="success">Copied</Badge> : null}
             {lastJob ? (
               <Button type="button" variant="outline" onClick={() => void navigate({ to: "/modules/$jobId", params: { jobId: lastJob.id } })}>
-                Ouvrir dernier job
+                View Job
               </Button>
             ) : null}
           </div>
@@ -145,13 +196,14 @@ export function DedicatedModuleLauncher(props: {
       {runResult ? (
         <Card>
           <CardHeader>
-            <CardTitle>Résultat</CardTitle>
-            <CardDescription>Return code: {runResult.returncode}</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Badge variant={runResult.ok ? "success" : "danger"}>{runResult.ok ? "Completed" : "Failed"}</Badge>
+              Result
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Badge variant={runResult.ok ? "success" : "danger"}>{runResult.ok ? "success" : "failed"}</Badge>
-            <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">{runResult.stdout || "(stdout empty)"}</pre>
-            {runResult.stderr ? <pre className="max-h-72 overflow-auto rounded-md border border-rose-300 bg-rose-100 p-3 text-xs text-rose-800">{runResult.stderr}</pre> : null}
+            <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">{runResult.stdout || "(no output)"}</pre>
+            {runResult.stderr ? <pre className="max-h-72 overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">{runResult.stderr}</pre> : null}
           </CardContent>
         </Card>
       ) : null}

@@ -3,10 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Copy, LoaderCircle, OctagonX } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { RunTimeline } from "@/components/modules/run-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getModuleJob } from "@/lib/api/endpoints";
+import { parseSubSteps, runTimeline } from "@/lib/progress";
 
 function formatTime(value: string | null | undefined): string {
   if (!value) {
@@ -88,25 +90,28 @@ export function ModuleJobDetailPage() {
       .filter((line) => line.toLowerCase().includes(pattern))
       .join("\n");
   }, [logFilter, stderrView]);
+  const timelineItems = runTimeline(job);
+  const subSteps = parseSubSteps(String(job?.request["module"] ?? ""), stdoutView, stderrView);
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Job detail</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Job Detail</h1>
         <p className="mt-1 text-sm text-muted-foreground">{jobId}</p>
         <div className="mt-3">
           <Button asChild variant="outline">
-            <Link to="/modules">Retour modules</Link>
+            <Link to="/modules">Back To Modules</Link>
           </Button>
         </div>
       </section>
 
       <Card>
         <CardHeader>
-          <CardTitle>Etat</CardTitle>
-          <CardDescription>Suivi live tant que pending/running.</CardDescription>
+          <CardTitle>Run Timeline</CardTitle>
+          <CardDescription>Live Progress While Queued Or Running.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <RunTimeline items={timelineItems} />
           {jobQuery.isLoading ? <p className="text-sm text-muted-foreground">Chargement...</p> : null}
           {jobQuery.error ? (
             <p className="rounded-md border border-rose-300 bg-rose-100 p-3 text-sm text-rose-800">
@@ -137,12 +142,22 @@ export function ModuleJobDetailPage() {
               </div>
 
               <div className="grid gap-2 text-sm md:grid-cols-2">
-                <p>Créé: {formatTime(job.created_at)}</p>
-                <p>Démarré: {formatTime(job.started_at)}</p>
-                <p>Terminé: {formatTime(job.finished_at)}</p>
-                <p>Durée: {formatDuration(job.started_at, job.finished_at)}</p>
+                <p>Created: {formatTime(job.created_at)}</p>
+                <p>Started: {formatTime(job.started_at)}</p>
+                <p>Finished: {formatTime(job.finished_at)}</p>
+                <p>Duration: {formatDuration(job.started_at, job.finished_at)}</p>
                 <p>Module: {String(job.request["module"] ?? "-")}</p>
               </div>
+              {subSteps.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Detected Sub-Steps</p>
+                  {subSteps.map((step, index) => (
+                    <div key={`${step.label}-${index}`} className="rounded-md border border-border p-2 text-sm">
+                      <span className="font-medium">{step.status.toUpperCase()}</span>: {step.label}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
               {commandText ? (
                 <div className="space-y-2">

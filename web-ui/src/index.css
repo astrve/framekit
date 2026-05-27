@@ -1,32 +1,60 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --font-sans: "Sora", "Avenir Next", "Segoe UI", sans-serif;
+  --font-sans: "DM Sans", "Segoe UI", sans-serif;
 }
 
+/* Light mode (default) */
 :root {
-  --color-bg: #f3f5f7;
-  --color-surface: #dce8ef;
-  --background: #ffffff;
-  --foreground: #101828;
+  --color-bg: #faf8f4;
+  --color-surface: #f3ede4;
+  --background: #faf8f4;
+  --foreground: #1a1208;
   --card: #ffffff;
-  --card-foreground: #101828;
+  --card-foreground: #1a1208;
   --popover: #ffffff;
-  --popover-foreground: #101828;
-  --primary: #0b7285;
-  --primary-foreground: #effbff;
-  --secondary: #e8eef2;
-  --secondary-foreground: #24313e;
-  --muted: #f3f4f6;
-  --muted-foreground: #64748b;
-  --accent: #d9edf2;
-  --accent-foreground: #0b3a45;
-  --destructive: #b42318;
-  --destructive-foreground: #fff5f5;
-  --border: #d0dce5;
-  --input: #d0dce5;
-  --ring: #0b7285;
+  --popover-foreground: #1a1208;
+  --primary: #bf945c;
+  --primary-foreground: #ffffff;
+  --secondary: #ede8df;
+  --secondary-foreground: #5c4a2a;
+  --muted: #f0e8da;
+  --muted-foreground: #8c7454;
+  --accent: #e2b97d;
+  --accent-foreground: #1a1208;
+  --destructive: #d93025;
+  --destructive-foreground: #ffffff;
+  --border: #ddd0bc;
+  --input: #ddd0bc;
+  --ring: #bf945c;
   --radius: 0.6rem;
+}
+
+/* Dark mode */
+.dark {
+  --color-bg: #16110c;
+  --color-surface: #1f1710;
+  --background: #16110c;
+  --foreground: #f2e8d8;
+  --card: #231a10;
+  --card-foreground: #f2e8d8;
+  --popover: #2a1f12;
+  --popover-foreground: #f2e8d8;
+  --primary: #d4a55e;
+  --primary-foreground: #16110c;
+  --secondary: #2e2316;
+  --secondary-foreground: #c8a870;
+  --muted: #27200f;
+  --muted-foreground: #9c8060;
+  --accent: #e2b97d;
+  --accent-foreground: #16110c;
+  --destructive: #ff5a5a;
+  --destructive-foreground: #fff0f0;
+  --border: #3d3020;
+  --input: #3d3020;
+  --ring: #d4a55e;
 }
 
 @theme inline {
@@ -75,3 +103,17 @@ body {
   min-height: 100vh;
 }
 
+select {
+  color-scheme: light;
+}
+
+.dark select {
+  color-scheme: dark;
+}
+
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}

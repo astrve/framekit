@@ -144,7 +144,7 @@ class BannerRegistry:
                 # In production, these would point to extracted banner files
                 # or use a CDN with the actual banner images
                 banners[section.value] = (
-                    f"https://raw.githubusercontent.com/astrve/framekit/banners-v1.0.0/banners/{design}/{language}/{section.value}.png"
+                    f"https://raw.githubusercontent.com/astrve/framekit/refs/heads/feature/banners/{design}/{language}/{section.value}.png"
                 )
 
         return banners

@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from fastapi.testclient import TestClient
 
 from framekit.web.app import create_app
+
+
+@pytest.fixture(autouse=True)
+def _open_access_mode(monkeypatch: MonkeyPatch) -> None:
+    """Run all web API tests as if no users are registered (open-access mode).
+
+    Patches _is_auth_active to False so middleware never blocks requests with 401.
+    Auth-specific tests that need auth active must override this with their own patch.
+    """
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
 
 
 def test_healthz_returns_ok() -> None:
@@ -63,6 +74,41 @@ def test_modules_presets_returns_entries() -> None:
 
     assert response.status_code == 200
     assert any(item["id"] == "doctor-json" for item in payload["presets"])
+
+
+def test_modules_spec_returns_cli_shapes() -> None:
+    client = TestClient(create_app())
+    response = client.get("/api/v1/modules/spec")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert "modules" in payload
+    inspect_module = next((item for item in payload["modules"] if item["name"] == "inspect"), None)
+    assert inspect_module is not None
+    assert "parameters" in inspect_module
+    assert isinstance(inspect_module["parameters"], list)
+
+
+def test_modules_resources_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.list_pipeline_batch_resources",
+        lambda: {
+            "pipeline_presets": [{"name": "multi_fr", "path": "x", "source": "bundled"}],
+            "prez_presets": [{"name": "default", "path": "y", "source": "bundled"}],
+            "announces": [{"value": "https://tracker/announce", "is_selected": True}],
+            "selected_announce": "https://tracker/announce",
+            "nfo_templates": ["movie_default"],
+            "prez_templates": {"bbcode": ["classic"], "html": ["magazine_dark"]},
+            "banner_previews": [{"name": "textual_blue", "preview_url": "https://example.test/banner.png"}],
+        },
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/modules/resources")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["pipeline_presets"][0]["name"] == "multi_fr"
+    assert payload["announces"][0]["is_selected"] is True
 
 
 def test_settings_summary_endpoint(monkeypatch: MonkeyPatch) -> None:
@@ -196,7 +242,7 @@ def test_seedbox_add_endpoint_returns_400_on_validation_error(monkeypatch: Monke
 def test_seedbox_use_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         "framekit.web.app.set_default_seedbox",
-        lambda name: [
+        lambda name, profile_name=None: [
             {
                 "name": name,
                 "rclone_remote": "remote",
@@ -435,3 +481,133 @@ def test_modules_jobs_rerun_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert response.status_code == 200
     assert payload["id"] == "job-2"
     assert payload["status"] == "pending"
+
+
+def test_provider_token_get_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.get_provider_token_value",
+        lambda provider: {"provider": provider, "token": "", "is_set": False, "encrypted": False},
+    )
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/settings/provider-token/tvdb")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["provider"] == "tvdb"
+    assert payload["is_set"] is False
+
+
+def test_provider_token_get_invalid_provider(monkeypatch: MonkeyPatch) -> None:
+    def _raise(provider: str) -> None:
+        raise ValueError(f"unsupported provider: {provider}")
+
+    monkeypatch.setattr("framekit.web.app.get_provider_token_value", _raise)
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/settings/provider-token/unknown")
+
+    assert response.status_code == 400
+
+
+def test_provider_token_set_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.set_provider_token_value",
+        lambda provider, token: {"provider": provider, "token": "", "is_set": True, "encrypted": True},
+    )
+    client = TestClient(create_app())
+
+    response = client.post("/api/v1/settings/provider-token/tvdb", json={"token": "my-secret-key"})
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["provider"] == "tvdb"
+    assert payload["is_set"] is True
+
+
+def test_announce_rename_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.rename_torrent_announce_label",
+        lambda index, label: {
+            "announces": [{"value": "https://tracker.example.com/announce", "label": label, "is_selected": True}],
+            "selected_announce": "https://tracker.example.com/announce",
+        },
+    )
+    client = TestClient(create_app())
+
+    response = client.patch("/api/v1/torrent/announces/0", json={"label": "My Tracker"})
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["announces"][0]["label"] == "My Tracker"
+
+
+def test_profiles_create_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.create_settings_profile",
+        lambda name, description, overrides: {
+            "profiles": [{"name": name, "description": description, "active": False, "overrides": overrides}],
+            "active": None,
+        },
+    )
+    client = TestClient(create_app())
+
+    response = client.post("/api/v1/profiles", json={"name": "test-profile", "description": "A test", "overrides": {"metadata.provider": "tvdb"}})
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["profiles"][0]["name"] == "test-profile"
+
+
+def test_profiles_create_missing_name(monkeypatch: MonkeyPatch) -> None:
+    def _raise(name: str, description: str, overrides: dict) -> None:
+        raise ValueError("profile name is required")
+
+    monkeypatch.setattr("framekit.web.app.create_settings_profile", _raise)
+    client = TestClient(create_app())
+
+    response = client.post("/api/v1/profiles", json={"name": "", "description": "", "overrides": {}})
+
+    assert response.status_code == 400
+
+
+def test_profiles_delete_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.delete_settings_profile",
+        lambda name: {"profiles": [], "active": None},
+    )
+    client = TestClient(create_app())
+
+    response = client.delete("/api/v1/profiles/test-profile")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["profiles"] == []
+
+
+def test_profiles_delete_not_found(monkeypatch: MonkeyPatch) -> None:
+    def _raise(name: str) -> None:
+        raise ValueError(f"profile not found: {name}")
+
+    monkeypatch.setattr("framekit.web.app.delete_settings_profile", _raise)
+    client = TestClient(create_app())
+
+    response = client.delete("/api/v1/profiles/missing")
+
+    assert response.status_code == 400
+
+
+def test_delete_all_presets_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.delete_all_yaml_presets",
+        lambda kind: {"kind": kind, "deleted": ["preset-a", "preset-b"], "count": 2},
+    )
+    client = TestClient(create_app())
+
+    response = client.delete("/api/v1/presets/pipeline/all")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["kind"] == "pipeline"
+    assert payload["count"] == 2
+    assert "preset-a" in payload["deleted"]

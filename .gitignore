@@ -97,3 +97,8 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+#dev web-ui
+
+Branding Framekit/
+node_modules/

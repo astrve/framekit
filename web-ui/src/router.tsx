@@ -19,6 +19,12 @@ const modulesRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/modules"), "ModulesPage"),
 });
 
+const configurationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/configuration",
+  component: lazyRouteComponent(() => import("@/routes/modules"), "ModulesPage"),
+});
+
 const moduleJobDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/modules/$jobId",
@@ -73,10 +79,59 @@ const dedicatedModuleRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/dedicated-module"), "DedicatedModulePage"),
 });
 
+const logsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/logs",
+  component: lazyRouteComponent(() => import("@/routes/logs"), "LogsPage"),
+});
+
+const cliRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cli",
+  component: lazyRouteComponent(() => import("@/routes/cli"), "CliPage"),
+});
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/about",
+  component: lazyRouteComponent(() => import("@/routes/about"), "AboutPage"),
+});
+
+const presetsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/presets",
+  component: lazyRouteComponent(() => import("@/routes/presets"), "PresetsPage"),
+});
+
+const aliasesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/aliases",
+  component: lazyRouteComponent(() => import("@/routes/aliases"), "AliasesPage"),
+});
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/login",
+  component: lazyRouteComponent(() => import("@/routes/login"), "LoginPage"),
+});
+
+const usersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/users",
+  component: lazyRouteComponent(() => import("@/routes/users"), "UsersPage"),
+});
+
+const webhooksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/webhooks",
+  component: lazyRouteComponent(() => import("@/routes/webhooks"), "WebhooksPage"),
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   doctorRoute,
   modulesRoute,
+  configurationRoute,
   moduleJobDetailRoute,
   settingsSetupRoute,
   seedboxRoute,
@@ -86,6 +141,14 @@ const routeTree = rootRoute.addChildren([
   moduleStudioRoute,
   studiosRoute,
   dedicatedModuleRoute,
+  logsRoute,
+  presetsRoute,
+  aliasesRoute,
+  cliRoute,
+  aboutRoute,
+  loginRoute,
+  usersRoute,
+  webhooksRoute,
 ]);
 
 export const router = createRouter({
