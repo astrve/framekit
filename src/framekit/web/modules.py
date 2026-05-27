@@ -294,7 +294,8 @@ def _load_jobs_from_db() -> None:
     for row in rows:
         try:
             job = ModuleJob.model_validate_json(row["payload_json"])
-        except Exception:  # nosec B110
+        except Exception as exc:  # nosec B110
+            logger.warning("Skipping corrupted job row from DB: {}", exc)
             continue
 
         if job.status in {"pending", "running"}:
@@ -1595,7 +1596,8 @@ def _run_module_command_cancellable(
                 if not chunk:
                     break
                 output_queue.put((stream_name, chunk))
-        except Exception:
+        except Exception as exc:
+            logger.warning("Job output reader error ({}): {}", stream_name, exc)
             return
 
     def _drain_queue() -> bool:

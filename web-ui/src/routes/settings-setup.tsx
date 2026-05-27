@@ -844,6 +844,7 @@ export function SettingsSetupPage() {
                   <InfoTooltip text={tooltip} />
                   {qdata?.is_set ? <Badge variant="success" className="text-xs">Set{qdata.encrypted ? " (encrypted)" : ""}</Badge> : <Badge variant="secondary" className="text-xs">Not set</Badge>}
                 </p>
+                {qdata?.error ? <p className="text-xs text-destructive">{qdata.error}</p> : null}
                 {qdata?.is_set && qdata.token ? (
                   <div className="flex items-center gap-2 font-mono text-xs bg-muted rounded px-2 py-1.5 break-all">
                     <span className="flex-1 text-muted-foreground break-all">
@@ -1028,6 +1029,8 @@ export function SettingsSetupPage() {
                 ))}
               </div>
             )}
+            {useSeedboxMutation.isError ? <p className="text-xs text-destructive mt-1">{String((useSeedboxMutation.error as Error)?.message ?? "Failed")}</p> : null}
+            {removeSeedboxMutation.isError ? <p className="text-xs text-destructive mt-1">{String((removeSeedboxMutation.error as Error)?.message ?? "Failed")}</p> : null}
           </div>
         </CardContent>
       </Card>
@@ -1283,6 +1286,9 @@ export function SettingsSetupPage() {
                 ))}
               </div>
             )}
+            {removeAnnounceMutation.isError ? <p className="text-xs text-destructive">{String((removeAnnounceMutation.error as Error)?.message ?? "Failed")}</p> : null}
+            {selectAnnounceMutation.isError ? <p className="text-xs text-destructive">{String((selectAnnounceMutation.error as Error)?.message ?? "Failed")}</p> : null}
+            {renameAnnounceMutation.isError ? <p className="text-xs text-destructive">{String((renameAnnounceMutation.error as Error)?.message ?? "Failed")}</p> : null}
             <div className="flex gap-2">
               <Input value={newAnnounceUrl} onChange={(e) => setNewAnnounceUrl(e.target.value)}
                 placeholder="https://tracker.example.com/…/announce" className="flex-1 font-mono text-xs" />

@@ -875,7 +875,8 @@ def create_app() -> FastAPI:
     @app.post("/api/v1/auth/users/{user_id}/enable")
     def auth_users_enable(user_id: str, req: Request) -> dict[str, Any]:
         _require_admin(req)
-        _get_user_store().set_enabled(user_id, enabled=True)
+        if not _get_user_store().set_enabled(user_id, enabled=True):
+            raise HTTPException(status_code=404, detail="User not found")
         return {"ok": True}
 
     @app.post("/api/v1/auth/users/{user_id}/disable")
@@ -883,7 +884,8 @@ def create_app() -> FastAPI:
         payload = _require_admin(req)
         if payload.get("sub") == user_id:
             raise HTTPException(status_code=400, detail="Cannot disable your own account")
-        _get_user_store().set_enabled(user_id, enabled=False)
+        if not _get_user_store().set_enabled(user_id, enabled=False):
+            raise HTTPException(status_code=404, detail="User not found")
         return {"ok": True}
 
     @app.post("/api/v1/auth/users/{user_id}/password")

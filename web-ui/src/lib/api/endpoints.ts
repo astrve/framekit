@@ -506,8 +506,9 @@ function _extractApiDetail(err: unknown): string {
 }
 
 export async function testWebhook(id: string): Promise<void> {
+  let result: { ok: boolean };
   try {
-    await fetchValidated(
+    result = await fetchValidated(
       `/api/v1/webhooks/${encodeURIComponent(id)}/test`,
       z.object({ ok: z.boolean() }),
       { method: "POST" },
@@ -515,6 +516,7 @@ export async function testWebhook(id: string): Promise<void> {
   } catch (err) {
     throw new Error(_extractApiDetail(err) || "Test failed");
   }
+  if (!result.ok) throw new Error("Test failed");
 }
 
 export async function testWebhookPayload(payload: {
@@ -524,8 +526,9 @@ export async function testWebhookPayload(payload: {
   title_template?: string;
   body_template?: string;
 }): Promise<void> {
+  let result: { ok: boolean };
   try {
-    await fetchValidated("/api/v1/webhooks/test", z.object({ ok: z.boolean() }), {
+    result = await fetchValidated("/api/v1/webhooks/test", z.object({ ok: z.boolean() }), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -533,6 +536,7 @@ export async function testWebhookPayload(payload: {
   } catch (err) {
     throw new Error(_extractApiDetail(err) || "Test failed");
   }
+  if (!result.ok) throw new Error("Test failed");
 }
 
 // Auth

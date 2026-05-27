@@ -109,9 +109,11 @@ export function WebhooksPage() {
     },
   });
 
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const toggleMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => updateWebhook(id, { enabled }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["webhooks"] }),
+    onSuccess: () => { setToggleError(null); void qc.invalidateQueries({ queryKey: ["webhooks"] }); },
+    onError: (err) => setToggleError((err as Error)?.message || "Failed to update"),
   });
 
   const saveMutation = useMutation({
@@ -296,6 +298,9 @@ export function WebhooksPage() {
           <CardTitle className="text-sm">Registered webhooks ({webhooks.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          {toggleError && (
+            <p className="mb-2 text-xs text-destructive">{toggleError}</p>
+          )}
           {webhooksQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : webhooks.length === 0 ? (
@@ -421,6 +426,11 @@ export function WebhooksPage() {
                             {confirmDelete === wh.id ? (
                               <>
                                 <span className="text-xs text-destructive">Delete?</span>
+                                {deleteMutation.isError && (
+                                  <span className="text-xs text-destructive">
+                                    {String((deleteMutation.error as Error)?.message ?? "Failed")}
+                                  </span>
+                                )}
                                 <Button size="sm" variant="destructive" className="h-7"
                                   onClick={() => deleteMutation.mutate(wh.id)}
                                   disabled={deleteMutation.isPending}>Yes</Button>

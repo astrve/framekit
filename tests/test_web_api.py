@@ -253,6 +253,7 @@ def test_seedbox_use_endpoint(monkeypatch: MonkeyPatch) -> None:
             }
         ],
     )
+    monkeypatch.setattr("framekit.web.app.get_seedbox_default_by_profile", lambda: {})
     client = TestClient(create_app())
     response = client.post("/api/v1/seedbox/use", json={"name": "main"})
     payload = response.json()
@@ -611,3 +612,216 @@ def test_delete_all_presets_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert payload["kind"] == "pipeline"
     assert payload["count"] == 2
     assert "preset-a" in payload["deleted"]
+
+
+# ---------------------------------------------------------------------------
+# Batch G — regression tests for Batches A–F
+# ---------------------------------------------------------------------------
+
+# ── Auth middleware ──────────────────────────────────────────────────────────
+
+def test_auth_middleware_open_mode_allows_data_route() -> None:
+    """Zero users (open mode) → protected data route returns 200, no token needed."""
+    # autouse _open_access_mode fixture patches _is_auth_active → False
+    client = TestClient(create_app())
+    response = client.get("/api/v1/system/info")
+    assert response.status_code == 200
+
+
+def test_auth_middleware_active_blocks_unauthenticated_data_route(monkeypatch: MonkeyPatch) -> None:
+    """Auth active + no token → 401 with 'Authentication required'."""
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    client = TestClient(create_app())
+    response = client.get("/api/v1/settings/summary")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required"
+
+
+def test_auth_middleware_always_open_paths_bypass_auth(monkeypatch: MonkeyPatch) -> None:
+    """healthz, system/info, auth/status stay open even when auth is active."""
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    client = TestClient(create_app())
+    assert client.get("/healthz").status_code == 200
+    assert client.get("/api/v1/system/info").status_code == 200
+    assert client.get("/api/v1/auth/status").status_code == 200
+
+
+# ── Batch A — selected_announce nullable + seedbox rclone colon ─────────────
+
+def test_announces_selected_announce_is_nullable(monkeypatch: MonkeyPatch) -> None:
+    """selected_announce field is null (not absent) when nothing is selected."""
+    monkeypatch.setattr(
+        "framekit.web.app.list_torrent_announces_info",
+        lambda: {"announces": [], "selected_announce": None},
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/torrent/announces")
+    payload = response.json()
+    assert response.status_code == 200
+    assert "selected_announce" in payload
+    assert payload["selected_announce"] is None
+
+
+def test_seedbox_add_accepts_rclone_remote_with_trailing_colon(monkeypatch: MonkeyPatch) -> None:
+    """rclone_remote in 'name:' format (standard rclone syntax) is accepted unchanged."""
+    monkeypatch.setattr(
+        "framekit.web.app.create_seedbox_profile",
+        lambda **kwargs: [
+            {
+                "name": kwargs["name"],
+                "rclone_remote": kwargs["rclone_remote"],
+                "remote_base_path": kwargs["remote_base_path"],
+                "max_concurrent_uploads": None,
+                "bandwidth_limit": "",
+                "is_default": False,
+            }
+        ],
+    )
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/seedbox/add",
+        json={"name": "gdrive", "rclone_remote": "gdrive:", "remote_base_path": "/uploads"},
+    )
+    assert response.status_code == 200
+    assert response.json()["seedboxes"][0]["rclone_remote"] == "gdrive:"
+
+
+# ── Batch C — settings patch allowlist + password endpoint ──────────────────
+
+def test_settings_patch_rejects_torrent_client_password() -> None:
+    """upload.torrent_client_password is not in the patch allowlist → 400."""
+    # No monkeypatching: allowlist check raises ValueError before any Settings() call.
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/settings/patch",
+        json={"changes": {"upload.torrent_client_password": "secret"}},
+    )
+    assert response.status_code == 400
+    assert "torrent_client_password" in response.json()["detail"]
+
+
+def test_torrent_client_password_get_returns_status_only(monkeypatch: MonkeyPatch) -> None:
+    """GET torrent-client-password returns is_set+encrypted, never the password value."""
+    monkeypatch.setattr(
+        "framekit.web.app.get_torrent_client_password",
+        lambda: {"is_set": True, "encrypted": True},
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/upload/torrent-client-password")
+    payload = response.json()
+    assert response.status_code == 200
+    assert "is_set" in payload
+    assert "encrypted" in payload
+    assert "password" not in payload
+    assert "token" not in payload
+
+
+# ── Webhooks — template support + placeholder validation (Batch D) ───────────
+
+def test_webhook_add_stores_title_and_body_template(monkeypatch: MonkeyPatch) -> None:
+    """POST /webhooks with title_template/body_template → stored in response."""
+    from framekit.core.webhooks import WebhookConfig
+
+    def _add(**kwargs):  # type: ignore[return]
+        return [
+            WebhookConfig(
+                id="wh-1",
+                name=kwargs["name"],
+                url=kwargs["url"],
+                discord=kwargs.get("discord", False),
+                title_template=kwargs.get("title_template") or None,
+                body_template=kwargs.get("body_template") or None,
+            )
+        ]
+
+    monkeypatch.setattr("framekit.web.app.add_webhook", _add)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/webhooks",
+        json={
+            "name": "ci",
+            "url": "https://hooks.example.com/1",
+            "title_template": "Job: {event}",
+            "body_template": "Module: {module}",
+        },
+    )
+    assert response.status_code == 200
+    wh = response.json()["webhooks"][0]
+    assert wh["title_template"] == "Job: {event}"
+    assert wh["body_template"] == "Module: {module}"
+
+
+def test_webhook_update_stores_templates(monkeypatch: MonkeyPatch) -> None:
+    """PATCH /webhooks/{id} with templates → stored in response."""
+    from framekit.core.webhooks import WebhookConfig
+
+    def _update(webhook_id, **kwargs):  # type: ignore[return]
+        return [
+            WebhookConfig(
+                id=webhook_id,
+                name="ci",
+                url="https://hooks.example.com/1",
+                title_template=kwargs.get("title_template") or None,
+                body_template=kwargs.get("body_template") or None,
+            )
+        ]
+
+    monkeypatch.setattr("framekit.web.app.update_webhook", _update)
+    client = TestClient(create_app())
+    response = client.patch(
+        "/api/v1/webhooks/wh-1",
+        json={"title_template": "Done: {job_id}", "body_template": ""},
+    )
+    assert response.status_code == 200
+    wh = response.json()["webhooks"][0]
+    assert wh["title_template"] == "Done: {job_id}"
+    # body_template="" → cleared → None in response
+    assert wh["body_template"] is None
+
+
+def test_webhook_add_unknown_placeholder_returns_400(monkeypatch: MonkeyPatch) -> None:
+    """Unknown placeholder {movie} raises ValueError → 400 with placeholder name in detail."""
+    # Monkeypatch only load/save to avoid disk I/O; validation runs for real.
+    monkeypatch.setattr("framekit.core.webhooks.load_webhooks", lambda: [])
+    monkeypatch.setattr("framekit.core.webhooks.save_webhooks", lambda _: None)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/webhooks",
+        json={
+            "name": "bad",
+            "url": "https://hooks.example.com/1",
+            "title_template": "{movie} was released",
+        },
+    )
+    assert response.status_code == 400
+    assert "movie" in response.json()["detail"]
+
+
+def test_webhook_test_payload_returns_ok_with_mocked_http(monkeypatch: MonkeyPatch) -> None:
+    """POST /webhooks/test fires request and returns ok:true when target responds 2xx."""
+
+    class _FakeResponse:
+        status_code = 200
+        text = ""
+
+    class _FakeClient:
+        def __init__(self, **kwargs: object) -> None:  # noqa: ARG002
+            pass
+
+        def __enter__(self) -> "_FakeClient":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            pass
+
+        def post(self, url: str, **kwargs: object) -> _FakeResponse:  # noqa: ARG002
+            return _FakeResponse()
+
+    monkeypatch.setattr("httpx.Client", _FakeClient)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/webhooks/test",
+        json={"url": "https://hooks.example.com/1", "discord": False},
+    )
+    assert response.status_code == 200
+    assert response.json()["ok"] is True

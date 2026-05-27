@@ -6,10 +6,16 @@ export type ParsedStep = {
 };
 
 const MODULE_PATTERNS: Record<string, RegExp[]> = {
-  pipeline: [/^\[(?<module>[a-z-]+)\]\s+(?<state>en cours|ok|failed|en échec|done)/i, /^Step\s+\d+\/\d+:\s+(?<module>.+)$/i],
-  batch: [/^Traitement\s+\d+\s+sur\s+\d+\s*:\s*(?<module>.+)$/i],
-  cleanmkv: [/^Traitement des fichiers MKV/i],
-  torrent: [/^Hachage de la charge utile du torrent/i],
+  // "[INFO] Renamer in progress..." — pipeline.step.running key is absent from all locale
+  // files so the default English string is always used regardless of the UI locale setting.
+  pipeline: [/^\[INFO\]\s+(?<module>.+?)\s+in\s+progress/i],
+  // EN: "Processing N of M: name" | FR: "Traitement N sur M : name" | ES: "Procesando N de M: name"
+  // Rich console.rule() may surround the text with dashes; match anywhere in the line.
+  batch: [/(?:Processing|Traitement|Procesando)\s+\d+\s+(?:of|sur|de)\s+\d+\s*[: ]\s*(?<module>.+)/i],
+  // EN: "Processing MKV files" | FR: "Traitement des fichiers MKV" | ES: "Procesando archivos MKV"
+  cleanmkv: [/(?:Processing\s+MKV\s+files?|Traitement\s+des\s+fichiers\s+MKV|Procesando\s+archivos\s+MKV)/i],
+  // EN: "Hashing torrent payload" | FR: "Hachage de la charge utile du torrent" | ES: "Hashing del payload del torrent"
+  torrent: [/(?:Hashing\s+torrent|Hachage\s+de\s+la\s+charge|Hashing\s+del\s+payload)/i],
   upload: [/^upload/i, /^tracker/i],
 };
 
