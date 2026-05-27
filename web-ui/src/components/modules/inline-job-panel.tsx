@@ -11,6 +11,126 @@ import type { ModuleJob } from "@/lib/api/schemas";
 import { cn } from "@/lib/utils";
 import { parseSubSteps, runTimeline } from "@/lib/progress";
 
+// ── payload helpers ───────────────────────────────────────────────────────────
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function formatBytes(bytes: unknown): string {
+  const n = Number(bytes);
+  if (!n || Number.isNaN(n)) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function formatMs(ms: unknown): string {
+  const n = Number(ms);
+  if (!n || Number.isNaN(n)) return "—";
+  const totalSeconds = Math.floor(n / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function dash(v: unknown): string {
+  const s = String(v ?? "");
+  return s && s !== "null" && s !== "undefined" ? s : "—";
+}
+
+// ── structured result sub-components ─────────────────────────────────────────
+
+function InspectResult({ payload }: { payload: Record<string, unknown> }) {
+  const rows: [string, string][] = [
+    ["Title", dash(payload.release_title)],
+    ["Series", dash(payload.series_title)],
+    ["Year", dash(payload.year)],
+    ["Media kind", dash(payload.media_kind)],
+    ["Episodes", String(payload.episode_count ?? "—")],
+    ["Completeness", dash(payload.completeness_label)],
+    [
+      "Missing",
+      Array.isArray(payload.missing_codes) && payload.missing_codes.length > 0
+        ? (payload.missing_codes as string[]).join(", ")
+        : "—",
+    ],
+    ["Size", formatBytes(payload.size_bytes)],
+    ["Duration", formatMs(payload.duration_ms)],
+    ["Source", dash(payload.source)],
+    ["Resolution", dash(payload.resolution)],
+    ["Video", dash(payload.video_tag)],
+    ["Audio", dash(payload.audio_tag)],
+    ["Language", dash(payload.language_tag)],
+  ];
+  return (
+    <div className="rounded-md border border-border overflow-hidden text-xs">
+      <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted/60 border-b border-border/60">
+        Release inspection
+      </p>
+      <div className="divide-y divide-border/40">
+        {rows.map(([label, value]) => (
+          <div key={label} className="grid grid-cols-[130px_1fr] px-3 py-1.5">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="font-mono break-all">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type ValidateIssue = { severity: string; category: string; message: string; suggestion: string };
+
+function ValidateResult({ payload }: { payload: Record<string, unknown> }) {
+  const passed = Number(payload.checks_passed ?? 0);
+  const warned = Number(payload.checks_warned ?? 0);
+  const failed = Number(payload.checks_failed ?? 0);
+  const issues = (Array.isArray(payload.issues) ? payload.issues : []) as ValidateIssue[];
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-3 text-xs font-medium">
+        <span className="text-emerald-600 dark:text-emerald-400">✓ {passed} passed</span>
+        {warned > 0 && (
+          <span className="text-amber-600 dark:text-amber-400">
+            ⚠ {warned} warning{warned !== 1 ? "s" : ""}
+          </span>
+        )}
+        {failed > 0 && (
+          <span className="text-destructive">
+            ✗ {failed} error{failed !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+      {issues.length > 0 && (
+        <div className="space-y-1.5">
+          {issues.map((issue, i) => (
+            <div
+              key={i}
+              className={`rounded-md border px-3 py-2 text-xs ${
+                issue.severity === "error"
+                  ? "border-destructive/40 bg-destructive/5 text-destructive"
+                  : "border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400"
+              }`}
+            >
+              <span className="font-semibold capitalize">{issue.category}</span>
+              {" — "}
+              {issue.message}
+              {issue.suggestion && (
+                <span className="block mt-0.5 opacity-70">{issue.suggestion}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function formatDuration(
@@ -290,8 +410,30 @@ export function InlineJobPanel({
         </div>
       )}
 
-      {/* ── Live stdout tail / final output ─────────────────────────────── */}
-      {outputText && (
+      {/* ── Structured result card (inspect / validate with parsed payload) ─ */}
+      {isTerminal && job?.result?.parsed_payload && isRecord(job.result.parsed_payload) &&
+        (moduleName === "inspect" || moduleName === "validate") ? (
+        <div className="px-4 pb-4 space-y-2">
+          {moduleName === "inspect" && (
+            <InspectResult payload={job.result.parsed_payload} />
+          )}
+          {moduleName === "validate" && (
+            <ValidateResult payload={job.result.parsed_payload} />
+          )}
+          {outputText && (
+            <details className="group">
+              <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground list-none flex items-center gap-1">
+                <span className="transition-transform group-open:rotate-90 inline-block">▶</span>
+                Raw output
+              </summary>
+              <pre className="mt-1.5 max-h-40 overflow-auto rounded-md border border-border bg-muted px-3 py-2 text-[11px] leading-relaxed font-mono">
+                {outputText}
+              </pre>
+            </details>
+          )}
+        </div>
+      ) : outputText ? (
+        /* ── Normal live / final output for all other modules ──────────── */
         <div className="px-4 pb-4 space-y-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {isRunning ? "Live output" : "Output"}
@@ -300,7 +442,7 @@ export function InlineJobPanel({
             {outputText}
           </pre>
         </div>
-      )}
+      ) : null}
 
       {/* ── Stderr / job-level error ─────────────────────────────────────── */}
       {(stderrText || job?.error) && (

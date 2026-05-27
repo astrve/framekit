@@ -36,7 +36,11 @@ import {
   UploadTrackersSchema,
   VaultStatusSchema,
   WatchFoldersSchema,
+  WatchServiceStatusSchema,
+  WatchServiceStopSchema,
   SettingsProfilesSchema,
+  RunsListSchema,
+  type RunsList,
   type AliasList,
   type AuthLoginResponse,
   type AuthStatus,
@@ -71,6 +75,8 @@ import {
   type UploadTrackers,
   type VaultStatus,
   type WatchFolders,
+  type WatchServiceStatus,
+  type WatchServiceStop,
   type SettingsProfiles,
 } from "@/lib/api/schemas";
 
@@ -627,4 +633,20 @@ export async function changeAuthUserPassword(token: string, userId: string, newP
   });
   if (!res.ok) throw new Error(_parseRawDetail(await res.text()));
   return { ok: true };
+}
+
+export async function getRuns(limit = 50): Promise<RunsList> {
+  return fetchValidated(`/api/v1/runs?limit=${limit}`, RunsListSchema);
+}
+
+export async function getWatchServiceStatus(): Promise<WatchServiceStatus> {
+  return fetchValidated("/api/v1/watch/service", WatchServiceStatusSchema);
+}
+
+export async function startWatchService(): Promise<ModuleJob> {
+  return fetchValidated("/api/v1/watch/service/start", ModuleJobSchema, { method: "POST" });
+}
+
+export async function stopWatchService(): Promise<WatchServiceStop> {
+  return fetchValidated("/api/v1/watch/service/stop", WatchServiceStopSchema, { method: "POST" });
 }

@@ -228,17 +228,8 @@ export function HomePage() {
   // ── seedbox / upload history ─────────────────────────────────────────────
 
   const defaultSeedbox = seedboxQuery.data?.seedboxes.find((s) => s.is_default);
-  const lastUploadEntry = uploadHistoryQuery.data?.entries[0] as
-    | Record<string, unknown>
-    | undefined;
-  const lastUploadTs = lastUploadEntry
-    ? String(
-        lastUploadEntry.timestamp ??
-          lastUploadEntry.created_at ??
-          lastUploadEntry.date ??
-          "",
-      )
-    : "";
+  const lastUploadEntry = uploadHistoryQuery.data?.entries[0];
+  const lastUploadTs = lastUploadEntry?.timestamp ?? "";
 
   // ── render ───────────────────────────────────────────────────────────────
 

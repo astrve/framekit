@@ -841,3 +841,221 @@ def test_clean_web_job_output_strips_ansi() -> None:
     assert _clean_web_job_output("") == ""
     # Mixed: ANSI before and after plain content
     assert _clean_web_job_output("\x1b[32mok\x1b[0m \x1b[31merr\x1b[0m") == "ok err"
+
+
+# ---------------------------------------------------------------------------
+# Batch L.1 — regression tests for Batches I / J / K backend additions
+# ---------------------------------------------------------------------------
+
+# ── GET /api/v1/runs ─────────────────────────────────────────────────────────
+
+def test_runs_endpoint_returns_empty_list_when_no_ledger(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr("framekit.web.app.list_runs_from_ledger", lambda limit=50: [])
+    client = TestClient(create_app())
+    response = client.get("/api/v1/runs")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["runs"] == []
+
+
+def test_runs_endpoint_rejects_out_of_range_limit() -> None:
+    """limit=0 and limit=201 must return 400."""
+    # No monkeypatching needed — limit guard fires before list_runs_from_ledger.
+    client = TestClient(create_app())
+    assert client.get("/api/v1/runs?limit=0").status_code == 400
+    assert client.get("/api/v1/runs?limit=201").status_code == 400
+
+
+def test_runs_endpoint_passes_limit_to_helper(monkeypatch: MonkeyPatch) -> None:
+    captured: list[int] = []
+
+    def _stub(limit: int = 50) -> list[dict]:
+        captured.append(limit)
+        return []
+
+    monkeypatch.setattr("framekit.web.app.list_runs_from_ledger", _stub)
+    client = TestClient(create_app())
+    client.get("/api/v1/runs?limit=7")
+    assert captured == [7]
+
+
+# ── list_runs_from_ledger unit tests (pure-function, tmp_path) ────────────────
+
+def test_list_runs_from_ledger_missing_file_returns_empty(
+    tmp_path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "framekit.core.runs.ledger.get_runs_ledger_path",
+        lambda: tmp_path / "nonexistent.ndjson",
+    )
+    from framekit.web.modules import list_runs_from_ledger
+    assert list_runs_from_ledger() == []
+
+
+def test_list_runs_from_ledger_groups_by_run_id(
+    tmp_path, monkeypatch: MonkeyPatch
+) -> None:
+    import json as _json
+
+    ledger = tmp_path / "ledger.ndjson"
+    ledger.write_text(
+        _json.dumps({"run_id": "run-A", "module": "renamer", "src": "a.mkv", "timestamp": "2024-01-02T00:00:00"}) + "\n"
+        + _json.dumps({"run_id": "run-A", "module": "renamer", "src": "b.mkv", "timestamp": "2024-01-02T00:00:01"}) + "\n"
+        + _json.dumps({"run_id": "run-B", "module": "cleanmkv", "src": "c.mkv", "timestamp": "2024-01-03T00:00:00"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("framekit.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
+    from framekit.web.modules import list_runs_from_ledger
+    runs = list_runs_from_ledger()
+    assert len(runs) == 2
+    run_a = next(r for r in runs if r["run_id"] == "run-A")
+    assert run_a["file_count"] == 2
+    assert run_a["module"] == "renamer"
+    assert len(run_a["actions"]) == 2
+
+
+def test_list_runs_from_ledger_newest_first(
+    tmp_path, monkeypatch: MonkeyPatch
+) -> None:
+    import json as _json
+
+    ledger = tmp_path / "ledger.ndjson"
+    ledger.write_text(
+        _json.dumps({"run_id": "old", "module": "renamer", "timestamp": "2024-01-01T00:00:00"}) + "\n"
+        + _json.dumps({"run_id": "new", "module": "renamer", "timestamp": "2024-01-05T00:00:00"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("framekit.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
+    from framekit.web.modules import list_runs_from_ledger
+    runs = list_runs_from_ledger()
+    assert runs[0]["run_id"] == "new"
+    assert runs[1]["run_id"] == "old"
+
+
+def test_list_runs_from_ledger_respects_limit(
+    tmp_path, monkeypatch: MonkeyPatch
+) -> None:
+    import json as _json
+
+    lines = [
+        _json.dumps({"run_id": f"run-{i}", "module": "renamer", "timestamp": f"2024-01-{i + 1:02d}T00:00:00"})
+        for i in range(5)
+    ]
+    ledger = tmp_path / "ledger.ndjson"
+    ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    monkeypatch.setattr("framekit.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
+    from framekit.web.modules import list_runs_from_ledger
+    assert len(list_runs_from_ledger(limit=2)) == 2
+
+
+# ── Watch service API ─────────────────────────────────────────────────────────
+
+def test_watch_service_status_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.get_watch_service_status",
+        lambda: {"status": "stopped", "pid": None},
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/watch/service")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["status"] == "stopped"
+    assert payload["pid"] is None
+
+
+def test_watch_service_start_enqueues_watch_module_job(monkeypatch: MonkeyPatch) -> None:
+    """POST /watch/service/start must enqueue module=watch with expected args."""
+    captured: list = []
+
+    class _JobStub:
+        def model_dump(self) -> dict:
+            return {
+                "id": "job-watch",
+                "status": "pending",
+                "created_at": "2026-01-01T00:00:00Z",
+                "started_at": None,
+                "finished_at": None,
+                "request": {},
+                "result": None,
+                "error": None,
+            }
+
+    def _enqueue(request):
+        captured.append(request)
+        return _JobStub()
+
+    monkeypatch.setattr("framekit.web.app.enqueue_module_job", _enqueue)
+    client = TestClient(create_app())
+    response = client.post("/api/v1/watch/service/start")
+    assert response.status_code == 200
+    assert response.json()["id"] == "job-watch"
+    assert len(captured) == 1
+    req = captured[0]
+    assert req.module == "watch"
+    assert "start" in req.args_text
+    assert "--all" in req.args_text
+    assert req.auto_yes is True
+
+
+def test_watch_service_stop_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr("framekit.web.app.stop_watch_service", lambda: {"stopped": True})
+    client = TestClient(create_app())
+    response = client.post("/api/v1/watch/service/stop")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["stopped"] is True
+
+
+# ── CLI --json output ─────────────────────────────────────────────────────────
+
+def test_inspect_json_outputs_valid_json_on_missing_path() -> None:
+    """inspect --json with nonexistent path prints {"error": "..."} — valid JSON, exit 1."""
+    import json as _json
+    from click.testing import CliRunner
+    from framekit.commands.inspect import inspect_command
+
+    runner = CliRunner()
+    result = runner.invoke(inspect_command, ["--json", "/nonexistent/path/that/does/not/exist"])
+    parsed = _json.loads(result.output.strip())
+    assert "error" in parsed
+    assert result.exit_code != 0
+
+
+def test_validate_json_outputs_valid_json(tmp_path, monkeypatch: MonkeyPatch) -> None:
+    """validate --json prints a valid JSON object regardless of validation outcome."""
+    import json as _json
+    from click.testing import CliRunner
+    from framekit.commands.validate import validate_command
+
+    class _Severity:
+        value = "error"
+
+    class _Issue:
+        severity = _Severity()
+        category = "container"
+        message = "No MKV files found"
+        suggestion = "Add an MKV file"
+
+    class _Result:
+        release_name = "TestRelease"
+        is_valid = False
+        checks_passed = 0
+        checks_warned = 0
+        checks_failed = 1
+        issues = [_Issue()]
+
+    class _ServiceStub:
+        def __init__(self, **kwargs):  # noqa: ARG002
+            pass
+
+        def validate(self, path):  # noqa: ARG002
+            return _Result()
+
+    monkeypatch.setattr("framekit.commands.validate.ValidationService", _ServiceStub)
+
+    runner = CliRunner()
+    result = runner.invoke(validate_command, ["--json", str(tmp_path)])
+    parsed = _json.loads(result.output.strip())
+    assert parsed["release_name"] == "TestRelease"
+    assert isinstance(parsed["issues"], list)
+    assert parsed["checks_failed"] == 1

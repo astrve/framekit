@@ -265,6 +265,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
+                  <Link to="/rollback">Rollback</Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
                   <Link to="/studios">Browse all →</Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -361,6 +365,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Link to="/module/$moduleSlug" params={{ moduleSlug: item.slug }}>{item.title}</Link>
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/rollback">Rollback</Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -127,6 +127,12 @@ const webhooksRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/webhooks"), "WebhooksPage"),
 });
 
+const rollbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/rollback",
+  component: lazyRouteComponent(() => import("@/routes/rollback"), "RollbackPage"),
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   doctorRoute,
@@ -149,6 +155,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   usersRoute,
   webhooksRoute,
+  rollbackRoute,
 ]);
 
 export const router = createRouter({

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from rich import box
 from rich.table import Table
 
@@ -70,30 +72,58 @@ def _missing_episode_codes(codes: list[str]) -> str:
     return ", ".join(codes)
 
 
-def run_inspect_command(path: str | None) -> int:
+def run_inspect_command(path: str | None, json_output: bool = False) -> int:
     """Run inspect command."""
-    print_module_banner("Inspect")
+    if not json_output:
+        print_module_banner("Inspect")
     folder = _resolve_inspect_folder(path)
 
     if not folder.exists() or not folder.is_dir():
-        print_error(
-            tr(
-                "cleanmkv.error.folder_not_found",
-                default="Folder not found: {folder}",
-                folder=folder,
+        if json_output:
+            print(json.dumps({"error": f"Folder not found: {folder}"}, ensure_ascii=False))
+        else:
+            print_error(
+                tr(
+                    "cleanmkv.error.folder_not_found",
+                    default="Folder not found: {folder}",
+                    folder=folder,
+                )
             )
-        )
-        return 1
+        raise SystemExit(1)
 
     episodes = scan_nfo_folder(folder)
     if not episodes:
-        print_error(
-            tr("nfo.error.no_mkv", default="No MKV files found in folder: {folder}", folder=folder)
-        )
-        return 1
+        if json_output:
+            print(json.dumps({"error": f"No MKV files found in folder: {folder}"}, ensure_ascii=False))
+        else:
+            print_error(
+                tr("nfo.error.no_mkv", default="No MKV files found in folder: {folder}", folder=folder)
+            )
+        raise SystemExit(1)
 
     release = build_release_nfo(folder, episodes)
     completeness = inspect_release_completeness(release)
+
+    if json_output:
+        payload = {
+            "media_kind": release.media_kind,
+            "release_title": release.release_title,
+            "series_title": release.series_title,
+            "year": release.year,
+            "episode_count": len(release.episodes),
+            "completeness_label": completeness.label,
+            "missing_codes": completeness.missing_codes,
+            "size_bytes": release.total_size_bytes,
+            "duration_ms": release.total_duration_ms,
+            "source": release.source,
+            "resolution": release.resolution,
+            "video_tag": release.video_tag,
+            "audio_tag": release.audio_tag,
+            "language_tag": release.language_tag,
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0
+
     console.print(_inspect_summary_table(folder, release, completeness))
     return 0
 
@@ -105,6 +135,7 @@ def run_inspect_command(path: str | None) -> int:
     ),
 )
 @click.argument("path_parts", nargs=-1)
-def inspect_command(path_parts: tuple[str, ...]) -> int:
+@click.option("--json", "json_output", is_flag=True, default=False, help="Output structured JSON to stdout instead of a table.")
+def inspect_command(path_parts: tuple[str, ...], json_output: bool) -> int:
     """Handle inspect command."""
-    return run_inspect_command(join_path_parts(path_parts) or None)
+    return run_inspect_command(join_path_parts(path_parts) or None, json_output=json_output)

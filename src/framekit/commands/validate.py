@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from framekit.core.i18n import tr
@@ -83,6 +84,7 @@ def _print_result(result: ValidationResult) -> None:
 )
 @click.option("--min-resolution", type=int, default=None, help="Minimum video width in pixels.")
 @click.option("--max-size-gb", type=float, default=None, help="Maximum file size in GB.")
+@click.option("--json", "json_output", is_flag=True, default=False, help="Output structured JSON to stdout instead of a table.")
 def validate_command(
     path: str,
     ruleset: str,
@@ -91,6 +93,7 @@ def validate_command(
     require_subs: bool | None,
     min_resolution: int | None,
     max_size_gb: float | None,
+    json_output: bool,
 ) -> None:
     r"""Validate a release folder against tracker requirements.
 
@@ -102,6 +105,7 @@ def validate_command(
         fk validate "Release folder"
         fk validate "Release folder" --ruleset strict
         fk validate "Release folder" --min-resolution 1920 --require-subs
+        fk validate "Release folder" --json
     """
     if strict:
         rules = BUILTIN_RULESETS["strict"]
@@ -118,12 +122,32 @@ def validate_command(
         rules.max_file_size_gb = max_size_gb
 
     release_path = Path(path)
-    print_info(tr("validate.start", default=f"Validating: {release_path.name}"))
+    if not json_output:
+        print_info(tr("validate.start", default=f"Validating: {release_path.name}"))
 
     service = ValidationService(rules=rules)
     result = service.validate(release_path)
 
-    _print_result(result)
+    if json_output:
+        payload = {
+            "release_name": result.release_name,
+            "is_valid": result.is_valid,
+            "checks_passed": result.checks_passed,
+            "checks_warned": result.checks_warned,
+            "checks_failed": result.checks_failed,
+            "issues": [
+                {
+                    "severity": issue.severity.value,
+                    "category": issue.category,
+                    "message": issue.message,
+                    "suggestion": issue.suggestion,
+                }
+                for issue in result.issues
+            ],
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        _print_result(result)
 
     if not result.is_valid:
         raise SystemExit(1)

@@ -21,6 +21,19 @@ const MODULE_PATTERNS: Record<string, RegExp[]> = {
   screenshot: [/Extracting\s+\d+\s+screenshots?/i],
   // EN: "Processing N file(s)..." — emitted by all extract sub-commands (subtitle/audio/video)
   extract: [/Processing\s+\d+\s+file/i],
+  // EN: "Modified: N" | "Planned changes: N" (dry-run count) | "Rename operation completed."
+  renamer: [
+    /(?:Modified|Planned\s+changes)\s*:\s*(?<module>\d+)/i,
+    /Rename\s+operation\s+completed/i,
+    /(?:Dry-run\s+completed|Dry\s+run\s+completed)/i,
+  ],
+  // EN: "NFO written: /path/to/file.nfo" — emitted once per output file
+  nfo: [/NFO\s+written\s*:\s*(?<module>.+)/i],
+  // EN: "Output: /path/to/output.html" | "Presentation generated." | "Presentation dry-run completed."
+  prez: [
+    /(?:\[INFO\]\s+)?Output\s*:\s*(?<module>.+)/i,
+    /Presentation\s+(?:generated|dry-run\s+completed|dry\s+run\s+completed)/i,
+  ],
 };
 
 export function parseSubSteps(moduleName: string, stdout: string, stderr: string): ParsedStep[] {

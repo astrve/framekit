@@ -1852,6 +1852,76 @@ def list_module_jobs(limit: int = 20) -> list[ModuleJob]:
         return [job.model_copy(deep=True) for job in jobs[:limit]]
 
 
+def get_watch_service_status() -> dict[str, Any]:
+    """Return running/stopped status by reading the watcher PID file."""
+    from framekit.modules.watch.service import read_running_watcher_pid
+
+    pid = read_running_watcher_pid()
+    return {
+        "status": "running" if pid is not None else "stopped",
+        "pid": pid,
+    }
+
+
+def stop_watch_service(timeout_seconds: float = 5.0) -> dict[str, Any]:
+    """Signal the running watcher to stop gracefully.
+
+    Returns ``{"stopped": True}`` on success, ``{"stopped": False}`` when no
+    running watcher was found or the process did not exit within the timeout.
+    """
+    from framekit.modules.watch.service import stop_running_watcher
+
+    ok = stop_running_watcher(timeout_seconds=timeout_seconds)
+    return {"stopped": ok}
+
+
+def list_runs_from_ledger(limit: int = 50) -> list[dict[str, Any]]:
+    """Read run ledger NDJSON, group by run_id, return newest-first list.
+
+    Each entry: {run_id, module, file_count, timestamp, actions: [...]}
+    """
+    from framekit.core.runs.ledger import get_runs_ledger_path
+
+    path = get_runs_ledger_path()
+    if not path.exists():
+        return []
+
+    # run_id → list of raw entry dicts
+    groups: dict[str, list[dict[str, Any]]] = {}
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry: dict[str, Any] = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                run_id = str(entry.get("run_id", ""))
+                if not run_id:
+                    continue
+                groups.setdefault(run_id, []).append(entry)
+    except OSError:
+        return []
+
+    runs: list[dict[str, Any]] = []
+    for run_id, entries in groups.items():
+        timestamps = [str(e.get("timestamp", "")) for e in entries if e.get("timestamp")]
+        earliest = min(timestamps) if timestamps else ""
+        module = str(entries[0].get("module", "")) if entries else ""
+        runs.append({
+            "run_id": run_id,
+            "module": module,
+            "file_count": len(entries),
+            "timestamp": earliest,
+            "actions": entries,
+        })
+
+    runs.sort(key=lambda r: r["timestamp"], reverse=True)
+    return runs[:limit]
+
+
 def cancel_module_job(job_id: str) -> ModuleJob | None:
     """Request cancellation for one running/pending job and return snapshot."""
     process: Any = None

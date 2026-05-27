@@ -50,6 +50,8 @@ from framekit.web.modules import (
     get_upload_state,
     get_upload_tracker_info,
     get_vault_status_info,
+    get_watch_service_status,
+    stop_watch_service,
     list_aliases_summary,
     list_module_jobs,
     list_modules,
@@ -59,6 +61,7 @@ from framekit.web.modules import (
     list_seedbox_history,
     list_seedboxes_summary,
     list_pipeline_batch_resources,
+    list_runs_from_ledger,
     list_torrent_announces_info,
     list_upload_history,
     list_upload_trackers_summary,
@@ -485,6 +488,12 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.get("/api/v1/runs")
+    def list_runs(limit: int = 50) -> dict[str, Any]:
+        if limit < 1 or limit > 200:
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 200")
+        return {"runs": list_runs_from_ledger(limit=limit)}
+
     @app.get("/api/v1/modules/jobs")
     def list_jobs(limit: int = 20) -> dict[str, Any]:
         if limit < 1 or limit > 100:
@@ -637,6 +646,32 @@ def create_app() -> FastAPI:
             return {"folders": remove_watch_folder(index)}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/v1/watch/service")
+    def watch_service_status() -> dict[str, Any]:
+        return get_watch_service_status()
+
+    @app.post("/api/v1/watch/service/start")
+    def watch_service_start() -> dict[str, Any]:
+        """Spawn the watch daemon as a background module job (2 h max)."""
+        try:
+            job = enqueue_module_job(
+                RunModuleRequest(
+                    module="watch",
+                    args_text="start --all --no-status-updates",
+                    dry_run=False,
+                    auto_yes=True,
+                    confirm_destructive=True,
+                    timeout_seconds=7200,
+                )
+            )
+            return job.model_dump()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/watch/service/stop")
+    def watch_service_stop() -> dict[str, Any]:
+        return stop_watch_service()
 
     @app.get("/api/v1/profiles")
     def profiles_list() -> dict[str, Any]:

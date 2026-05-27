@@ -306,15 +306,30 @@ export function UploadPage() {
           ) : (
             <div className="space-y-2">
               {(historyQuery.data?.entries ?? []).map((entry, index) => (
-                <div key={index} className="rounded-md border border-border p-3 text-sm">
-                  <div className="grid gap-1">
-                    {Object.entries(entry).map(([key, value]) => (
-                      <div key={key} className="grid grid-cols-[120px_1fr] gap-2 text-xs">
-                        <span className="text-muted-foreground capitalize">{key.replace(/_/g, " ")}</span>
-                        <span className="break-all font-mono">{String(value)}</span>
-                      </div>
-                    ))}
+                <div key={index} className="rounded-md border border-border p-3 text-sm space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant={entry.success ? "success" : "danger"}>
+                      {entry.success ? "Success" : "Failed"}
+                    </Badge>
+                    <span className="font-medium">{entry.tracker}</span>
+                    {entry.torrent && (
+                      <span className="text-muted-foreground text-xs truncate max-w-xs">{entry.torrent}</span>
+                    )}
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : ""}
+                    </span>
                   </div>
+                  {entry.url && (
+                    <p className="text-xs text-muted-foreground break-all">{entry.url}</p>
+                  )}
+                  {entry.message && (
+                    <p className="text-xs text-muted-foreground">{entry.message}</p>
+                  )}
+                  {entry.errors.length > 0 && (
+                    <ul className="text-xs text-destructive space-y-0.5">
+                      {entry.errors.map((err, i) => <li key={i}>{err}</li>)}
+                    </ul>
+                  )}
                 </div>
               ))}
             </div>

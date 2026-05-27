@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
+  Activity,
   AlertCircle,
   Check,
   Cog,
@@ -20,6 +21,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  Square,
   Trash2,
   Upload,
   Wrench,
@@ -27,6 +29,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +40,9 @@ import {
   activateSettingsProfile,
   addTorrentAnnounce,
   addWatchFolder,
+  getWatchServiceStatus,
+  startWatchService,
+  stopWatchService,
   createSettingsProfile,
   deactivateSettingsProfile,
   deleteSettingsProfile,
@@ -67,7 +73,7 @@ import {
   useSeedbox,
   removeSeedbox,
 } from "@/lib/api/endpoints";
-import type { DoctorPayload, ProviderToken, SettingsProfiles, TmdbToken, TorrentAnnounces, TorrentClientPassword, VaultStatus, WatchFolders, ToolsCheck, ToolCheckItem } from "@/lib/api/schemas";
+import type { DoctorPayload, ModuleJob, ProviderToken, SettingsProfiles, TmdbToken, TorrentAnnounces, TorrentClientPassword, VaultStatus, WatchFolders, WatchServiceStatus, ToolsCheck, ToolCheckItem } from "@/lib/api/schemas";
 
 // ────────────────────────────────────────────────────────────────────────────
 // helpers
@@ -412,6 +418,24 @@ export function SettingsSetupPage() {
   const removeWatchFolderMutation = useMutation({
     mutationFn: (index: number) => removeWatchFolder(index),
     onSuccess: () => void watchFoldersQuery.refetch(),
+  });
+
+  const [watchJobId, setWatchJobId] = useState<string | null>(null);
+  const watchServiceQuery = useQuery({
+    queryKey: ["watch-service-status"],
+    queryFn: getWatchServiceStatus,
+    refetchInterval: 5000,
+  });
+  const startWatchMutation = useMutation({
+    mutationFn: startWatchService,
+    onSuccess: (job: ModuleJob) => {
+      setWatchJobId(job.id);
+      void watchServiceQuery.refetch();
+    },
+  });
+  const stopWatchMutation = useMutation({
+    mutationFn: stopWatchService,
+    onSuccess: () => { void watchServiceQuery.refetch(); },
   });
 
   const [toolsCheckResult, setToolsCheckResult] = useState<ToolsCheck | null>(null);
@@ -1042,6 +1066,70 @@ export function SettingsSetupPage() {
           <CardDescription>Filesystem watcher that auto-triggers workflows on new files.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* ── Watch session ─────────────────────────────────────── */}
+          <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <Activity className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-sm font-medium">Watch session</span>
+              {watchServiceQuery.data ? (
+                <Badge variant={watchServiceQuery.data.status === "running" ? "success" : "secondary"}>
+                  {watchServiceQuery.data.status === "running"
+                    ? `Active (PID ${watchServiceQuery.data.pid ?? "?"})`
+                    : "Inactive"}
+                </Badge>
+              ) : (
+                <Badge variant="secondary">Unknown</Badge>
+              )}
+              <div className="flex gap-2 ml-auto">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={startWatchMutation.isPending || watchServiceQuery.data?.status === "running"}
+                  onClick={() => startWatchMutation.mutate()}
+                >
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                  Start session
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={stopWatchMutation.isPending || watchServiceQuery.data?.status === "stopped"}
+                  onClick={() => stopWatchMutation.mutate()}
+                >
+                  <Square className="mr-1.5 h-3.5 w-3.5" />
+                  Stop session
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Web UI watch sessions are temporary — managed by the web server process, max 2 hours. For 24/7 watching use <code className="font-mono">framekit watch start</code> from the CLI.
+            </p>
+            {startWatchMutation.error ? (
+              <p className="text-xs text-destructive">
+                {startWatchMutation.error instanceof Error ? startWatchMutation.error.message : "Failed to start watch session."}
+              </p>
+            ) : null}
+            {stopWatchMutation.isSuccess && !stopWatchMutation.data?.stopped ? (
+              <p className="text-xs text-muted-foreground">
+                No active session found — may have already stopped, or was started from a different directory.
+              </p>
+            ) : null}
+            {stopWatchMutation.error ? (
+              <p className="text-xs text-destructive">
+                {stopWatchMutation.error instanceof Error ? stopWatchMutation.error.message : "Failed to stop watch session."}
+              </p>
+            ) : null}
+          </div>
+          {watchJobId !== null ? (
+            <InlineJobPanel
+              jobId={watchJobId}
+              moduleName="watch"
+              onRerun={(newJob: ModuleJob) => setWatchJobId(newJob.id)}
+            />
+          ) : null}
+
           <BoolField label="Watcher enabled" checked={bool(d["watch.enabled"])} onChange={(v) => set("watch.enabled", v)}
             tooltip="Enable the background filesystem watcher — monitors configured folders and triggers pipeline on new releases" />
           <div className="grid gap-3 sm:grid-cols-2">

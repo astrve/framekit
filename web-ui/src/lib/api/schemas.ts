@@ -178,8 +178,20 @@ export const UploadStateSchema = z.object({
   auto_upload: z.boolean(),
 });
 
+export const UploadHistoryEntrySchema = z.object({
+  success: z.boolean(),
+  tracker: z.string(),
+  torrent_id: z.number().nullable().optional(),
+  url: z.string().nullable().optional(),
+  message: z.string().default(""),
+  errors: z.array(z.string()).default([]),
+  upload_time: z.number().default(0),
+  timestamp: z.string(),
+  torrent: z.string().optional(),
+});
+
 export const UploadHistorySchema = z.object({
-  entries: z.array(z.record(z.string(), z.unknown())),
+  entries: z.array(UploadHistoryEntrySchema),
 });
 
 export const SeedboxHistorySchema = z.object({
@@ -285,6 +297,18 @@ export const WatchFoldersSchema = z.object({
 export type WatchFolder = z.infer<typeof WatchFolderSchema>;
 export type WatchFolders = z.infer<typeof WatchFoldersSchema>;
 
+export const WatchServiceStatusSchema = z.object({
+  status: z.enum(["running", "stopped"]),
+  pid: z.number().nullable(),
+});
+
+export const WatchServiceStopSchema = z.object({
+  stopped: z.boolean(),
+});
+
+export type WatchServiceStatus = z.infer<typeof WatchServiceStatusSchema>;
+export type WatchServiceStop = z.infer<typeof WatchServiceStopSchema>;
+
 export type VaultStatus = z.infer<typeof VaultStatusSchema>;
 export type TmdbToken = z.infer<typeof TmdbTokenSchema>;
 export type TorrentAnnounces = z.infer<typeof TorrentAnnouncesSchema>;
@@ -310,11 +334,37 @@ export type SeedboxList = z.infer<typeof SeedboxListSchema>;
 export type UploadTrackers = z.infer<typeof UploadTrackersSchema>;
 export type UploadTrackerInfo = z.infer<typeof UploadTrackerInfoSchema>;
 export type UploadState = z.infer<typeof UploadStateSchema>;
+export type UploadHistoryEntry = z.infer<typeof UploadHistoryEntrySchema>;
 export type UploadHistory = z.infer<typeof UploadHistorySchema>;
 export type SeedboxHistory = z.infer<typeof SeedboxHistorySchema>;
 export type RunModuleResult = z.infer<typeof RunModuleResultSchema>;
 export type ModuleJob = z.infer<typeof ModuleJobSchema>;
 export type LogEntry = z.infer<typeof LogEntrySchema>;
+
+export const LedgerEntrySchema = z.object({
+  run_id: z.string(),
+  action: z.string(),
+  src: z.string(),
+  dst: z.string(),
+  module: z.string(),
+  timestamp: z.string(),
+});
+
+export const RunSummarySchema = z.object({
+  run_id: z.string(),
+  module: z.string(),
+  file_count: z.number(),
+  timestamp: z.string(),
+  actions: z.array(LedgerEntrySchema),
+});
+
+export const RunsListSchema = z.object({
+  runs: z.array(RunSummarySchema),
+});
+
+export type LedgerEntry = z.infer<typeof LedgerEntrySchema>;
+export type RunSummary = z.infer<typeof RunSummarySchema>;
+export type RunsList = z.infer<typeof RunsListSchema>;
 export type LogsRead = z.infer<typeof LogsReadSchema>;
 
 export const ToolCheckItemSchema = z.object({

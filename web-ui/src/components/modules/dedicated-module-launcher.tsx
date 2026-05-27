@@ -85,10 +85,22 @@ export function DedicatedModuleLauncher(props: {
     return null;
   }
 
+  // Modules that emit structured JSON when --json is passed.
+  // Auto-injected for async runs so InlineJobPanel can render a rich result card.
+  const JSON_OUTPUT_MODULES = new Set(["inspect", "validate"]);
+
+  function effectiveArgsText(): string {
+    const base = argsText.trim();
+    if (asyncRun && JSON_OUTPUT_MODULES.has(moduleName) && !base.includes("--json")) {
+      return base ? `${base} --json` : "--json";
+    }
+    return base;
+  }
+
   function submitJob(confirmedDestructive: boolean) {
     const payload = {
       module: moduleName,
-      args_text: argsText.trim(),
+      args_text: effectiveArgsText(),
       dry_run: isDryRun,
       auto_yes: false,
       confirm_destructive: confirmedDestructive,
