@@ -70,6 +70,13 @@ Additional UI work completed:
   - `docker-compose.service.yml` provides single-service example with config/cache/media volumes
   - No npm/Node required at runtime (packaged static assets served by Python package)
 
+**Service events / SSE**
+- In-process event bus/ring buffer implemented (`src/framekit/core/service/events.py`)
+- `GET /api/v1/events/recent` implemented with limit validation
+- `GET /api/v1/events/stream` implemented (`text/event-stream`, initial connected comment, keepalive ping, graceful disconnect)
+- Lifecycle events emitted from service/job/watch/intake paths
+- Web UI `/events` page consumes recent events + live SSE stream with degraded fallback state
+
 ### Production UI serving
 
 - `npm run build` copies `web-ui/dist/` into `src/framekit/web/static/`
@@ -150,7 +157,7 @@ framekit service uninstall
 | Docker bind on `0.0.0.0` | Requires auth active (create admin first) due serve non-loopback guard |
 | Token expiry | In-session expiry clears React state softly via DOM event; no toast shown to user |
 | Intake UI | No management page for intake sources in Web UI (API exists, UI not yet built) |
-| Service events/SSE | `GET /api/v1/events/stream` not yet implemented; Web UI polls instead |
+| Service events/SSE | In-memory ring buffer only; no persisted event history yet |
 | Job retry/resume | `attempts` column in DB; retry policy (max attempts, backoff) not yet wired |
 
 ---
@@ -176,24 +183,22 @@ framekit service uninstall
 - Intake history table (accepted/rejected, dedup_hit flag)
 - No new backend endpoints needed — all exist under `/api/v1/intake/`
 
-2. **Service events / SSE**
-- `GET /api/v1/events/stream` SSE stream of lifecycle events
-- Web UI subscribes to replace 3 s polling on dashboard active-operations feed
-- Events ring buffer already planned (`service/events.ndjson`)
-- Read `SERVICE_MODE_PLAN.md` §8.5 before starting
-
-3. **Job retry / resume policy**
+2. **Job retry / resume policy**
 `attempts` column already in DB. Add `max_attempts` setting and per-category
 backoff in the worker loop.
 
-4. **Windows smoke checklist / docs polish**
+3. **Windows smoke checklist / docs polish**
 - Refresh checklist: install, start, status, logs, stop, uninstall
 - Keep docs aligned with current task-mode quoting and logging behavior
 
-5. **Linux service hardening**
+4. **Linux service hardening**
 - Broader smoke checklist for `systemctl --user` lifecycle on multiple distros
 - Optional fallback UX when `systemd --user` unavailable
 - Container auth/bootstrap ergonomics improvements
+
+5. **Events persistence/history (optional)**
+- Keep current SSE contract; add persistence only if history requirements grow
+- Candidate scope: append-only event log + bounded history API
 
 ---
 
@@ -204,6 +209,6 @@ backoff in the worker loop.
 | Global handoff | `docs/codex-handoff.md` |
 | Linux/Docker service | `docs/linux-docker-service.md`, `src/framekit/core/service/linux.py`, `src/framekit/commands/service.py`, `Dockerfile`, `docker-compose.service.yml` |
 | Intake UI | `web-ui/src/lib/api/endpoints.ts` (intake fns), `web-ui/src/lib/api/schemas.ts` (`IntakeSource*`) |
-| Events/SSE | `SERVICE_MODE_PLAN.md` §8.5, `src/framekit/core/webhooks.py` (event names), `web-ui/src/routes/home.tsx` |
+| Events persistence/history (optional) | `SERVICE_MODE_PLAN.md` §8.5, `src/framekit/core/service/events.py`, `src/framekit/web/app.py`, `web-ui/src/routes/events.tsx` |
 | Retry/resume policy | `src/framekit/modules/batch/service.py`, `src/framekit/core/jobs/queue.py` |
 | Windows smoke/docs polish | `docs/windows-service.md`, `src/framekit/core/service/windows.py`, `src/framekit/commands/service.py` |

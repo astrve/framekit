@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import re
 import sys
 from importlib import metadata as importlib_metadata
@@ -7,13 +9,18 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from framekit.commands.doctor import collect_doctor_payload
 from framekit.core.auth.models import UserRole, UserStore
 from framekit.core.auth.tokens import TokenError, create_access_token, decode_access_token
+from framekit.core.service.events import (
+    emit_service_event,
+    list_service_events_recent,
+    wait_for_service_events,
+)
 from framekit.core.webhooks import (
     add_webhook,
     load_webhooks,
@@ -274,6 +281,12 @@ class IntakeReleaseRequest(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+def _sse_encode_event(payload: dict[str, Any]) -> bytes:
+    """Encode one dict payload as a SSE event frame."""
+    body = json.dumps(payload, ensure_ascii=False)
+    return f"id: {payload.get('id', '')}\nevent: framekit.event\ndata: {body}\n\n".encode("utf-8")
+
+
 # Sample data used by both webhook test endpoints so templates render with visible values.
 _WEBHOOK_TEST_DATA: dict[str, Any] = {
     "module": "pipeline",
@@ -508,7 +521,64 @@ def create_app() -> FastAPI:
         """
         stop_embedded_watcher()
         start_embedded_watcher()
+        emit_service_event(
+            "service.reloaded",
+            message="Service watchers reloaded",
+            data={"watcher": get_embedded_watcher_state()},
+        )
         return {"ok": True, "watcher": get_embedded_watcher_state()}
+
+    @app.get("/api/v1/events/recent")
+    def events_recent(limit: int = 100) -> dict[str, Any]:
+        """Return recent in-memory service events."""
+        if limit < 1 or limit > 500:
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
+        return {"events": list_service_events_recent(limit)}
+
+    @app.get("/api/v1/events/stream")
+    async def events_stream(request: Request) -> StreamingResponse:
+        """SSE stream for service events with keepalive and graceful disconnect."""
+        last_event_id = request.headers.get("last-event-id")
+
+        async def _stream() -> Any:
+            after_id = last_event_id
+            loop = asyncio.get_running_loop()
+            last_ping_at = loop.time()
+            # Emit a first keepalive quickly so clients confirm stream state.
+            yield b": connected\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    batch = await asyncio.to_thread(
+                        wait_for_service_events,
+                        after_id=after_id,
+                        timeout_s=1.0,
+                    )
+                except Exception as exc:
+                    emit_service_event(
+                        "service.events.error",
+                        level="warning",
+                        message="Events stream loop stopped",
+                        data={"error": str(exc)},
+                    )
+                    break
+                if not batch:
+                    now = loop.time()
+                    if now - last_ping_at >= 15.0:
+                        yield b": keepalive\n\n"
+                        last_ping_at = now
+                    continue
+                for event in batch:
+                    after_id = str(event.get("id", after_id or "0"))
+                    yield _sse_encode_event(event)
+
+        headers = {
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+        return StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
 
     # ── Intake API ───────────────────────────────────────────────────────────
 
@@ -560,6 +630,12 @@ def create_app() -> FastAPI:
                 dedup_key=req.dedup_key,
             )
         except ValueError as exc:
+            emit_service_event(
+                "intake.rejected",
+                level="warning",
+                message="Intake release rejected",
+                data={"source_id": req.source, "path": req.path, "error": str(exc)},
+            )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/v1/intake/webhook/{source_id}")
@@ -580,6 +656,12 @@ def create_app() -> FastAPI:
                 dedup_key=req.dedup_key,
             )
         except ValueError as exc:
+            emit_service_event(
+                "intake.rejected",
+                level="warning",
+                message="Intake webhook rejected",
+                data={"source_id": source_id, "path": req.path, "error": str(exc)},
+            )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/v1/system/info")

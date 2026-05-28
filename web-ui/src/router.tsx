@@ -109,6 +109,12 @@ const aliasesRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/aliases"), "AliasesPage"),
 });
 
+const eventsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/events",
+  component: lazyRouteComponent(() => import("@/routes/events"), "EventsPage"),
+});
+
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
@@ -156,6 +162,7 @@ const routeTree = rootRoute.addChildren([
   logsRoute,
   presetsRoute,
   aliasesRoute,
+  eventsRoute,
   cliRoute,
   aboutRoute,
   loginRoute,

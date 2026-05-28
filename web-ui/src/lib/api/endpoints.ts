@@ -81,9 +81,13 @@ import {
   type SettingsProfiles,
   IntakeSourceListSchema,
   IntakeReleaseResponseSchema,
+  ServiceEventSchema,
+  ServiceEventsListSchema,
   type IntakeSource,
   type IntakeSourceList,
   type IntakeReleaseResponse,
+  type ServiceEvent,
+  type ServiceEventsList,
 } from "@/lib/api/schemas";
 
 export async function getHealth(): Promise<HealthPayload> {
@@ -707,4 +711,95 @@ export async function submitIntakeRelease(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export async function getRecentServiceEvents(limit = 100): Promise<ServiceEventsList> {
+  return fetchValidated(`/api/v1/events/recent?limit=${limit}`, ServiceEventsListSchema);
+}
+
+function _parseSseChunk(rawChunk: string): { id: string | null; event: string; data: string | null } | null {
+  const lines = rawChunk.replace(/\r/g, "").split("\n");
+  let eventName = "message";
+  let eventId: string | null = null;
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (!line || line.startsWith(":")) continue;
+    if (line.startsWith("event:")) {
+      eventName = line.slice(6).trim() || "message";
+      continue;
+    }
+    if (line.startsWith("id:")) {
+      eventId = line.slice(3).trim() || null;
+      continue;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+  return {
+    id: eventId,
+    event: eventName,
+    data: dataLines.join("\n"),
+  };
+}
+
+export async function streamServiceEvents(params: {
+  signal: AbortSignal;
+  onEvent: (event: ServiceEvent) => void;
+  lastEventId?: string | null;
+}): Promise<void> {
+  const token = localStorage.getItem("framekit_token");
+  const headers: Record<string, string> = {
+    Accept: "text/event-stream",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(params.lastEventId ? { "Last-Event-ID": params.lastEventId } : {}),
+  };
+
+  const response = await fetch(`${resolveApiBaseUrl()}/api/v1/events/stream`, {
+    method: "GET",
+    headers,
+    signal: params.signal,
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    if (response.status === 401) {
+      localStorage.removeItem("framekit_token");
+      window.dispatchEvent(new CustomEvent("framekit:unauthorized"));
+    }
+    throw new ApiError("API request failed for /api/v1/events/stream", response.status, body);
+  }
+  if (!response.body) {
+    throw new Error("Event stream body is empty");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    while (true) {
+      const separatorIndex = buffer.indexOf("\n\n");
+      if (separatorIndex < 0) break;
+      const chunk = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+      const parsed = _parseSseChunk(chunk);
+      if (!parsed?.data) continue;
+      try {
+        const event = ServiceEventSchema.parse(JSON.parse(parsed.data));
+        params.onEvent(event);
+      } catch {
+        // Ignore malformed event payloads; keep stream alive.
+      }
+    }
+  }
 }

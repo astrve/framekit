@@ -488,6 +488,21 @@ export const IntakeReleaseResponseSchema = z.object({
   dedup_hit: z.boolean(),
 });
 
+export const ServiceEventSchema = z.object({
+  id: z.string(),
+  ts: z.string(),
+  type: z.string(),
+  level: z.string(),
+  message: z.string(),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const ServiceEventsListSchema = z.object({
+  events: z.array(ServiceEventSchema),
+});
+
 export type IntakeSource = z.infer<typeof IntakeSourceSchema>;
 export type IntakeSourceList = z.infer<typeof IntakeSourceListSchema>;
 export type IntakeReleaseResponse = z.infer<typeof IntakeReleaseResponseSchema>;
+export type ServiceEvent = z.infer<typeof ServiceEventSchema>;
+export type ServiceEventsList = z.infer<typeof ServiceEventsListSchema>;

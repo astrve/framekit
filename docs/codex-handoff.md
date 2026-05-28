@@ -46,6 +46,13 @@ Implemented:
   - `GET /api/v1/service/status`
   - `POST /api/v1/service/reload`
 
+- Service events / SSE
+  - In-process event bus/ring buffer in `src/framekit/core/service/events.py`.
+  - `GET /api/v1/events/recent` implemented.
+  - `GET /api/v1/events/stream` implemented with initial comment, keepalive ping, and disconnect handling.
+  - Events emitted from service/job/watch/intake lifecycle points.
+  - Web UI `/events` page and nav entry wired for recent + live stream with degraded fallback.
+
 - Intake API
   - `POST /api/v1/intake/release`
   - Source CRUD.
@@ -180,23 +187,7 @@ web-ui/src/lib/api/endpoints.ts
 web-ui/src/lib/api/schemas.ts
 ```
 
-### Priority 2 — Service events / SSE
-
-Goals:
-
-- Add `GET /api/v1/events/stream`.
-- Switch dashboard active-operations updates from polling to SSE subscription.
-- Keep API auth semantics and `/api/*` route behavior unchanged.
-
-Inspect before coding:
-
-```text
-SERVICE_MODE_PLAN.md
-src/framekit/core/webhooks.py
-web-ui/src/routes/home.tsx
-```
-
-### Priority 3 — Job retry / resume policy
+### Priority 2 — Job retry / resume policy
 
 Goals:
 
@@ -210,7 +201,7 @@ src/framekit/modules/batch/service.py
 src/framekit/core/jobs/queue.py
 ```
 
-### Priority 4 — Windows smoke checklist + docs polish
+### Priority 3 — Windows smoke checklist + docs polish
 
 Goals:
 
@@ -225,7 +216,7 @@ docs/service-mode-status.md
 src/framekit/core/service/windows.py
 ```
 
-### Priority 5 — Linux service hardening
+### Priority 4 — Linux service hardening
 
 Goals:
 
@@ -242,6 +233,13 @@ src/framekit/commands/service.py
 Dockerfile
 docker-compose.service.yml
 ```
+
+### Priority 5 — Events persistence/history (optional)
+
+Goals:
+
+- Keep current SSE API shape and live behavior unchanged.
+- Add persisted history only if product needs retention beyond in-memory ring buffer.
 
 ---
 

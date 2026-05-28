@@ -1279,6 +1279,102 @@ def test_service_reload_restarts_embedded_watcher(monkeypatch: MonkeyPatch) -> N
     assert calls == ["stop", "start"]
 
 
+# ── Service events API (recent + SSE) ────────────────────────────────────────
+
+
+def test_events_recent_endpoint(monkeypatch: MonkeyPatch) -> None:
+    events = [
+        {
+            "id": "10",
+            "ts": "2026-01-01T00:00:00+00:00",
+            "type": "job.queued",
+            "level": "info",
+            "message": "Job queued",
+            "data": {"job_id": "job-1"},
+        },
+        {
+            "id": "11",
+            "ts": "2026-01-01T00:00:01+00:00",
+            "type": "job.started",
+            "level": "info",
+            "message": "Job started",
+            "data": {"job_id": "job-1"},
+        },
+    ]
+    monkeypatch.setattr("framekit.web.app.list_service_events_recent", lambda limit=100: events[:limit])
+    client = TestClient(create_app())
+    response = client.get("/api/v1/events/recent?limit=2")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "events" in payload
+    assert len(payload["events"]) == 2
+    assert payload["events"][0]["type"] == "job.queued"
+
+
+def test_events_recent_endpoint_rejects_invalid_limit() -> None:
+    client = TestClient(create_app())
+    response = client.get("/api/v1/events/recent?limit=0")
+    assert response.status_code == 400
+    assert "limit" in response.json()["detail"]
+
+
+@pytest.mark.timeout(5)
+def test_events_stream_endpoint_sse_frame(monkeypatch: MonkeyPatch) -> None:
+    sample = {
+        "id": "42",
+        "ts": "2026-01-01T00:00:42+00:00",
+        "type": "job.completed",
+        "level": "info",
+        "message": "Job completed",
+        "data": {"job_id": "job-42"},
+    }
+
+    calls = {"count": 0}
+
+    def _wait(after_id=None, timeout_s=15.0):  # noqa: ARG001
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return [sample]
+        raise RuntimeError("stop-test-stream")
+
+    monkeypatch.setattr("framekit.web.app.wait_for_service_events", _wait)
+    client = TestClient(create_app())
+
+    with client.stream("GET", "/api/v1/events/stream") as response:
+        assert response.status_code == 200
+        assert response.headers.get("content-type", "").startswith("text/event-stream")
+
+        lines: list[str] = []
+        for line in response.iter_lines():
+            text = line.decode("utf-8") if isinstance(line, (bytes, bytearray)) else str(line)
+            if text:
+                lines.append(text)
+            if text.startswith("data: "):
+                break
+
+    joined = "\n".join(lines)
+    assert ": connected" in joined
+    assert "event: framekit.event" in joined
+    assert '"type": "job.completed"' in joined or '"type":"job.completed"' in joined
+    assert '"job_id": "job-42"' in joined or '"job_id":"job-42"' in joined
+
+
+def test_events_recent_requires_auth_when_enabled(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    client = TestClient(create_app())
+    response = client.get("/api/v1/events/recent")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required"
+
+
+def test_events_stream_requires_auth_when_enabled(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    client = TestClient(create_app())
+    response = client.get("/api/v1/events/stream")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required"
+
+
 # ── Intake API ────────────────────────────────────────────────────────────────
 
 

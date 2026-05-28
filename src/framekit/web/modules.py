@@ -26,6 +26,7 @@ from loguru import logger
 from pydantic import BaseModel, Field, field_validator
 
 from framekit.commands.main import cli as framekit_cli
+from framekit.core.service.events import emit_service_event
 from framekit.core.webhooks import dispatch_webhook_event
 from framekit.core.banners import BannerRegistry
 from framekit.core.paths import (
@@ -1949,6 +1950,15 @@ def _execute_job(job_id: str) -> None:
         "job.started",
         {"module": request.module, "args_text": request.args_text, "job_id": job_id},
     )
+    emit_service_event(
+        "job.started",
+        message="Job started",
+        data={
+            "job_id": job_id,
+            "module": request.module,
+            "args_text": request.args_text,
+        },
+    )
 
     def _on_output(stdout_text: str, stderr_text: str) -> None:
         with _JOBS_LOCK:
@@ -1972,21 +1982,34 @@ def _execute_job(job_id: str) -> None:
         with _JOBS_LOCK:
             current = _JOBS.get(job_id)
             if current is not None:
+                cancelled = cancel_event.is_set()
                 upd = current.model_copy(
                     update={
-                        "status": "cancelled" if cancel_event.is_set() else "failed",
+                        "status": "cancelled" if cancelled else "failed",
                         "error": str(exc),
                         "finished_at": _utc_now(),
                     }
                 )
                 _JOBS[job_id] = upd
                 _persist_job(upd)
+        event_name = "job.cancelled" if cancel_event.is_set() else "job.failed"
         dispatch_webhook_event(
-            "job.failed",
+            "job.failed" if event_name == "job.failed" else "job.completed",
             {
                 "module": request.module,
                 "args_text": request.args_text,
                 "job_id": job_id,
+                "error": str(exc),
+            },
+        )
+        emit_service_event(
+            event_name,
+            level="warning" if event_name == "job.cancelled" else "error",
+            message="Job cancelled" if event_name == "job.cancelled" else "Job failed",
+            data={
+                "job_id": job_id,
+                "module": request.module,
+                "args_text": request.args_text,
                 "error": str(exc),
             },
         )
@@ -2013,13 +2036,34 @@ def _execute_job(job_id: str) -> None:
         _JOBS[job_id] = upd
         _persist_job(upd)
 
-    event_name = "job.completed" if status in {"completed", "cancelled"} else "job.failed"
+    if status == "completed":
+        event_name = "job.completed"
+    elif status == "cancelled":
+        event_name = "job.cancelled"
+    else:
+        event_name = "job.failed"
     dispatch_webhook_event(
-        event_name,
+        "job.completed" if status == "cancelled" else event_name,
         {
             "module": request.module,
             "args_text": request.args_text,
             "job_id": job_id,
+            "returncode": result.returncode,
+            "ok": result.ok,
+        },
+    )
+    emit_service_event(
+        event_name,
+        level="warning" if status == "cancelled" else ("info" if status == "completed" else "error"),
+        message=(
+            "Job completed"
+            if status == "completed"
+            else ("Job cancelled" if status == "cancelled" else "Job failed")
+        ),
+        data={
+            "job_id": job_id,
+            "module": request.module,
+            "args_text": request.args_text,
             "returncode": result.returncode,
             "ok": result.ok,
         },
@@ -2100,6 +2144,18 @@ def enqueue_module_job(
         _persist_job(job)
         _trim_jobs_if_needed()
 
+    emit_service_event(
+        "job.queued",
+        message="Job queued",
+        data={
+            "job_id": job.id,
+            "module": request.module,
+            "args_text": request.args_text,
+            "origin": origin or "web",
+            "category": category or "",
+            "priority": priority,
+        },
+    )
     _ensure_worker_started()
     _PENDING_SIGNAL.set()
     return job
@@ -2195,9 +2251,20 @@ def start_embedded_watcher() -> None:
             _EMBEDDED_WATCHER = watcher
             active = len([f for f in config.folders if f.enabled])
             logger.info("Embedded watcher started ({} folder(s)).", active)
+            emit_service_event(
+                "watch.started",
+                message="Embedded watcher started",
+                data={"folders_active": active},
+            )
         except Exception as exc:
             _EMBEDDED_WATCHER_ERROR = str(exc)
             logger.error("Embedded watcher failed to start: {}", exc)
+            emit_service_event(
+                "watch.error",
+                level="error",
+                message="Embedded watcher failed to start",
+                data={"error": str(exc)},
+            )
 
 
 def stop_embedded_watcher() -> None:
@@ -2210,8 +2277,18 @@ def stop_embedded_watcher() -> None:
         try:
             watcher.stop()
             logger.info("Embedded watcher stopped.")
+            emit_service_event(
+                "watch.stopped",
+                message="Embedded watcher stopped",
+            )
         except Exception as exc:
             logger.warning("Embedded watcher stop raised: {}", exc)
+            emit_service_event(
+                "watch.error",
+                level="warning",
+                message="Embedded watcher stop error",
+                data={"error": str(exc)},
+            )
         finally:
             _EMBEDDED_WATCHER = None
 
@@ -2306,6 +2383,16 @@ def cancel_module_job(job_id: str) -> ModuleJob | None:
             )
             _JOBS[job_id] = updated
             _persist_job(updated)
+            emit_service_event(
+                "job.cancelled",
+                level="warning",
+                message="Job cancelled",
+                data={
+                    "job_id": job_id,
+                    "module": updated.request.module,
+                    "args_text": updated.request.args_text,
+                },
+            )
             return updated.model_copy(deep=True)
 
     if process is not None:
@@ -2590,6 +2677,17 @@ def submit_intake_release(
     req_hash = _intake_request_hash(source_id, str(resolved), dedup_key)
     existing = _find_job_by_request_hash(req_hash)
     if existing:
+        emit_service_event(
+            "intake.rejected",
+            level="warning",
+            message="Intake duplicate ignored",
+            data={
+                "source_id": source_id,
+                "path": str(resolved),
+                "dedup_hit": True,
+                "job_id": existing,
+            },
+        )
         return {"job_id": existing, "accepted": False, "dedup_hit": True}
 
     # Preset resolution: explicit → source default → matching watch folder preset
@@ -2625,6 +2723,16 @@ def submit_intake_release(
     _set_job_request_hash(job.id, req_hash)
 
     logger.info("Intake release accepted: source={} path={} job={}", source_id, str(resolved), job.id)
+    emit_service_event(
+        "intake.accepted",
+        message="Intake release accepted",
+        data={
+            "source_id": source_id,
+            "path": str(resolved),
+            "job_id": job.id,
+            "dedup_hit": False,
+        },
+    )
     return {"job_id": job.id, "accepted": True, "dedup_hit": False}
 
 

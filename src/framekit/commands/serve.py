@@ -72,9 +72,15 @@ def serve_command(host: str, port: int, reload: bool) -> None:
             start_embedded_watcher,
             stop_embedded_watcher,
         )
+        from framekit.core.service.events import emit_service_event
 
         _load_jobs_from_db()
         start_embedded_watcher()
+        emit_service_event(
+            "service.started",
+            message="Framekit service started",
+            data={"host": host, "port": port},
+        )
 
         try:
             import uvicorn
@@ -88,6 +94,7 @@ def serve_command(host: str, port: int, reload: bool) -> None:
                 log_level="info",
             )
         finally:
+            emit_service_event("service.stopped", message="Framekit service stopped")
             stop_embedded_watcher()
     finally:
         supervisor.release()
