@@ -8,6 +8,7 @@ import {
   Clapperboard,
   FileCog,
   Info,
+  KeyRound,
   LayoutDashboard,
   Layers,
   LogOut,
@@ -49,6 +50,7 @@ const topNav = [
   { to: "/upload", label: "Upload", icon: Upload },
   { to: "/presets", label: "Presets & Profiles", icon: FileCog },
   { to: "/aliases", label: "Aliases", icon: BookMarked },
+  { to: "/intake", label: "Intake", icon: KeyRound },
   { to: "/logs", label: "Logs", icon: ScrollText },
   { to: "/doctor", label: "Diagnostics", icon: Stethoscope },
   { to: "/cli", label: "Terminal", icon: Terminal },
@@ -316,6 +318,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <>
               {authUser.role === "admin" && (
                 <>
+                  <Link
+                    to="/intake"
+                    className="shrink-0 rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    title="Intake"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                  </Link>
                   <Link
                     to="/webhooks"
                     className="shrink-0 rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
