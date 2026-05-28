@@ -129,8 +129,24 @@ class _suppress_oserror:
 class WatcherService:
     """Main service for watching folders and processing files."""
 
-    def __init__(self, config: WatchConfig):
+    def __init__(self, config: WatchConfig, embedded: bool = False):
+        """Initialise the watcher service.
+
+        Args:
+            config: Watch configuration (folders, validation, notifications, …).
+            embedded: When *True* the service runs inside a larger host process
+                (e.g. ``framekit serve``).  Three behaviours change:
+
+                * Signal handlers are **not** installed — the host process owns
+                  its own signal lifecycle.
+                * The ``.framekit_watch.pid`` file is **not** written or removed
+                  so that ``framekit watch stop`` cannot accidentally terminate
+                  the host service process.
+                * ``start()`` returns immediately after launching background
+                  threads instead of blocking in a ``while`` loop.
+        """
         self.config = config
+        self._embedded = embedded
         self.processing_queue: Queue = Queue()
         self.stop_event = Event()
         self.processing_thread: Thread | None = None
@@ -145,7 +161,8 @@ class WatcherService:
         self.status = WatchStatus()
         self.start_time: float | None = None
 
-        self._setup_signal_handlers()
+        if not self._embedded:
+            self._setup_signal_handlers()
 
     def _setup_signal_handlers(self) -> None:
         """Setup signal handlers for graceful shutdown.
@@ -272,7 +289,8 @@ class WatcherService:
 
         self.stop_event.clear()
 
-        self._write_pid_file()
+        if not self._embedded:
+            self._write_pid_file()
 
         for folder in enabled_folders:
             t = Thread(target=self._watch_folder, args=(folder.path,), daemon=True)
@@ -293,6 +311,11 @@ class WatcherService:
 
         self.notifier.notify_watch_started(self.status.folders_watched)
         logger.info(f"Watch mode started, monitoring {len(enabled_folders)} folder(s)")
+
+        if self._embedded:
+            # In embedded mode the caller owns the process lifecycle.
+            # Return immediately; background threads run as daemons.
+            return
 
         try:
             while self.status.running:
@@ -322,7 +345,8 @@ class WatcherService:
             self.processing_thread.join(timeout=5.0)
 
         self.status.running = False
-        self._remove_pid_file()
+        if not self._embedded:
+            self._remove_pid_file()
         self.notifier.notify_watch_stopped()
         logger.info("Watch mode stopped")
 

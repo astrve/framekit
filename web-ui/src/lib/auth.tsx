@@ -49,6 +49,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem(TOKEN_KEY);
+      setToken(null);
+      setUser(null);
+    };
+    window.addEventListener("framekit:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("framekit:unauthorized", handleUnauthorized);
+  }, []);
+
   const login = useCallback((newToken: string, newUser: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, newToken);
     setToken(newToken);

@@ -23,6 +23,8 @@ from framekit.commands.profile import profile_group
 from framekit.commands.renamer import renamer_command
 from framekit.commands.rollback import rollback_command
 from framekit.commands.screenshot import screenshot_command
+from framekit.commands.serve import serve_command
+from framekit.commands.service import service_group
 from framekit.commands.seedbox import seedbox_group
 from framekit.commands.settings import settings_command
 from framekit.commands.setup import setup_command
@@ -53,7 +55,7 @@ def _configure_rich_click() -> None:
         "framekit": [
             {
                 "name": tr("cli.section.configuration", default="Configuration"),
-                "commands": ["init", "setup", "language", "about"],
+                "commands": ["init", "setup", "serve", "service", "language", "about"],
             },
             {
                 "name": tr("cli.section.tools", default="Tools"),
@@ -226,6 +228,8 @@ def cli() -> None:
 cli.add_command(about_command, "about")
 cli.add_command(init_command, "init")
 cli.add_command(setup_command, "setup")
+cli.add_command(serve_command, "serve")
+cli.add_command(service_group, "service")
 cli.add_command(language_command, "language")
 
 # Tools

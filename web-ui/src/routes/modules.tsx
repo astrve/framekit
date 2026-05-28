@@ -263,17 +263,24 @@ export function ModulesPage() {
                 <p className="text-xs text-muted-foreground">{job.id}</p>
               </button>
               <p className="font-medium">{String((job.request["module"] as string) ?? "-")}</p>
-              <Badge
-                variant={
-                  job.status === "completed"
-                    ? "success"
-                    : job.status === "failed" || job.status === "cancelled"
-                      ? "danger"
-                      : "secondary"
-                }
-              >
-                {job.status}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge
+                  variant={
+                    job.status === "completed"
+                      ? "success"
+                      : job.status === "failed" || job.status === "cancelled"
+                        ? "danger"
+                        : "secondary"
+                  }
+                >
+                  {job.status}
+                </Badge>
+                {job.origin ? (
+                  <Badge variant="secondary" className="font-mono text-[10px]">
+                    {job.origin}
+                  </Badge>
+                ) : null}
+              </div>
               <Button
                 type="button"
                 variant="outline"

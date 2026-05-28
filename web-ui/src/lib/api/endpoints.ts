@@ -38,6 +38,7 @@ import {
   WatchFoldersSchema,
   WatchServiceStatusSchema,
   WatchServiceStopSchema,
+  ServiceStatusSchema,
   SettingsProfilesSchema,
   RunsListSchema,
   type RunsList,
@@ -46,7 +47,6 @@ import {
   type AuthStatus,
   type AuthUser,
   type AuthUsersList,
-  type WebhookConfig,
   type WebhookList,
   type ToolsCheck,
   type DoctorPayload,
@@ -77,7 +77,13 @@ import {
   type WatchFolders,
   type WatchServiceStatus,
   type WatchServiceStop,
+  type ServiceStatus,
   type SettingsProfiles,
+  IntakeSourceListSchema,
+  IntakeReleaseResponseSchema,
+  type IntakeSource,
+  type IntakeSourceList,
+  type IntakeReleaseResponse,
 } from "@/lib/api/schemas";
 
 export async function getHealth(): Promise<HealthPayload> {
@@ -639,6 +645,18 @@ export async function getRuns(limit = 50): Promise<RunsList> {
   return fetchValidated(`/api/v1/runs?limit=${limit}`, RunsListSchema);
 }
 
+export async function getServiceStatus(): Promise<ServiceStatus> {
+  return fetchValidated("/api/v1/service/status", ServiceStatusSchema);
+}
+
+export async function reloadService(): Promise<{ ok: boolean }> {
+  return fetchValidated(
+    "/api/v1/service/reload",
+    ServiceStatusSchema.pick({ status: true }).extend({ ok: z.boolean(), watcher: ServiceStatusSchema.shape.watcher }),
+    { method: "POST" },
+  );
+}
+
 export async function getWatchServiceStatus(): Promise<WatchServiceStatus> {
   return fetchValidated("/api/v1/watch/service", WatchServiceStatusSchema);
 }
@@ -649,4 +667,44 @@ export async function startWatchService(): Promise<ModuleJob> {
 
 export async function stopWatchService(): Promise<WatchServiceStop> {
   return fetchValidated("/api/v1/watch/service/stop", WatchServiceStopSchema, { method: "POST" });
+}
+
+// ── Intake API ────────────────────────────────────────────────────────────────
+
+export async function listIntakeSources(): Promise<IntakeSourceList> {
+  return fetchValidated("/api/v1/intake/sources", IntakeSourceListSchema);
+}
+
+export async function createIntakeSource(payload: {
+  name: string;
+  source_id: string;
+  default_preset?: string | null;
+}): Promise<IntakeSource> {
+  // Response includes token field (shown once).
+  return fetchValidated("/api/v1/intake/sources", IntakeSourceListSchema.shape.sources.element, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteIntakeSource(sourceId: string): Promise<{ deleted: boolean; source_id: string }> {
+  return fetchValidated(
+    `/api/v1/intake/sources/${encodeURIComponent(sourceId)}`,
+    z.object({ deleted: z.boolean(), source_id: z.string() }),
+    { method: "DELETE" },
+  );
+}
+
+export async function submitIntakeRelease(payload: {
+  source: string;
+  path: string;
+  preset?: string | null;
+  dedup_key?: string | null;
+}): Promise<IntakeReleaseResponse> {
+  return fetchValidated("/api/v1/intake/release", IntakeReleaseResponseSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }

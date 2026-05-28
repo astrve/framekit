@@ -40,13 +40,14 @@ import {
   activateSettingsProfile,
   addTorrentAnnounce,
   addWatchFolder,
+  getServiceStatus,
   getWatchServiceStatus,
   startWatchService,
   stopWatchService,
   createSettingsProfile,
   deactivateSettingsProfile,
   deleteSettingsProfile,
-  getDoctorPayload,
+
   getImageHostKey,
   getModulesResources,
   getSeedboxList,
@@ -73,7 +74,7 @@ import {
   useSeedbox,
   removeSeedbox,
 } from "@/lib/api/endpoints";
-import type { DoctorPayload, ModuleJob, ProviderToken, SettingsProfiles, TmdbToken, TorrentAnnounces, TorrentClientPassword, VaultStatus, WatchFolders, WatchServiceStatus, ToolsCheck, ToolCheckItem } from "@/lib/api/schemas";
+import type { ModuleJob, ProviderToken, ToolsCheck } from "@/lib/api/schemas";
 
 // ────────────────────────────────────────────────────────────────────────────
 // helpers
@@ -336,7 +337,7 @@ export function SettingsSetupPage() {
     onSuccess: () => void seedboxesQuery.refetch(),
   });
   const useSeedboxMutation = useMutation({
-    mutationFn: useSeedbox,
+    mutationFn: (name: string) => useSeedbox(name),
     onSuccess: () => void seedboxesQuery.refetch(),
   });
   const removeSeedboxMutation = useMutation({
@@ -426,6 +427,15 @@ export function SettingsSetupPage() {
     queryFn: getWatchServiceStatus,
     refetchInterval: 5000,
   });
+  // Service status — determines whether the embedded watcher owns watch lifecycle.
+  const serviceStatusQuery = useQuery({
+    queryKey: ["service-status-watch"],
+    queryFn: getServiceStatus,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+  const embeddedWatcherRunning =
+    serviceStatusQuery.data?.watcher?.status === "running";
   const startWatchMutation = useMutation({
     mutationFn: startWatchService,
     onSuccess: (job: ModuleJob) => {
@@ -1071,7 +1081,11 @@ export function SettingsSetupPage() {
             <div className="flex flex-wrap items-center gap-3">
               <Activity className="h-4 w-4 text-primary shrink-0" />
               <span className="text-sm font-medium">Watch session</span>
-              {watchServiceQuery.data ? (
+              {embeddedWatcherRunning ? (
+                <Badge variant="success">
+                  Managed by service — {serviceStatusQuery.data?.watcher?.folders_active ?? 0} folder{(serviceStatusQuery.data?.watcher?.folders_active ?? 0) !== 1 ? "s" : ""} active
+                </Badge>
+              ) : watchServiceQuery.data ? (
                 <Badge variant={watchServiceQuery.data.status === "running" ? "success" : "secondary"}>
                   {watchServiceQuery.data.status === "running"
                     ? `Active (PID ${watchServiceQuery.data.pid ?? "?"})`
@@ -1080,32 +1094,40 @@ export function SettingsSetupPage() {
               ) : (
                 <Badge variant="secondary">Unknown</Badge>
               )}
-              <div className="flex gap-2 ml-auto">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={startWatchMutation.isPending || watchServiceQuery.data?.status === "running"}
-                  onClick={() => startWatchMutation.mutate()}
-                >
-                  <Play className="mr-1.5 h-3.5 w-3.5" />
-                  Start session
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={stopWatchMutation.isPending || watchServiceQuery.data?.status === "stopped"}
-                  onClick={() => stopWatchMutation.mutate()}
-                >
-                  <Square className="mr-1.5 h-3.5 w-3.5" />
-                  Stop session
-                </Button>
-              </div>
+              {!embeddedWatcherRunning && (
+                <div className="flex gap-2 ml-auto">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={startWatchMutation.isPending || watchServiceQuery.data?.status === "running"}
+                    onClick={() => startWatchMutation.mutate()}
+                  >
+                    <Play className="mr-1.5 h-3.5 w-3.5" />
+                    Start session
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={stopWatchMutation.isPending || watchServiceQuery.data?.status === "stopped"}
+                    onClick={() => stopWatchMutation.mutate()}
+                  >
+                    <Square className="mr-1.5 h-3.5 w-3.5" />
+                    Stop session
+                  </Button>
+                </div>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Web UI watch sessions are temporary — managed by the web server process, max 2 hours. For 24/7 watching use <code className="font-mono">framekit watch start</code> from the CLI.
-            </p>
+            {embeddedWatcherRunning ? (
+              <p className="text-xs text-muted-foreground">
+                Watch is managed by the running service process. Start/stop is handled automatically — use <code className="font-mono">framekit serve</code> to control the service.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Web UI watch sessions are temporary — managed by the web server process, max 2 hours. For 24/7 watching use <code className="font-mono">framekit watch start</code> from the CLI or run <code className="font-mono">framekit serve</code> for a persistent service.
+              </p>
+            )}
             {startWatchMutation.error ? (
               <p className="text-xs text-destructive">
                 {startWatchMutation.error instanceof Error ? startWatchMutation.error.message : "Failed to start watch session."}

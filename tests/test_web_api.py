@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from fastapi.testclient import TestClient
@@ -646,6 +648,81 @@ def test_auth_middleware_always_open_paths_bypass_auth(monkeypatch: MonkeyPatch)
     assert client.get("/api/v1/auth/status").status_code == 200
 
 
+# ── Static / SPA serving ──────────────────────────────────────────────────────
+
+
+def _write_test_spa(dist_dir: Path, marker: str) -> None:
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    (dist_dir / "index.html").write_text(
+        f"<!doctype html><html><body>{marker}</body></html>",
+        encoding="utf-8",
+    )
+    assets_dir = dist_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "main.js").write_text(f"console.log('{marker}')", encoding="utf-8")
+
+
+def test_static_serving_prefers_packaged_assets(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    """When both dirs exist, packaged framekit.web/static is used before source web-ui/dist."""
+    packaged_dir = tmp_path / "packaged-static"
+    source_dir = tmp_path / "source-dist"
+    _write_test_spa(packaged_dir, marker="packaged-ui")
+    _write_test_spa(source_dir, marker="source-ui")
+    monkeypatch.setattr("framekit.web.app._PACKAGE_STATIC_DIR", packaged_dir)
+    monkeypatch.setattr("framekit.web.app._SOURCE_DIST_DIR", source_dir)
+
+    client = TestClient(create_app())
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+    assert "packaged-ui" in response.text
+    assert "source-ui" not in response.text
+
+
+def test_static_serving_falls_back_to_source_dist(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    """If packaged static is absent, source-tree web-ui/dist still serves UI."""
+    packaged_dir = tmp_path / "missing-packaged"
+    source_dir = tmp_path / "source-dist"
+    _write_test_spa(source_dir, marker="source-fallback")
+    monkeypatch.setattr("framekit.web.app._PACKAGE_STATIC_DIR", packaged_dir)
+    monkeypatch.setattr("framekit.web.app._SOURCE_DIST_DIR", source_dir)
+
+    client = TestClient(create_app())
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "source-fallback" in response.text
+
+
+def test_static_serving_returns_json_hint_when_no_assets(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    """If no static assets exist, root returns JSON fallback hint."""
+    monkeypatch.setattr("framekit.web.app._PACKAGE_STATIC_DIR", tmp_path / "missing-packaged")
+    monkeypatch.setattr("framekit.web.app._SOURCE_DIST_DIR", tmp_path / "missing-source")
+
+    client = TestClient(create_app())
+    response = client.get("/")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["message"] == "Framekit API is running. Web UI has not been built."
+    assert "npm run build" in payload["hint"]
+
+
+def test_spa_catch_all_never_swallows_api_paths(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    """Unknown /api/* path stays 404 JSON even when SPA catch-all is active."""
+    packaged_dir = tmp_path / "packaged-static"
+    _write_test_spa(packaged_dir, marker="packaged-ui")
+    monkeypatch.setattr("framekit.web.app._PACKAGE_STATIC_DIR", packaged_dir)
+    monkeypatch.setattr("framekit.web.app._SOURCE_DIST_DIR", tmp_path / "missing-source")
+
+    client = TestClient(create_app())
+    response = client.get("/api/not-a-real-route")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Not found"
+
+
 # ── Batch A — selected_announce nullable + seedbox rclone colon ─────────────
 
 def test_announces_selected_announce_is_nullable(monkeypatch: MonkeyPatch) -> None:
@@ -948,6 +1025,134 @@ def test_list_runs_from_ledger_respects_limit(
     assert len(list_runs_from_ledger(limit=2)) == 2
 
 
+# ── Service status API ────────────────────────────────────────────────────────
+
+def test_service_status_stopped_when_no_state_file(monkeypatch: MonkeyPatch) -> None:
+    """GET /api/v1/service/status returns stopped when no state file exists."""
+    monkeypatch.setattr(
+        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        lambda self: None,
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/service/status")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["status"] == "stopped"
+    assert payload["pid"] is None
+
+
+def test_service_status_running_with_fresh_heartbeat(monkeypatch: MonkeyPatch) -> None:
+    """GET /api/v1/service/status returns running when state file is fresh and PID alive."""
+    import os
+    import time
+
+    now = time.time()
+    monkeypatch.setattr(
+        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        lambda self: {
+            "status": "running",
+            "pid": os.getpid(),   # current test process — guaranteed alive
+            "started_at": now - 5.0,
+            "heartbeat_at": now - 1.0,
+        },
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/service/status")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["status"] == "running"
+    assert payload["pid"] == os.getpid()
+    assert payload["uptime_seconds"] is not None
+
+
+def test_service_status_stopped_when_heartbeat_stale(monkeypatch: MonkeyPatch) -> None:
+    """GET /api/v1/service/status returns stopped when heartbeat is too old (crash guard)."""
+    import time
+
+    stale_ts = time.time() - 120.0  # 120 s ago — well past 30 s threshold
+    monkeypatch.setattr(
+        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        lambda self: {
+            "status": "running",
+            "pid": 99999,
+            "started_at": stale_ts,
+            "heartbeat_at": stale_ts,
+        },
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/service/status")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["status"] == "stopped"
+
+
+def test_service_status_running_includes_watcher_state(monkeypatch: MonkeyPatch) -> None:
+    """GET /api/v1/service/status includes watcher subsystem state when running."""
+    import os
+    import time
+
+    now = time.time()
+    monkeypatch.setattr(
+        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        lambda self: {
+            "status": "running",
+            "pid": os.getpid(),
+            "started_at": now - 5.0,
+            "heartbeat_at": now - 1.0,
+        },
+    )
+    monkeypatch.setattr(
+        "framekit.web.app.get_embedded_watcher_state",
+        lambda: {"status": "stopped", "folders_active": 0, "last_error": None},
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/service/status")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["status"] == "running"
+    assert "watcher" in payload
+    watcher = payload["watcher"]
+    assert watcher["status"] == "stopped"
+    assert watcher["folders_active"] == 0
+    assert watcher["last_error"] is None
+
+
+def test_get_embedded_watcher_state_no_watcher() -> None:
+    """get_embedded_watcher_state returns stopped state when no watcher is active."""
+    import framekit.web.modules as mod
+
+    # Ensure clean state (no embedded watcher from other tests)
+    original = mod._EMBEDDED_WATCHER
+    original_err = mod._EMBEDDED_WATCHER_ERROR
+    try:
+        mod._EMBEDDED_WATCHER = None
+        mod._EMBEDDED_WATCHER_ERROR = None
+        state = mod.get_embedded_watcher_state()
+        assert state["status"] == "stopped"
+        assert state["folders_active"] == 0
+        assert state["last_error"] is None
+    finally:
+        mod._EMBEDDED_WATCHER = original
+        mod._EMBEDDED_WATCHER_ERROR = original_err
+
+
+def test_get_embedded_watcher_state_with_error() -> None:
+    """get_embedded_watcher_state returns error status when startup failed."""
+    import framekit.web.modules as mod
+
+    original = mod._EMBEDDED_WATCHER
+    original_err = mod._EMBEDDED_WATCHER_ERROR
+    try:
+        mod._EMBEDDED_WATCHER = None
+        mod._EMBEDDED_WATCHER_ERROR = "watch folder does not exist"
+        state = mod.get_embedded_watcher_state()
+        assert state["status"] == "error"
+        assert state["last_error"] == "watch folder does not exist"
+    finally:
+        mod._EMBEDDED_WATCHER = original
+        mod._EMBEDDED_WATCHER_ERROR = original_err
+
+
 # ── Watch service API ─────────────────────────────────────────────────────────
 
 def test_watch_service_status_endpoint(monkeypatch: MonkeyPatch) -> None:
@@ -1004,6 +1209,354 @@ def test_watch_service_stop_endpoint(monkeypatch: MonkeyPatch) -> None:
     payload = response.json()
     assert response.status_code == 200
     assert payload["stopped"] is True
+
+
+def test_watch_service_start_returns_409_when_embedded_watcher_running(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """POST /watch/service/start must return 409 when the embedded watcher is active."""
+    monkeypatch.setattr(
+        "framekit.web.app.get_embedded_watcher_state",
+        lambda: {"status": "running", "folders_active": 2, "last_error": None},
+    )
+    client = TestClient(create_app())
+    response = client.post("/api/v1/watch/service/start")
+    assert response.status_code == 409
+    assert "embedded" in response.json()["detail"].lower() or "service" in response.json()["detail"].lower()
+
+
+def test_watch_service_start_enqueues_when_no_embedded_watcher(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """POST /watch/service/start enqueues a watch job when no embedded watcher is running."""
+    monkeypatch.setattr(
+        "framekit.web.app.get_embedded_watcher_state",
+        lambda: {"status": "stopped", "folders_active": 0, "last_error": None},
+    )
+    captured: list = []
+
+    class _JobStub:
+        def model_dump(self) -> dict:
+            return {
+                "id": "job-watch-2",
+                "status": "pending",
+                "created_at": "2026-01-01T00:00:00Z",
+                "started_at": None,
+                "finished_at": None,
+                "request": {},
+                "result": None,
+                "error": None,
+            }
+
+    def _enqueue(request):
+        captured.append(request)
+        return _JobStub()
+
+    monkeypatch.setattr("framekit.web.app.enqueue_module_job", _enqueue)
+    client = TestClient(create_app())
+    response = client.post("/api/v1/watch/service/start")
+    assert response.status_code == 200
+    assert response.json()["id"] == "job-watch-2"
+    assert len(captured) == 1
+
+
+def test_service_reload_restarts_embedded_watcher(monkeypatch: MonkeyPatch) -> None:
+    """POST /api/v1/service/reload calls stop then start on embedded watcher."""
+    calls: list[str] = []
+
+    monkeypatch.setattr("framekit.web.app.stop_embedded_watcher", lambda: calls.append("stop"))
+    monkeypatch.setattr("framekit.web.app.start_embedded_watcher", lambda: calls.append("start"))
+    monkeypatch.setattr(
+        "framekit.web.app.get_embedded_watcher_state",
+        lambda: {"status": "stopped", "folders_active": 0, "last_error": None},
+    )
+    client = TestClient(create_app())
+    response = client.post("/api/v1/service/reload")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert "watcher" in payload
+    assert calls == ["stop", "start"]
+
+
+# ── Intake API ────────────────────────────────────────────────────────────────
+
+
+def test_intake_list_sources_empty(monkeypatch: MonkeyPatch) -> None:
+    """GET /api/v1/intake/sources returns empty list when no sources configured."""
+    monkeypatch.setattr("framekit.web.app.list_intake_sources", lambda: [])
+    client = TestClient(create_app())
+    response = client.get("/api/v1/intake/sources")
+    assert response.status_code == 200
+    assert response.json() == {"sources": []}
+
+
+def test_intake_create_source_returns_token(monkeypatch: MonkeyPatch) -> None:
+    """POST /api/v1/intake/sources returns source dict including one-time token."""
+    created = {
+        "id": "abc-123",
+        "name": "qBittorrent",
+        "source_id": "qbittorrent",
+        "enabled": True,
+        "default_preset": None,
+        "created_at": "2026-01-01T00:00:00Z",
+        "token": "tok_abc",
+    }
+    monkeypatch.setattr("framekit.web.app.create_intake_source", lambda name, source_id, default_preset=None: created)
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/intake/sources",
+        json={"name": "qBittorrent", "source_id": "qbittorrent"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_id"] == "qbittorrent"
+    assert payload["token"] == "tok_abc"
+
+
+def test_intake_create_source_requires_admin_when_auth_active(monkeypatch: MonkeyPatch) -> None:
+    """POST /api/v1/intake/sources returns 401 when auth active and no credentials."""
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("framekit.web.app._require_admin", lambda req: (_ for _ in ()).throw(
+        __import__("fastapi").HTTPException(status_code=401, detail="Authentication required")
+    ))
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    response = client.post(
+        "/api/v1/intake/sources",
+        json={"name": "qBittorrent", "source_id": "qbittorrent"},
+    )
+    assert response.status_code == 401
+
+
+def test_intake_delete_source(monkeypatch: MonkeyPatch) -> None:
+    """DELETE /api/v1/intake/sources/{id} returns deleted=True."""
+    monkeypatch.setattr(
+        "framekit.web.app.delete_intake_source",
+        lambda source_id: {"deleted": True, "source_id": source_id},
+    )
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    client = TestClient(create_app())
+    response = client.delete("/api/v1/intake/sources/qbittorrent")
+    assert response.status_code == 200
+    assert response.json() == {"deleted": True, "source_id": "qbittorrent"}
+
+
+def test_intake_delete_source_unknown_returns_404(monkeypatch: MonkeyPatch) -> None:
+    """DELETE /api/v1/intake/sources/{id} returns 404 for unknown source."""
+    monkeypatch.setattr(
+        "framekit.web.app.delete_intake_source",
+        lambda source_id: (_ for _ in ()).throw(ValueError(f"source_id '{source_id}' not found")),
+    )
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    client = TestClient(create_app())
+    response = client.delete("/api/v1/intake/sources/unknown")
+    assert response.status_code == 404
+
+
+def test_intake_submit_release_accepted(monkeypatch: MonkeyPatch, tmp_path) -> None:
+    """POST /api/v1/intake/release returns accepted=True and job_id when auth disabled."""
+    result = {"job_id": "job-intake-1", "accepted": True, "dedup_hit": False}
+    monkeypatch.setattr(
+        "framekit.web.app.submit_intake_release",
+        lambda source_id, path, preset=None, dedup_key=None: result,
+    )
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/intake/release",
+        json={"source": "qbittorrent", "path": str(tmp_path)},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["job_id"] == "job-intake-1"
+    assert payload["accepted"] is True
+    assert payload["dedup_hit"] is False
+
+
+def test_intake_submit_release_dedup(monkeypatch: MonkeyPatch, tmp_path) -> None:
+    """POST /api/v1/intake/release returns dedup_hit=True when duplicate detected."""
+    result = {"job_id": "job-existing", "accepted": False, "dedup_hit": True}
+    monkeypatch.setattr(
+        "framekit.web.app.submit_intake_release",
+        lambda source_id, path, preset=None, dedup_key=None: result,
+    )
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/intake/release",
+        json={"source": "qbittorrent", "path": str(tmp_path)},
+    )
+    assert response.status_code == 200
+    assert response.json()["dedup_hit"] is True
+
+
+def test_intake_submit_release_bad_path(monkeypatch: MonkeyPatch) -> None:
+    """POST /api/v1/intake/release returns 400 when path validation fails."""
+    monkeypatch.setattr(
+        "framekit.web.app.submit_intake_release",
+        lambda source_id, path, preset=None, dedup_key=None: (_ for _ in ()).throw(
+            ValueError("Path does not exist: /nonexistent")
+        ),
+    )
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/intake/release",
+        json={"source": "qbittorrent", "path": "/nonexistent"},
+    )
+    assert response.status_code == 400
+    assert "Path does not exist" in response.json()["detail"]
+
+
+def test_intake_submit_release_requires_token_when_auth_active(monkeypatch: MonkeyPatch, tmp_path) -> None:
+    """POST /api/v1/intake/release returns 401 when auth active and no credentials."""
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("framekit.web.app._get_current_user", lambda req: None)
+    monkeypatch.setattr("framekit.web.app.verify_intake_token", lambda source_id, token: False)
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    response = client.post(
+        "/api/v1/intake/release",
+        json={"source": "qbittorrent", "path": str(tmp_path)},
+    )
+    assert response.status_code == 401
+
+
+def test_intake_submit_release_accepts_valid_intake_token(monkeypatch: MonkeyPatch, tmp_path) -> None:
+    """POST /api/v1/intake/release accepts valid intake token when auth is active."""
+    result = {"job_id": "job-tok-1", "accepted": True, "dedup_hit": False}
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("framekit.web.app._get_current_user", lambda req: None)
+    monkeypatch.setattr("framekit.web.app.verify_intake_token", lambda source_id, token: True)
+    monkeypatch.setattr(
+        "framekit.web.app.submit_intake_release",
+        lambda source_id, path, preset=None, dedup_key=None: result,
+    )
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/intake/release",
+        json={"source": "qbittorrent", "path": str(tmp_path)},
+        headers={"Authorization": "Bearer secret-token"},
+    )
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "job-tok-1"
+
+
+def test_intake_webhook_alias_route(monkeypatch: MonkeyPatch, tmp_path) -> None:
+    """POST /api/v1/intake/webhook/{source} routes to submit_intake_release with path source."""
+    result = {"job_id": "job-wh-1", "accepted": True, "dedup_hit": False}
+    monkeypatch.setattr(
+        "framekit.web.app.submit_intake_release",
+        lambda source_id, path, preset=None, dedup_key=None: result,
+    )
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/intake/webhook/mydownloader",
+        json={"source": "mydownloader", "path": str(tmp_path)},
+    )
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "job-wh-1"
+
+
+def test_intake_rate_limit_exceeded(monkeypatch: MonkeyPatch, tmp_path) -> None:
+    """POST /api/v1/intake/release returns 400 when rate limit exceeded."""
+    monkeypatch.setattr(
+        "framekit.web.app.submit_intake_release",
+        lambda source_id, path, preset=None, dedup_key=None: (_ for _ in ()).throw(
+            ValueError("Rate limit exceeded (30 requests/min per source)")
+        ),
+    )
+    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/intake/release",
+        json={"source": "qbittorrent", "path": str(tmp_path)},
+    )
+    assert response.status_code == 400
+    assert "Rate limit" in response.json()["detail"]
+
+
+# ── Intake unit tests (modules layer) ─────────────────────────────────────────
+
+
+def test_intake_request_hash_deterministic() -> None:
+    from framekit.web.modules import _intake_request_hash
+    h1 = _intake_request_hash("src", "/tmp/release", "key1")
+    h2 = _intake_request_hash("src", "/tmp/release", "key1")
+    assert h1 == h2
+    assert len(h1) == 40  # sha1 hex
+
+
+def test_intake_request_hash_differs_on_key() -> None:
+    from framekit.web.modules import _intake_request_hash
+    h1 = _intake_request_hash("src", "/tmp/release", "key1")
+    h2 = _intake_request_hash("src", "/tmp/release", "key2")
+    assert h1 != h2
+
+
+def test_intake_rate_limit_allows_up_to_limit() -> None:
+    from framekit.web.modules import _check_intake_rate_limit, _INTAKE_RATE_WINDOWS, _INTAKE_RATE_LOCK
+    source = "rate_test_source_unique_xyz"
+    with _INTAKE_RATE_LOCK:
+        _INTAKE_RATE_WINDOWS.pop(source, None)
+    for _ in range(30):
+        assert _check_intake_rate_limit(source) is True
+    assert _check_intake_rate_limit(source) is False
+
+
+def test_intake_path_allowed_no_roots(monkeypatch: MonkeyPatch) -> None:
+    from pathlib import Path
+    from framekit.web.modules import _intake_path_allowed
+    monkeypatch.setattr("framekit.web.modules._intake_allowed_roots", lambda: [])
+    assert _intake_path_allowed(Path("/any/path")) is True
+
+
+def test_intake_path_allowed_with_root(monkeypatch: MonkeyPatch, tmp_path) -> None:
+    from framekit.web.modules import _intake_path_allowed
+    monkeypatch.setattr(
+        "framekit.web.modules._intake_allowed_roots",
+        lambda: [tmp_path.resolve()],
+    )
+    assert _intake_path_allowed((tmp_path / "release").resolve()) is True
+    assert _intake_path_allowed(tmp_path.parent.resolve()) is False
+
+
+def test_verify_intake_token_constant_time(monkeypatch: MonkeyPatch) -> None:
+    from framekit.web.modules import verify_intake_token
+
+    class _FakeVault:
+        def retrieve(self, key, default=None):
+            if key == "intake.src1.token":
+                return "correct-token"
+            return default
+
+    class _FakeSettings:
+        def get_vault(self):
+            return _FakeVault()
+
+    monkeypatch.setattr("framekit.web.modules.Settings", _FakeSettings)
+    assert verify_intake_token("src1", "correct-token") is True
+    assert verify_intake_token("src1", "wrong-token") is False
+    assert verify_intake_token("unknown", "anything") is False
+
+
+def test_submit_intake_release_unknown_source(monkeypatch: MonkeyPatch) -> None:
+    from framekit.web.modules import submit_intake_release
+    monkeypatch.setattr("framekit.web.modules._load_intake_sources", lambda: [])
+    with pytest.raises(ValueError, match="Unknown intake source"):
+        submit_intake_release("nonexistent", "/tmp/path")
+
+
+def test_submit_intake_release_disabled_source(monkeypatch: MonkeyPatch) -> None:
+    from framekit.web.modules import submit_intake_release, IntakeSource
+    source = IntakeSource(
+        id="1", name="Disabled", source_id="dis", enabled=False,
+        default_preset=None, created_at="2026-01-01T00:00:00Z",
+    )
+    monkeypatch.setattr("framekit.web.modules._load_intake_sources", lambda: [source])
+    with pytest.raises(ValueError, match="disabled"):
+        submit_intake_release("dis", "/tmp/path")
 
 
 # ── CLI --json output ─────────────────────────────────────────────────────────

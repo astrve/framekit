@@ -378,7 +378,7 @@ export function SeedboxPage() {
                   rclone_remote: addRemote.trim(),
                   remote_base_path: addBasePath.trim() || "/",
                   max_concurrent_uploads: Number.parseInt(addTransfers, 10) || 3,
-                  bandwidth_limit: addBandwidth.trim() || undefined,
+                  bandwidth_limit: addBandwidth.trim() || "",
                 });
               }}
             >

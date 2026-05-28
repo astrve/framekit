@@ -62,7 +62,11 @@ export function parseSubSteps(moduleName: string, stdout: string, stderr: string
   return steps.slice(-10);
 }
 
-export function runTimeline(job: ModuleJob | null | undefined): Array<{ label: string; active: boolean; done: boolean; failed: boolean }> {
+export function runTimeline(job: ModuleJob | null | undefined): [
+  { label: string; active: boolean; done: boolean; failed: boolean },
+  { label: string; active: boolean; done: boolean; failed: boolean },
+  { label: string; active: boolean; done: boolean; failed: boolean },
+] {
   const status = job?.status ?? "pending";
   const queueDone = status !== "pending";
   const runningDone = status === "completed" || status === "failed" || status === "cancelled";

@@ -19,8 +19,8 @@ const LEVEL_CONFIG: Record<string, { text: string; badge: string }> = {
   CRITICAL: { text: "text-red-700 dark:text-red-400 font-semibold", badge: "bg-red-200 text-red-800 dark:bg-red-900/60 dark:text-red-200 font-bold" },
 };
 
-function levelCfg(level: string) {
-  return LEVEL_CONFIG[level.toUpperCase()] ?? LEVEL_CONFIG.INFO;
+function levelCfg(level: string): { text: string; badge: string } {
+  return LEVEL_CONFIG[level.toUpperCase()] ?? LEVEL_CONFIG["INFO"] ?? { text: "text-foreground", badge: "bg-muted text-muted-foreground" };
 }
 
 function formatMsg(entry: LogEntry): string {

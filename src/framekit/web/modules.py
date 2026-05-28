@@ -1,23 +1,28 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import os
 import re
+import secrets
 import shlex
 import sqlite3
 import subprocess  # nosec B404
 import sys
+import time as _time_module
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from queue import Empty, SimpleQueue
-from threading import Event, Lock, Thread
+from threading import Event, Lock, Semaphore, Thread
 from time import monotonic, sleep
 from typing import Any, Literal
 from uuid import uuid4
 
 from click.core import Argument, Command, Group, Option, Parameter
+from loguru import logger
 from pydantic import BaseModel, Field, field_validator
 
 from framekit.commands.main import cli as framekit_cli
@@ -82,16 +87,48 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
 )
 
 MODULE_INDEX = {spec.name: spec for spec in MODULE_SPECS}
-_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="framekit-web-jobs")
+
+# Job state
 _JOBS_LOCK = Lock()
 _JOBS: dict[str, ModuleJob] = {}
 _JOB_CANCEL_EVENTS: dict[str, Event] = {}
 _JOB_PROCESSES: dict[str, Any] = {}
 _MAX_JOBS = 200
 _DB_LOCK = Lock()
+
+# Claim-based worker: replaces ThreadPoolExecutor.
+# _PENDING_SIGNAL is set whenever a new job is enqueued; the dispatcher thread
+# wakes up, claims pending jobs up to _MAX_CONCURRENT_JOBS, and spawns one
+# daemon thread per claimed job.
+_MAX_CONCURRENT_JOBS = 2
+_WORKER_SEMAPHORE = Semaphore(_MAX_CONCURRENT_JOBS)
+_PENDING_SIGNAL = Event()
+_WORKER_INIT_LOCK = Lock()
+_WORKER_THREAD: Thread | None = None
+
 _MODULE_SPEC_CACHE: dict[str, Any] | None = None
 _MODULE_SPEC_CACHE_LOCK = Lock()
 _PRESETS_LOCK = Lock()
+
+# Stable worker identity for this process: written to claimed_by column on claim.
+_WORKER_ID: str = f"pid-{os.getpid()}"
+
+# ---------------------------------------------------------------------------
+# Embedded watcher subsystem (active only during `framekit serve`)
+# ---------------------------------------------------------------------------
+# Holds the single WatcherService instance when running in service mode.
+# None when no watcher is active (no folders configured, or not in service mode).
+_EMBEDDED_WATCHER: Any = None  # WatcherService | None — typed as Any to avoid top-level import
+_EMBEDDED_WATCHER_LOCK = Lock()
+_EMBEDDED_WATCHER_ERROR: str | None = None
+
+# ---------------------------------------------------------------------------
+# Intake rate-limiter state (in-process, resets on restart)
+# ---------------------------------------------------------------------------
+# Maps source_id → list of monotonic timestamps for recent requests.
+_INTAKE_RATE_LOCK = Lock()
+_INTAKE_RATE_WINDOWS: dict[str, list[float]] = {}
+_INTAKE_RATE_LIMIT = 30   # max requests per 60-second window per source
 
 # Environment injected into every web-launched subprocess so that:
 #   NO_COLOR=1           → Rich/Click never emit ANSI escape codes into the captured pipe
@@ -166,6 +203,21 @@ class ModuleJob(BaseModel):
     live_stderr: str = ""
     result: RunModuleResponse | None = None
     error: str | None = None
+    # Service-mode metadata (populated by intake/watch; null for web/CLI-origin jobs)
+    origin: str | None = None
+    category: str | None = None
+    priority: int = 0
+
+
+class IntakeSource(BaseModel):
+    """Configuration for an external intake source (e.g. qBittorrent, custom downloader)."""
+
+    id: str
+    name: str
+    source_id: str
+    enabled: bool = True
+    default_preset: str | None = None
+    created_at: str
 
 
 PRESETS: tuple[ModulePreset, ...] = (
@@ -253,6 +305,8 @@ def _db_connect() -> sqlite3.Connection:
 
 def _init_db() -> None:
     with _DB_LOCK, _db_connect() as conn:
+        # WAL mode improves concurrent read/write throughput for claim operations.
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_module_jobs (
@@ -269,6 +323,33 @@ def _init_db() -> None:
             ON web_module_jobs(created_at)
             """
         )
+        # Compound index for the claim query: WHERE status='pending' ORDER BY priority DESC, created_at ASC.
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_module_jobs_claim
+            ON web_module_jobs(status, priority, created_at)
+            """
+        )
+        # Additive migration: add service columns when upgrading from an older DB.
+        # ALTER TABLE ADD COLUMN is idempotent when guarded by the existing-column check.
+        existing: set[str] = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(web_module_jobs)").fetchall()
+        }
+        new_cols: list[tuple[str, str]] = [
+            ("priority",     "INTEGER DEFAULT 0"),
+            ("claimed_by",   "TEXT DEFAULT NULL"),
+            ("claimed_at",   "TEXT DEFAULT NULL"),
+            ("category",     "TEXT DEFAULT NULL"),
+            ("origin",       "TEXT DEFAULT NULL"),
+            ("request_hash", "TEXT DEFAULT NULL"),
+            ("attempts",     "INTEGER DEFAULT 0"),
+        ]
+        for col_name, col_def in new_cols:
+            if col_name not in existing:
+                conn.execute(
+                    f"ALTER TABLE web_module_jobs ADD COLUMN {col_name} {col_def}"
+                )
         conn.commit()
 
 
@@ -277,14 +358,17 @@ def _persist_job(job: ModuleJob) -> None:
     with _DB_LOCK, _db_connect() as conn:
         conn.execute(
             """
-            INSERT INTO web_module_jobs(id, created_at, status, payload_json)
-            VALUES(?, ?, ?, ?)
+            INSERT INTO web_module_jobs(id, created_at, status, payload_json, priority, category, origin)
+            VALUES(?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 created_at=excluded.created_at,
                 status=excluded.status,
-                payload_json=excluded.payload_json
+                payload_json=excluded.payload_json,
+                priority=excluded.priority,
+                category=excluded.category,
+                origin=excluded.origin
             """,
-            (job.id, job.created_at, job.status, payload_json),
+            (job.id, job.created_at, job.status, payload_json, job.priority, job.category, job.origin),
         )
         conn.commit()
 
@@ -1738,13 +1822,277 @@ def _run_module_command_cancellable(
             _JOB_PROCESSES.pop(job_id, None)
 
 
-def enqueue_module_job(request: RunModuleRequest) -> ModuleJob:
+# ---------------------------------------------------------------------------
+# Claim-based job worker
+# ---------------------------------------------------------------------------
+
+def _claim_pending_job_from_db(worker_id: str) -> tuple[str, str] | None:
+    """Atomically claim one pending job directly from SQLite.
+
+    Uses BEGIN IMMEDIATE so the SELECT+UPDATE is serialized against any
+    concurrent writers — correct for both single-process (S1b) and future
+    multi-process (S2) use.
+
+    Returns (job_id, payload_json) of the claimed job, or None when the queue
+    is empty.  The returned payload_json is the snapshot *before* the claim
+    (status still 'pending' in the blob); callers must apply the running
+    transition to the in-memory model themselves.
+    """
+    db_path = _jobs_db_path()
+    with _DB_LOCK:
+        # Dedicated connection with autocommit so we can issue BEGIN IMMEDIATE
+        # without Python's implicit transaction management interfering.
+        conn = sqlite3.connect(str(db_path), timeout=10.0, isolation_level=None)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """
+                SELECT id, payload_json
+                FROM web_module_jobs
+                WHERE status = 'pending'
+                ORDER BY priority DESC, created_at ASC
+                LIMIT 1
+                """
+            ).fetchone()
+            if row is None:
+                conn.execute("ROLLBACK")
+                return None
+            job_id = str(row["id"])
+            now = _utc_now()
+            conn.execute(
+                """
+                UPDATE web_module_jobs
+                SET status = 'running', claimed_by = ?, claimed_at = ?
+                WHERE id = ?
+                """,
+                (worker_id, now, job_id),
+            )
+            conn.execute("COMMIT")
+            return job_id, str(row["payload_json"])
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except Exception:
+                pass
+            raise
+        finally:
+            conn.close()
+
+
+def _claim_pending_job() -> str | None:
+    """Claim the highest-priority pending job from SQLite and sync to _JOBS cache.
+
+    Returns job_id of the now-running job, or None when nothing is pending.
+    Source of truth for claiming is SQLite; _JOBS is updated as a fast-read cache.
+    """
+    try:
+        result = _claim_pending_job_from_db(_WORKER_ID)
+    except Exception as exc:
+        logger.warning("DB claim failed: {}", exc)
+        return None
+
+    if result is None:
+        return None
+
+    job_id, payload_json = result
+    try:
+        job = ModuleJob.model_validate_json(payload_json)
+    except Exception as exc:
+        logger.warning("Cannot parse claimed job {}: {}", job_id, exc)
+        return None
+
+    # Apply the running transition to the in-memory representation.
+    updated = job.model_copy(
+        update={
+            "status": "running",
+            "started_at": _utc_now(),
+            "live_stdout": "",
+            "live_stderr": "",
+        }
+    )
+
+    with _JOBS_LOCK:
+        # Race guard: a cancel request may have arrived between the DB claim and here.
+        # If the in-memory job is already cancelled, sync DB and abort execution.
+        existing = _JOBS.get(job_id)
+        if existing is not None and existing.status == "cancelled":
+            _persist_job(existing)  # reverts DB status to cancelled
+            return None
+        _JOBS[job_id] = updated
+        # Ensure a cancel event exists — required for jobs claimed cross-process (S2).
+        if job_id not in _JOB_CANCEL_EVENTS:
+            _JOB_CANCEL_EVENTS[job_id] = Event()
+
+    # Persist the running state so that payload_json reflects status=running for recovery.
+    _persist_job(updated)
+    return job_id
+
+
+def _execute_job(job_id: str) -> None:
+    """Execute a job that has already been claimed (status=running).
+
+    This is the extracted body of the former ``_run()`` closure inside
+    ``enqueue_module_job``. It is now a top-level function so the worker
+    loop can call it for any job, enabling future cross-process claiming.
+    """
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if job is None:
+            return
+        cancel_event = _JOB_CANCEL_EVENTS.get(job_id)
+        if cancel_event is None:
+            return
+        request = job.request
+
+    dispatch_webhook_event(
+        "job.started",
+        {"module": request.module, "args_text": request.args_text, "job_id": job_id},
+    )
+
+    def _on_output(stdout_text: str, stderr_text: str) -> None:
+        with _JOBS_LOCK:
+            current = _JOBS.get(job_id)
+            if current is None:
+                return
+            upd = current.model_copy(
+                update={
+                    "live_stdout": _clean_web_job_output(stdout_text),
+                    "live_stderr": _clean_web_job_output(stderr_text),
+                }
+            )
+            _JOBS[job_id] = upd
+            _persist_job(upd)
+
+    try:
+        result = _run_module_command_cancellable(
+            request, job_id=job_id, cancel_event=cancel_event, on_output=_on_output
+        )
+    except Exception as exc:  # nosec B110
+        with _JOBS_LOCK:
+            current = _JOBS.get(job_id)
+            if current is not None:
+                upd = current.model_copy(
+                    update={
+                        "status": "cancelled" if cancel_event.is_set() else "failed",
+                        "error": str(exc),
+                        "finished_at": _utc_now(),
+                    }
+                )
+                _JOBS[job_id] = upd
+                _persist_job(upd)
+        dispatch_webhook_event(
+            "job.failed",
+            {
+                "module": request.module,
+                "args_text": request.args_text,
+                "job_id": job_id,
+                "error": str(exc),
+            },
+        )
+        return
+
+    with _JOBS_LOCK:
+        current = _JOBS.get(job_id)
+        if current is None:
+            return
+        status: Literal["completed", "failed", "cancelled"]
+        if cancel_event.is_set():
+            status = "cancelled"
+        else:
+            status = "completed" if result.ok else "failed"
+        upd = current.model_copy(
+            update={
+                "status": status,
+                "live_stdout": result.stdout,
+                "live_stderr": result.stderr,
+                "result": result,
+                "finished_at": _utc_now(),
+            }
+        )
+        _JOBS[job_id] = upd
+        _persist_job(upd)
+
+    event_name = "job.completed" if status in {"completed", "cancelled"} else "job.failed"
+    dispatch_webhook_event(
+        event_name,
+        {
+            "module": request.module,
+            "args_text": request.args_text,
+            "job_id": job_id,
+            "returncode": result.returncode,
+            "ok": result.ok,
+        },
+    )
+
+
+def _execute_job_and_release(job_id: str) -> None:
+    """Execute a claimed job and release the concurrency semaphore slot."""
+    try:
+        _execute_job(job_id)
+    finally:
+        _WORKER_SEMAPHORE.release()
+        # Signal the dispatcher so it can pick up the next pending job.
+        _PENDING_SIGNAL.set()
+
+
+def _worker_loop() -> None:
+    """Dispatcher: drains pending jobs up to _MAX_CONCURRENT_JOBS concurrently."""
+    while True:
+        _PENDING_SIGNAL.wait(timeout=5.0)
+        _PENDING_SIGNAL.clear()
+        # Claim and launch all claimable pending jobs in one pass.
+        while True:
+            if not _WORKER_SEMAPHORE.acquire(blocking=False):
+                # At capacity; a running job will signal when it finishes.
+                break
+            job_id = _claim_pending_job()
+            if job_id is None:
+                _WORKER_SEMAPHORE.release()
+                break
+            t = Thread(
+                target=_execute_job_and_release,
+                args=(job_id,),
+                daemon=True,
+                name=f"framekit-job-{job_id[:8]}",
+            )
+            t.start()
+
+
+def _ensure_worker_started() -> None:
+    """Start the dispatcher thread if it is not already alive."""
+    global _WORKER_THREAD
+    with _WORKER_INIT_LOCK:
+        if _WORKER_THREAD is None or not _WORKER_THREAD.is_alive():
+            t = Thread(
+                target=_worker_loop,
+                daemon=True,
+                name="framekit-job-dispatcher",
+            )
+            t.start()
+            _WORKER_THREAD = t
+
+
+# ---------------------------------------------------------------------------
+# Public job queue API
+# ---------------------------------------------------------------------------
+
+def enqueue_module_job(
+    request: RunModuleRequest,
+    *,
+    origin: str | None = None,
+    category: str | None = None,
+    priority: int = 0,
+) -> ModuleJob:
     """Queue one module execution and return initial pending job snapshot."""
     job = ModuleJob(
         id=str(uuid4()),
         status="pending",
         created_at=_utc_now(),
         request=request,
+        origin=origin,
+        category=category,
+        priority=priority,
     )
     with _JOBS_LOCK:
         _JOBS[job.id] = job
@@ -1752,89 +2100,8 @@ def enqueue_module_job(request: RunModuleRequest) -> ModuleJob:
         _persist_job(job)
         _trim_jobs_if_needed()
 
-    def _run() -> None:
-        with _JOBS_LOCK:
-            current = _JOBS[job.id]
-            updated = current.model_copy(
-                update={"status": "running", "started_at": _utc_now(), "live_stdout": "", "live_stderr": ""}
-            )
-            _JOBS[job.id] = updated
-            _persist_job(updated)
-            cancel_event = _JOB_CANCEL_EVENTS[job.id]
-
-        dispatch_webhook_event(
-            "job.started",
-            {"module": request.module, "args_text": request.args_text, "job_id": job.id},
-        )
-
-        def _on_output(stdout_text: str, stderr_text: str) -> None:
-            with _JOBS_LOCK:
-                current = _JOBS.get(job.id)
-                if current is None:
-                    return
-                updated = current.model_copy(
-                    update={
-                        "live_stdout": _clean_web_job_output(stdout_text),
-                        "live_stderr": _clean_web_job_output(stderr_text),
-                    }
-                )
-                _JOBS[job.id] = updated
-                _persist_job(updated)
-
-        try:
-            result = _run_module_command_cancellable(
-                request, job_id=job.id, cancel_event=cancel_event, on_output=_on_output
-            )
-        except Exception as exc:  # nosec B110
-            with _JOBS_LOCK:
-                current = _JOBS[job.id]
-                updated = current.model_copy(
-                    update={
-                        "status": "cancelled" if cancel_event.is_set() else "failed",
-                        "error": str(exc),
-                        "finished_at": _utc_now(),
-                    }
-                )
-                _JOBS[job.id] = updated
-                _persist_job(updated)
-            dispatch_webhook_event(
-                "job.failed",
-                {"module": request.module, "args_text": request.args_text, "job_id": job.id, "error": str(exc)},
-            )
-            return
-
-        with _JOBS_LOCK:
-            current = _JOBS[job.id]
-            status: Literal["completed", "failed", "cancelled"]
-            if cancel_event.is_set():
-                status = "cancelled"
-            else:
-                status = "completed" if result.ok else "failed"
-            updated = current.model_copy(
-                update={
-                    "status": status,
-                    "live_stdout": result.stdout,
-                    "live_stderr": result.stderr,
-                    "result": result,
-                    "finished_at": _utc_now(),
-                }
-            )
-            _JOBS[job.id] = updated
-            _persist_job(updated)
-
-        event_name = "job.completed" if status in {"completed", "cancelled"} else "job.failed"
-        dispatch_webhook_event(
-            event_name,
-            {
-                "module": request.module,
-                "args_text": request.args_text,
-                "job_id": job.id,
-                "returncode": result.returncode,
-                "ok": result.ok,
-            },
-        )
-
-    _EXECUTOR.submit(_run)
+    _ensure_worker_started()
+    _PENDING_SIGNAL.set()
     return job
 
 
@@ -1873,6 +2140,99 @@ def stop_watch_service(timeout_seconds: float = 5.0) -> dict[str, Any]:
 
     ok = stop_running_watcher(timeout_seconds=timeout_seconds)
     return {"stopped": ok}
+
+
+# ---------------------------------------------------------------------------
+# Embedded watcher lifecycle (service mode only)
+# ---------------------------------------------------------------------------
+
+
+def _build_watch_config_from_settings() -> Any:
+    """Build WatchConfig from current settings. Return None if no enabled folders."""
+    from framekit.modules.watch.models import WatchConfig
+
+    store = SettingsStore()
+    settings = store.load()
+    watch_data = settings.get("watch", {})
+    folders_raw = watch_data.get("folders", [])
+    if not isinstance(folders_raw, list) or not folders_raw:
+        return None
+    enabled = [
+        f for f in folders_raw if isinstance(f, dict) and f.get("enabled", True)
+    ]
+    if not enabled:
+        return None
+    watch_config_data: dict[str, Any] = {
+        "enabled": True,
+        "folders": folders_raw,
+        "notifications": watch_data.get("notifications", {}),
+    }
+    return WatchConfig.from_dict(watch_config_data)
+
+
+def start_embedded_watcher() -> None:
+    """Start WatcherService embedded in the service process.
+
+    No-ops silently if no watch folders are configured.  Any startup error is
+    captured in ``_EMBEDDED_WATCHER_ERROR`` and exposed via
+    ``get_embedded_watcher_state()``.
+    """
+    global _EMBEDDED_WATCHER, _EMBEDDED_WATCHER_ERROR
+    with _EMBEDDED_WATCHER_LOCK:
+        watcher = _EMBEDDED_WATCHER
+        if watcher is not None and watcher.status.running:
+            return  # already running — idempotent
+        _EMBEDDED_WATCHER_ERROR = None
+        try:
+            config = _build_watch_config_from_settings()
+            if config is None:
+                logger.info("Embedded watcher: no folders configured — skipping start.")
+                return
+            from framekit.modules.watch.service import WatcherService
+
+            watcher = WatcherService(config, embedded=True)
+            watcher.start()  # returns immediately in embedded mode
+            _EMBEDDED_WATCHER = watcher
+            active = len([f for f in config.folders if f.enabled])
+            logger.info("Embedded watcher started ({} folder(s)).", active)
+        except Exception as exc:
+            _EMBEDDED_WATCHER_ERROR = str(exc)
+            logger.error("Embedded watcher failed to start: {}", exc)
+
+
+def stop_embedded_watcher() -> None:
+    """Stop the embedded WatcherService if running."""
+    global _EMBEDDED_WATCHER
+    with _EMBEDDED_WATCHER_LOCK:
+        watcher = _EMBEDDED_WATCHER
+        if watcher is None:
+            return
+        try:
+            watcher.stop()
+            logger.info("Embedded watcher stopped.")
+        except Exception as exc:
+            logger.warning("Embedded watcher stop raised: {}", exc)
+        finally:
+            _EMBEDDED_WATCHER = None
+
+
+def get_embedded_watcher_state() -> dict[str, Any]:
+    """Return watcher subsystem state for inclusion in /api/v1/service/status."""
+    with _EMBEDDED_WATCHER_LOCK:
+        watcher = _EMBEDDED_WATCHER
+        err = _EMBEDDED_WATCHER_ERROR
+    if watcher is None:
+        return {
+            "status": "error" if err else "stopped",
+            "folders_active": 0,
+            "last_error": err,
+        }
+    status = watcher.get_status()
+    return {
+        "status": "running" if status.running else "stopped",
+        "folders_active": len(status.folders_watched),
+        "last_error": err,
+    }
 
 
 def list_runs_from_ledger(limit: int = 50) -> list[dict[str, Any]]:
@@ -1976,6 +2336,296 @@ def clear_module_jobs() -> int:
     for job_id in to_delete:
         _delete_persisted_job(job_id)
     return len(to_delete)
+
+
+# ---------------------------------------------------------------------------
+# Intake API — source management and release submission
+# ---------------------------------------------------------------------------
+
+_INTAKE_SOURCES_FILENAME = "intake_sources.json"
+_VALID_SOURCE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+
+def _intake_sources_path() -> Path:
+    return get_config_dir() / _INTAKE_SOURCES_FILENAME
+
+
+def _load_intake_sources() -> list[IntakeSource]:
+    path = _intake_sources_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return [IntakeSource(**s) for s in data.get("sources", [])]
+    except Exception as exc:
+        logger.warning("Failed to load intake sources: {}", exc)
+        return []
+
+
+def _save_intake_sources(sources: list[IntakeSource]) -> None:
+    path = _intake_sources_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"sources": [s.model_dump() for s in sources]}, indent=2),
+        encoding="utf-8",
+    )
+
+
+def list_intake_sources() -> list[dict[str, Any]]:
+    """Return all configured intake sources (tokens not included)."""
+    return [s.model_dump() for s in _load_intake_sources()]
+
+
+def create_intake_source(
+    name: str,
+    source_id: str,
+    *,
+    default_preset: str | None = None,
+) -> dict[str, Any]:
+    """Create a new intake source, generate a vault-stored token, return token once.
+
+    Raises ``ValueError`` if source_id is invalid, already exists, or vault is
+    unavailable.  Vault must be available — tokens are never stored in plaintext.
+    """
+    name = name.strip()
+    source_id = source_id.strip()
+    if not name:
+        raise ValueError("name is required")
+    if not _VALID_SOURCE_ID_RE.match(source_id):
+        raise ValueError(
+            "source_id must be 1–64 characters of [a-zA-Z0-9_-]"
+        )
+    sources = _load_intake_sources()
+    if any(s.source_id == source_id for s in sources):
+        raise ValueError(f"source_id '{source_id}' already exists")
+
+    # Vault required — fail closed.
+    s = Settings()
+    vault = s.get_vault()
+    if vault is None:
+        raise ValueError(
+            "Vault is unavailable. Intake source tokens require vault encryption. "
+            "Run 'framekit settings security init' to initialise the vault."
+        )
+
+    token = secrets.token_urlsafe(32)
+    vault_key = f"intake.{source_id}.token"
+    vault.store(vault_key, token)
+
+    source = IntakeSource(
+        id=str(uuid4()),
+        name=name,
+        source_id=source_id,
+        enabled=True,
+        default_preset=default_preset,
+        created_at=_utc_now(),
+    )
+    sources.append(source)
+    _save_intake_sources(sources)
+
+    logger.info("Intake source created: source_id={}", source_id)
+    result = source.model_dump()
+    result["token"] = token  # shown exactly once — never logged
+    return result
+
+
+def delete_intake_source(source_id: str) -> dict[str, Any]:
+    """Remove an intake source and delete its vault token."""
+    sources = _load_intake_sources()
+    remaining = [s for s in sources if s.source_id != source_id]
+    if len(remaining) == len(sources):
+        raise ValueError(f"source_id '{source_id}' not found")
+    _save_intake_sources(remaining)
+    try:
+        vault = Settings().get_vault()
+        if vault:
+            vault.delete(f"intake.{source_id}.token")
+    except Exception as exc:
+        logger.warning("Could not remove vault token for intake source '{}': {}", source_id, exc)
+    logger.info("Intake source deleted: source_id={}", source_id)
+    return {"deleted": True, "source_id": source_id}
+
+
+def verify_intake_token(source_id: str, token: str) -> bool:
+    """Constant-time comparison of *token* against vault-stored value.
+
+    Returns ``False`` (never raises) on vault errors — fail closed.
+    """
+    try:
+        vault = Settings().get_vault()
+        if vault is None:
+            return False
+        stored = vault.retrieve(f"intake.{source_id}.token", default=None)
+        if not stored:
+            return False
+        return hmac.compare_digest(str(stored), token)
+    except Exception:
+        return False
+
+
+def _intake_allowed_roots() -> list[Path]:
+    """Return allowlisted root paths for intake path validation.
+
+    Sources (in order): ``settings.intake.allowed_roots`` list, then the path
+    of every enabled watch folder.  When the combined list is empty, all paths
+    are allowed (no restriction configured).
+    """
+    store = SettingsStore()
+    settings = store.load()
+    roots: list[Path] = []
+    for raw in (settings.get("intake") or {}).get("allowed_roots", []):
+        try:
+            roots.append(Path(raw).resolve())
+        except Exception:
+            pass
+    for folder in list_watch_folders():
+        try:
+            roots.append(Path(folder["path"]).resolve())
+        except Exception:
+            pass
+    return roots
+
+
+def _intake_path_allowed(resolved: Path) -> bool:
+    """Return True if *resolved* is under at least one allowed root."""
+    roots = _intake_allowed_roots()
+    if not roots:
+        return True  # no restriction configured
+    for root in roots:
+        try:
+            resolved.relative_to(root)
+            return True
+        except ValueError:
+            pass
+    return False
+
+
+def _intake_request_hash(source_id: str, resolved_path: str, dedup_key: str | None) -> str:
+    raw = f"{source_id}:{resolved_path}:{dedup_key or resolved_path}"
+    return hashlib.sha1(raw.encode()).hexdigest()  # nosec B324 — dedup only, not crypto
+
+
+def _find_job_by_request_hash(req_hash: str) -> str | None:
+    """Return job_id of pending/running job with matching request_hash, or None."""
+    db_path = _jobs_db_path()
+    with _DB_LOCK:
+        conn = sqlite3.connect(str(db_path), timeout=5.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                """
+                SELECT id FROM web_module_jobs
+                WHERE request_hash = ? AND status IN ('pending', 'running')
+                LIMIT 1
+                """,
+                (req_hash,),
+            ).fetchone()
+        finally:
+            conn.close()
+    return str(row["id"]) if row else None
+
+
+def _set_job_request_hash(job_id: str, req_hash: str) -> None:
+    """Write request_hash to the DB row for an existing job (post-enqueue)."""
+    with _DB_LOCK, _db_connect() as conn:
+        conn.execute(
+            "UPDATE web_module_jobs SET request_hash = ? WHERE id = ?",
+            (req_hash, job_id),
+        )
+        conn.commit()
+
+
+def _check_intake_rate_limit(source_id: str) -> bool:
+    """Return True if source is within 30 req/min limit. Thread-safe."""
+    now = _time_module.monotonic()
+    cutoff = now - 60.0
+    with _INTAKE_RATE_LOCK:
+        ts = _INTAKE_RATE_WINDOWS.setdefault(source_id, [])
+        # Trim expired entries (list is append-ordered → find first in-window index)
+        i = 0
+        while i < len(ts) and ts[i] < cutoff:
+            i += 1
+        del ts[:i]
+        if len(ts) >= _INTAKE_RATE_LIMIT:
+            return False
+        ts.append(now)
+        return True
+
+
+def submit_intake_release(
+    source_id: str,
+    path: str,
+    *,
+    preset: str | None = None,
+    dedup_key: str | None = None,
+) -> dict[str, Any]:
+    """Validate *path* and enqueue a pipeline job for the given intake source.
+
+    Returns ``{"job_id": ..., "accepted": bool, "dedup_hit": bool}``.
+
+    Raises ``ValueError`` on rate limit, missing/forbidden path, or unknown source.
+    Only enqueues ``pipeline`` — never arbitrary modules.
+    """
+    sources = _load_intake_sources()
+    source = next((s for s in sources if s.source_id == source_id), None)
+    if source is None:
+        raise ValueError(f"Unknown intake source: '{source_id}'")
+    if not source.enabled:
+        raise ValueError(f"Intake source '{source_id}' is disabled")
+
+    if not _check_intake_rate_limit(source_id):
+        raise ValueError("Rate limit exceeded (30 requests/min per source)")
+
+    # resolve() first so symlinks are expanded before the allowlist check;
+    # checking exists() on the resolved path also eliminates a TOCTOU race.
+    resolved = Path(path.strip()).resolve()
+    if not resolved.exists():
+        raise ValueError(f"Path does not exist: {path}")
+    if not _intake_path_allowed(resolved):
+        raise ValueError(
+            f"Path is not under any configured allowed root: {path}. "
+            "Add the parent directory to settings.intake.allowed_roots or watch folders."
+        )
+
+    req_hash = _intake_request_hash(source_id, str(resolved), dedup_key)
+    existing = _find_job_by_request_hash(req_hash)
+    if existing:
+        return {"job_id": existing, "accepted": False, "dedup_hit": True}
+
+    # Preset resolution: explicit → source default → matching watch folder preset
+    resolved_preset: str | None = preset
+    if not resolved_preset and source.default_preset:
+        resolved_preset = source.default_preset
+    if not resolved_preset:
+        for folder in list_watch_folders():
+            try:
+                folder_path = Path(folder["path"]).resolve()
+                resolved.relative_to(folder_path)
+                fp = folder.get("preset", "default") or "default"
+                if fp != "default":
+                    resolved_preset = fp
+                break
+            except ValueError:
+                pass
+
+    parts = [shlex.quote(str(resolved))]
+    if resolved_preset:
+        parts.append(f"--preset {shlex.quote(resolved_preset)}")
+    args_text = " ".join(parts)
+
+    request = RunModuleRequest(
+        module="pipeline",
+        args_text=args_text,
+        dry_run=False,
+        auto_yes=True,
+        confirm_destructive=True,
+        timeout_seconds=7200.0,
+    )
+    job = enqueue_module_job(request, origin=f"intake:{source_id}", category="transform")
+    _set_job_request_hash(job.id, req_hash)
+
+    logger.info("Intake release accepted: source={} path={} job={}", source_id, str(resolved), job.id)
+    return {"job_id": job.id, "accepted": True, "dedup_hit": False}
 
 
 _init_db()

@@ -64,6 +64,7 @@ function makeJob(overrides: Partial<ModuleJob> = {}): ModuleJob {
     live_stderr: "",
     result: null,
     error: null,
+    priority: 0,
     ...overrides,
   };
 }

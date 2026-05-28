@@ -71,6 +71,10 @@ dependencies = [
   "loguru>=0.7.0,<0.8.0",
   "pydantic>=2.0.0,<3.0.0",
   "desktop-notifier>=6.2.0,<7.0.0",
+  "uvicorn[standard]>=0.48.0",
+  "fastapi>=0.115.0,<1.0.0",
+  "bcrypt>=4.0.0,<5.0.0",
+  "PyJWT>=2.8.0,<3.0.0",
 ]
 
 [project.urls]
@@ -116,10 +120,8 @@ docs = [
   "mkdocstrings[python]>=0.24.0",
 ]
 web = [
-  "fastapi>=0.115.0,<1.0.0",
-  "uvicorn[standard]>=0.30.0,<1.0.0",
-  "bcrypt>=4.0.0,<5.0.0",
-  "PyJWT>=2.8.0,<3.0.0",
+  # All web backend dependencies are now in the default dependency set.
+  # This extra is kept for backwards compatibility only.
 ]
 build-binary = [
   "pyinstaller>=6.20.0",
@@ -163,6 +165,7 @@ include = ["framekit*"]
   "templates/**/*.json",
   "presets/**/*.yaml",
   "presets/**/*.md",
+  "web/static/**/*",
 ]
 
 # ---------------------------------------------------------------------------

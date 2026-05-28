@@ -10,6 +10,7 @@ import {
   OctagonX,
   Play,
   ScrollText,
+  Server,
   Stethoscope,
   Upload,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   getDoctorPayload,
+  getServiceStatus,
   getSeedboxList,
   getUploadHistory,
   getUploadState,
@@ -142,6 +144,13 @@ export function HomePage() {
     queryKey: ["dashboard-vault"],
     queryFn: getVaultStatus,
     staleTime: 60_000,
+  });
+
+  const serviceQuery = useQuery({
+    queryKey: ["dashboard-service"],
+    queryFn: getServiceStatus,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
   });
 
   const trackersQuery = useQuery({
@@ -305,7 +314,7 @@ export function HomePage() {
                     {getJobModule(job)}
                   </span>
                   <span className="flex-1 truncate text-xs text-muted-foreground">
-                    {getJobArgsText(job)}
+                    {getJobDisplayPath(job)}
                   </span>
                   <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
                     {formatDuration(job.started_at, null)}
@@ -329,7 +338,7 @@ export function HomePage() {
       </section>
 
       {/* ── Stat cards ───────────────────────────────────────────────────── */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {/* System Health */}
         <Card
           className={cn(
@@ -449,6 +458,49 @@ export function HomePage() {
             >
               Manage Seedbox →
             </Link>
+          </CardContent>
+        </Card>
+
+        {/* Service */}
+        <Card
+          className={cn(
+            "border-border/60",
+            serviceQuery.data?.status === "running" && "border-emerald-500/40",
+          )}
+        >
+          <CardHeader className="px-4 pb-2 pt-4">
+            <CardTitle className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <Server className="h-3.5 w-3.5" />
+              Service
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            {serviceQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : serviceQuery.isError || !serviceQuery.data ? (
+              <Badge variant="secondary">Unknown</Badge>
+            ) : serviceQuery.data.status === "running" ? (
+              <div className="space-y-1.5">
+                <Badge variant="success">Running</Badge>
+                {serviceQuery.data.uptime_seconds != null && (
+                  <p className="text-xs text-muted-foreground">
+                    Up {Math.floor(serviceQuery.data.uptime_seconds / 60)}m
+                  </p>
+                )}
+                {serviceQuery.data.watcher?.status === "running" && (
+                  <p className="text-xs text-muted-foreground">
+                    Watch: {serviceQuery.data.watcher.folders_active} folder{serviceQuery.data.watcher.folders_active !== 1 ? "s" : ""}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Badge variant="secondary">Stopped</Badge>
+                <p className="text-xs text-muted-foreground">
+                  Run <code className="font-mono">framekit serve</code>
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

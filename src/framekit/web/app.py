@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 import sys
 from importlib import metadata as importlib_metadata
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -50,8 +52,16 @@ from framekit.web.modules import (
     get_upload_state,
     get_upload_tracker_info,
     get_vault_status_info,
+    get_embedded_watcher_state,
     get_watch_service_status,
+    start_embedded_watcher,
+    stop_embedded_watcher,
     stop_watch_service,
+    list_intake_sources,
+    create_intake_source,
+    delete_intake_source,
+    verify_intake_token,
+    submit_intake_release,
     list_aliases_summary,
     list_module_jobs,
     list_modules,
@@ -80,6 +90,24 @@ from framekit.web.modules import (
     set_tmdb_token_value,
     set_upload_state,
 )
+
+# Built frontend assets resolution order:
+# 1) Packaged static assets inside framekit.web (works for installed wheel/sdist/editable)
+# 2) Source-tree Vite output at web-ui/dist (works in repository checkouts)
+_PACKAGE_STATIC_DIR: Path = Path(__file__).resolve().parent / "static"
+_SOURCE_DIST_DIR: Path = Path(__file__).parent.parent.parent.parent / "web-ui" / "dist"
+
+
+def _resolve_frontend_dist_dir() -> Path | None:
+    """Return frontend build directory, preferring packaged assets over source-tree dist."""
+    for candidate in (_PACKAGE_STATIC_DIR, _SOURCE_DIST_DIR):
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved.is_dir():
+            return resolved
+    return None
 
 
 class UploadStateRequest(BaseModel):
@@ -226,6 +254,26 @@ class WebhookTestPayloadRequest(BaseModel):
     body_template: str = ""
 
 
+class IntakeSourceCreateRequest(BaseModel):
+    """Request payload for registering a new intake source."""
+
+    name: str
+    source_id: str
+    default_preset: str | None = None
+
+
+class IntakeReleaseRequest(BaseModel):
+    """Request payload for submitting a release path via intake."""
+
+    source: str
+    path: str
+    name: str | None = None
+    preset: str | None = None
+    profile: str | None = None
+    dedup_key: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
 # Sample data used by both webhook test endpoints so templates render with visible values.
 _WEBHOOK_TEST_DATA: dict[str, Any] = {
     "module": "pipeline",
@@ -308,6 +356,29 @@ def _require_admin(request: Any) -> dict[str, Any]:
     return payload
 
 
+def _intake_auth_check(request: Any, source_id: str) -> None:
+    """Validate intake request auth: intake token OR valid JWT.
+
+    When auth is disabled (no users), every request is accepted.
+    Raises ``HTTPException(401)`` if auth is active and neither credential is valid.
+    """
+    if not _is_auth_active():
+        return
+    # Accept valid JWT session token.
+    if _get_current_user(request) is not None:
+        return
+    # Accept intake-source token from Authorization header.
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer "):]
+        if verify_intake_token(source_id, token):
+            return
+    raise HTTPException(
+        status_code=401,
+        detail="Valid intake token or session required",
+    )
+
+
 def _resolve_version() -> str:
     for distribution_name in ("framekit-cli", "framekit"):
         try:
@@ -346,12 +417,23 @@ def create_app() -> FastAPI:
         "/redoc",
     })
 
+    # Intake submit paths bypass JWT auth — each handler validates intake token or JWT itself.
+    # Uses a precise regex so only the two submit routes are exempt; future /intake/* routes
+    # (e.g. admin CRUD) still go through the normal JWT guard.
+    _INTAKE_SUBMIT_RE = re.compile(r"^/api/v1/intake/(release|webhook/[^/]+)$")
+
     @app.middleware("http")
     async def enforce_auth(request: Request, call_next):  # type: ignore[return]
         if request.method == "OPTIONS":
             return await call_next(request)
         path = request.url.path
         if path in _ALWAYS_OPEN or path.startswith("/api/v1/auth/"):
+            return await call_next(request)
+        if _INTAKE_SUBMIT_RE.match(path):
+            return await call_next(request)
+        # Non-API paths (static assets, SPA routes) bypass server-side auth.
+        # The React app handles client-side auth state and redirects to /login.
+        if not path.startswith("/api/"):
             return await call_next(request)
         if _is_auth_active() and _get_current_user(request) is None:
             return JSONResponse({"detail": "Authentication required"}, status_code=401)
@@ -360,6 +442,145 @@ def create_app() -> FastAPI:
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/api/v1/service/status")
+    def service_status() -> dict[str, Any]:
+        """Return running/stopped status of the Framekit service process.
+
+        Guards against stale state files left by unclean shutdown via two checks:
+          1. Heartbeat staleness: heartbeat_at older than 3× interval → stopped.
+          2. PID liveness: os.kill(pid, 0) raises ProcessLookupError → stopped.
+        """
+        import os as _os
+        import time as _time
+
+        from framekit.core.paths import get_service_dir
+        from framekit.core.service.supervisor import ServiceSupervisor
+
+        _stopped: dict[str, Any] = {
+            "status": "stopped",
+            "pid": None,
+            "started_at": None,
+            "heartbeat_at": None,
+            "uptime_seconds": None,
+        }
+
+        state = ServiceSupervisor(get_service_dir()).read_state()
+        if state is None or state.get("status") not in {"starting", "running"}:
+            return _stopped
+
+        # Staleness check: heartbeat older than 3× interval indicates crashed process.
+        heartbeat_at: float | None = state.get("heartbeat_at")
+        stale_threshold = ServiceSupervisor.HEARTBEAT_INTERVAL_S * 3  # 30 s
+        if heartbeat_at is not None and (_time.time() - heartbeat_at) > stale_threshold:
+            return _stopped
+
+        # PID liveness check: signal 0 = existence probe, no actual signal sent.
+        pid: int | None = state.get("pid")
+        if pid is not None:
+            try:
+                _os.kill(pid, 0)
+            except ProcessLookupError:
+                # Process is gone — state file is stale.
+                return _stopped
+            except (PermissionError, OSError):
+                # Process exists but we lack permission to signal it — treat as running.
+                pass
+
+        started_at: float | None = state.get("started_at")
+        uptime = round(_time.time() - started_at, 1) if started_at else None
+        return {
+            "status": state.get("status", "running"),
+            "pid": pid,
+            "started_at": started_at,
+            "heartbeat_at": heartbeat_at,
+            "uptime_seconds": uptime,
+            "watcher": get_embedded_watcher_state(),
+        }
+
+    @app.post("/api/v1/service/reload")
+    def service_reload() -> dict[str, Any]:
+        """Reload embedded watcher settings without restarting the service.
+
+        Stops the running embedded watcher (if any), then re-reads
+        ``settings.watch.folders`` and restarts it.  This is a no-op and
+        returns ``{"ok": true}`` when no service supervisor is active.
+        """
+        stop_embedded_watcher()
+        start_embedded_watcher()
+        return {"ok": True, "watcher": get_embedded_watcher_state()}
+
+    # ── Intake API ───────────────────────────────────────────────────────────
+
+    @app.get("/api/v1/intake/sources")
+    def intake_list_sources(request: Request) -> dict[str, Any]:
+        """List all configured intake sources (tokens not included). Admin-only."""
+        if _is_auth_active():
+            _require_admin(request)
+        return {"sources": list_intake_sources()}
+
+    @app.post("/api/v1/intake/sources")
+    def intake_create_source(req: IntakeSourceCreateRequest, request: Request) -> dict[str, Any]:
+        """Create an intake source.  Returns the token once — store it securely."""
+        if _is_auth_active():
+            _require_admin(request)
+        try:
+            return create_intake_source(
+                req.name,
+                req.source_id,
+                default_preset=req.default_preset,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/v1/intake/sources/{source_id}")
+    def intake_delete_source(source_id: str, request: Request) -> dict[str, Any]:
+        """Delete an intake source and revoke its token."""
+        if _is_auth_active():
+            _require_admin(request)
+        try:
+            return delete_intake_source(source_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.post("/api/v1/intake/release")
+    def intake_submit_release(req: IntakeReleaseRequest, request: Request) -> dict[str, Any]:
+        """Submit a release path for pipeline processing.
+
+        Authentication: ``Authorization: Bearer <intake_token>`` for the given
+        ``source`` field, OR a valid JWT session token.  When auth is disabled
+        (no users configured), any request is accepted.
+        """
+        _intake_auth_check(request, req.source)
+        try:
+            return submit_intake_release(
+                req.source,
+                req.path,
+                preset=req.preset,
+                dedup_key=req.dedup_key,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/intake/webhook/{source_id}")
+    def intake_webhook(source_id: str, req: IntakeReleaseRequest, request: Request) -> dict[str, Any]:
+        """Alias for ``POST /api/v1/intake/release`` with source taken from the URL path.
+
+        ``source_id`` in the URL is the authoritative identity for both auth
+        validation and job submission — ``req.source`` in the body is ignored on
+        this route to prevent a source-spoofing attack where a caller authenticates
+        with token A but submits a body claiming source B.
+        """
+        _intake_auth_check(request, source_id)
+        try:
+            return submit_intake_release(
+                source_id,  # URL param is authoritative — body req.source ignored
+                req.path,
+                preset=req.preset,
+                dedup_key=req.dedup_key,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/v1/system/info")
     def system_info() -> dict[str, str]:
@@ -653,7 +874,26 @@ def create_app() -> FastAPI:
 
     @app.post("/api/v1/watch/service/start")
     def watch_service_start() -> dict[str, Any]:
-        """Spawn the watch daemon as a background module job (2 h max)."""
+        """Spawn the watch daemon.
+
+        When the embedded watcher is running (service mode via ``framekit serve``),
+        returns 409 — the service process owns the watch lifecycle and the Web UI
+        cannot spawn a competing subprocess watcher.
+
+        When no service is active (ephemeral/dev mode), falls back to the legacy
+        2 h background-job spawn so existing behaviour is preserved.
+        """
+        # Service-mode guard: refuse if embedded watcher is already running.
+        watcher_state = get_embedded_watcher_state()
+        if watcher_state.get("status") == "running":
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Watch is managed by the service process. "
+                    "The embedded watcher is already running — no action needed."
+                ),
+            )
+
         try:
             job = enqueue_module_job(
                 RunModuleRequest(
@@ -935,6 +1175,53 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True}
+
+    # ── Static / SPA serving ─────────────────────────────────────────────────
+    # Registered last so every /api/v1/* route takes priority.
+
+    _dist_resolved = _resolve_frontend_dist_dir()
+
+    if _dist_resolved is not None:
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_spa(full_path: str) -> FileResponse:  # type: ignore[return]
+            """Serve built frontend assets or fall back to index.html for SPA routing.
+
+            Security: resolves the candidate path and verifies it stays inside
+            dist directory before serving, preventing path-traversal.
+            """
+            # Undefined /api/* sub-paths should 404, not silently serve the SPA.
+            if full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="Not found")
+
+            candidate = _dist_resolved / full_path
+            try:
+                resolved = candidate.resolve()
+                if not resolved.is_relative_to(_dist_resolved):
+                    raise HTTPException(status_code=400, detail="Bad request")
+                if resolved.is_file():
+                    return FileResponse(resolved)
+            except (ValueError, OSError):
+                pass  # fall through to index.html
+
+            index = _dist_resolved / "index.html"
+            if index.exists():
+                return FileResponse(index)
+            raise HTTPException(status_code=404, detail="index.html not found in dist")
+
+    else:
+
+        @app.get("/", include_in_schema=False)
+        async def no_ui() -> JSONResponse:
+            """Inform users the Web UI is not built yet."""
+            return JSONResponse({
+                "message": "Framekit API is running. Web UI has not been built.",
+                "hint": (
+                    "Run 'npm run build' from the repository root to build and copy UI assets. "
+                    "If this is an installed package, reinstall with bundled web assets."
+                ),
+                "api_docs": "/docs",
+            })
 
     return app
 

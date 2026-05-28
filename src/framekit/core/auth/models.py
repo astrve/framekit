@@ -69,7 +69,7 @@ class User:
 class UserStore:
     """SQLite-backed user store with bcrypt password hashing.
 
-    Requires the ``bcrypt`` package (installed via the ``web`` extra).
+    Requires the ``bcrypt`` package (included in the default install).
     Auth is disabled by default; enable via ``auth.enabled`` setting.
     """
 
@@ -113,7 +113,7 @@ class UserStore:
         try:
             import bcrypt  # type: ignore[import-untyped]
         except ImportError as exc:
-            raise RuntimeError("bcrypt package required — install framekit-cli[web]") from exc
+            raise RuntimeError("bcrypt package required — install framekit-cli") from exc
         salt = bcrypt.gensalt()
         return bcrypt.hashpw(password.encode(), salt).decode()
 

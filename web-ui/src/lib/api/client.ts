@@ -48,7 +48,7 @@ export async function fetchValidated<TSchema extends z.ZodTypeAny>(
       const body = await response.text();
       if (response.status === 401 && !path.startsWith("/api/v1/auth/")) {
         localStorage.removeItem(TOKEN_KEY);
-        window.location.href = "/login";
+        window.dispatchEvent(new CustomEvent("framekit:unauthorized"));
       }
       throw new ApiError(`API request failed for ${path}`, response.status, body);
     }

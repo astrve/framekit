@@ -1,0 +1,20 @@
+services:
+  framekit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: framekit-service:local
+    environment:
+      FRAMEKIT_CONFIG_DIR: /var/lib/framekit/config
+      FRAMEKIT_CACHE_DIR: /var/lib/framekit/cache
+    ports:
+      - "8000:8000"
+    volumes:
+      - framekit_config:/var/lib/framekit/config
+      - framekit_cache:/var/lib/framekit/cache
+      - ./Workspace:/media
+    restart: unless-stopped
+
+volumes:
+  framekit_config:
+  framekit_cache:

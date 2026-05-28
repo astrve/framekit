@@ -5,10 +5,10 @@ import { cn } from "@/lib/utils";
 
 interface CheckboxProps {
   checked: boolean;
-  onCheckedChange?: (checked: boolean) => void;
-  id?: string;
-  disabled?: boolean;
-  className?: string;
+  onCheckedChange?: ((checked: boolean) => void) | undefined;
+  id?: string | undefined;
+  disabled?: boolean | undefined;
+  className?: string | undefined;
 }
 
 export function Checkbox({ checked, onCheckedChange, id, disabled, className }: CheckboxProps) {

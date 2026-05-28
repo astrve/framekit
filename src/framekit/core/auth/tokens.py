@@ -60,7 +60,7 @@ def create_access_token(
     try:
         import jwt  # type: ignore[import-untyped]
     except ImportError as exc:
-        raise RuntimeError("PyJWT package required — install framekit-cli[web]") from exc
+        raise RuntimeError("PyJWT package required — install framekit-cli") from exc
 
     now = datetime.now(UTC)
     payload: dict[str, Any] = {
@@ -89,7 +89,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
         import jwt  # type: ignore[import-untyped]
         from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
     except ImportError as exc:
-        raise RuntimeError("PyJWT package required — install framekit-cli[web]") from exc
+        raise RuntimeError("PyJWT package required — install framekit-cli") from exc
 
     try:
         payload: dict[str, Any] = jwt.decode(

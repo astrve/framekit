@@ -129,6 +129,7 @@ export const VaultStatusSchema = z.object({
 export const TmdbTokenSchema = z.object({
   token: z.string(),
   is_set: z.boolean(),
+  encrypted: z.boolean().optional(),
   error: z.string().optional(),
 });
 
@@ -155,7 +156,7 @@ export const SeedboxSummarySchema = z.object({
 
 export const SeedboxListSchema = z.object({
   seedboxes: z.array(SeedboxSummarySchema),
-  default_by_profile: z.record(z.string()).optional(),
+  default_by_profile: z.record(z.string(), z.string()).optional(),
 });
 
 export const UploadTrackerSummarySchema = z.object({
@@ -219,6 +220,9 @@ export const ModuleJobSchema = z.object({
   live_stderr: z.string().optional(),
   result: RunModuleResultSchema.nullable().optional(),
   error: z.string().nullable().optional(),
+  origin: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+  priority: z.number().optional().default(0),
 });
 
 export const ModuleJobsListSchema = z.object({
@@ -308,6 +312,26 @@ export const WatchServiceStopSchema = z.object({
 
 export type WatchServiceStatus = z.infer<typeof WatchServiceStatusSchema>;
 export type WatchServiceStop = z.infer<typeof WatchServiceStopSchema>;
+
+// ── Service status (framekit serve) ──────────────────────────────────────────
+
+export const ServiceWatcherStateSchema = z.object({
+  status: z.enum(["running", "stopped", "error"]),
+  folders_active: z.number(),
+  last_error: z.string().nullable(),
+});
+
+export const ServiceStatusSchema = z.object({
+  status: z.enum(["running", "stopped", "starting"]),
+  pid: z.number().nullable(),
+  started_at: z.number().nullable(),
+  heartbeat_at: z.number().nullable(),
+  uptime_seconds: z.number().nullable(),
+  watcher: ServiceWatcherStateSchema.optional(),
+});
+
+export type ServiceWatcherState = z.infer<typeof ServiceWatcherStateSchema>;
+export type ServiceStatus = z.infer<typeof ServiceStatusSchema>;
 
 export type VaultStatus = z.infer<typeof VaultStatusSchema>;
 export type TmdbToken = z.infer<typeof TmdbTokenSchema>;
@@ -442,3 +466,28 @@ export const AliasListSchema = z.object({
 
 export type AliasItem = z.infer<typeof AliasItemSchema>;
 export type AliasList = z.infer<typeof AliasListSchema>;
+
+export const IntakeSourceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  source_id: z.string(),
+  enabled: z.boolean(),
+  default_preset: z.string().nullable().optional(),
+  created_at: z.string(),
+  // token only present in create response (shown once)
+  token: z.string().optional(),
+});
+
+export const IntakeSourceListSchema = z.object({
+  sources: z.array(IntakeSourceSchema),
+});
+
+export const IntakeReleaseResponseSchema = z.object({
+  job_id: z.string(),
+  accepted: z.boolean(),
+  dedup_hit: z.boolean(),
+});
+
+export type IntakeSource = z.infer<typeof IntakeSourceSchema>;
+export type IntakeSourceList = z.infer<typeof IntakeSourceListSchema>;
+export type IntakeReleaseResponse = z.infer<typeof IntakeReleaseResponseSchema>;

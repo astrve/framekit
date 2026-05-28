@@ -190,6 +190,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     queryKey: ["settings-profiles-nav"],
     queryFn: getSettingsProfiles,
     staleTime: 30_000,
+    enabled: pathname !== "/login",
+    retry: false,
   });
   const activeProfile = profilesQuery.data?.active ?? null;
 

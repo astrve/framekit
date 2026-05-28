@@ -20,8 +20,8 @@ describe("parseSubSteps", () => {
     const stdout = "[INFO] Renamer in progress";
     const steps = parseSubSteps("pipeline", stdout, "");
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toContain("Renamer");
-    expect(steps[0].status).toBe("running");
+    expect(steps[0]!.label).toContain("Renamer");
+    expect(steps[0]!.status).toBe("running");
   });
 
   it("parses multiple pipeline sub-steps", () => {
@@ -39,14 +39,14 @@ describe("parseSubSteps", () => {
     const stdout = "Processing 2 of 5: Movie.2024.BluRay";
     const steps = parseSubSteps("batch", stdout, "");
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toContain("Movie.2024.BluRay");
+    expect(steps[0]!.label).toContain("Movie.2024.BluRay");
   });
 
   it("parses batch per-release line (FR)", () => {
     const stdout = "Traitement 1 sur 3 : Release.Name";
     const steps = parseSubSteps("batch", stdout, "");
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toContain("Release.Name");
+    expect(steps[0]!.label).toContain("Release.Name");
   });
 
   // renamer (added in Batch K) ────────────────────────────────────────────────
@@ -55,21 +55,21 @@ describe("parseSubSteps", () => {
     const stdout = "[OK]   Rename operation completed.";
     const steps = parseSubSteps("renamer", stdout, "");
     expect(steps.length).toBeGreaterThan(0);
-    expect(steps[0].label).toMatch(/[Rr]ename/);
+    expect(steps[0]!.label).toMatch(/[Rr]ename/);
   });
 
   it("parses renamer 'Planned changes' count — label is the digit", () => {
     const stdout = "[INFO] Planned changes: 4";
     const steps = parseSubSteps("renamer", stdout, "");
     expect(steps.length).toBeGreaterThan(0);
-    expect(steps[0].label).toBe("4");
+    expect(steps[0]!.label).toBe("4");
   });
 
   it("parses renamer 'Modified' count — label is the digit", () => {
     const stdout = "[INFO] Modified: 7";
     const steps = parseSubSteps("renamer", stdout, "");
     expect(steps.length).toBeGreaterThan(0);
-    expect(steps[0].label).toBe("7");
+    expect(steps[0]!.label).toBe("7");
   });
 
   it("parses renamer dry-run completed line", () => {
@@ -84,7 +84,7 @@ describe("parseSubSteps", () => {
     const stdout = "[OK]   NFO written: /releases/Movie.nfo";
     const steps = parseSubSteps("nfo", stdout, "");
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toContain("Movie.nfo");
+    expect(steps[0]!.label).toContain("Movie.nfo");
   });
 
   it("parses multiple nfo written lines into multiple steps", () => {
@@ -102,7 +102,7 @@ describe("parseSubSteps", () => {
     const stdout = "[INFO] Output: /releases/prez.html";
     const steps = parseSubSteps("prez", stdout, "");
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toContain("prez.html");
+    expect(steps[0]!.label).toContain("prez.html");
   });
 
   it("parses prez 'Presentation generated' line", () => {
@@ -150,7 +150,7 @@ describe("parseSubSteps", () => {
     const stdout = `[OK]   NFO written: ${long}`;
     const steps = parseSubSteps("nfo", stdout, "");
     if (steps.length > 0) {
-      expect(steps[0].label.length).toBeLessThanOrEqual(120);
+      expect(steps[0]!.label.length).toBeLessThanOrEqual(120);
     }
   });
 });
@@ -166,6 +166,7 @@ describe("runTimeline", () => {
       started_at: null,
       finished_at: null,
       request: {},
+      priority: 0,
     };
   }
 

@@ -280,6 +280,15 @@ def get_nfo_logo_registry_file() -> Path:
     return get_user_nfo_logos_dir() / "registry.json"
 
 
+def get_service_dir() -> Path:
+    """Return the service runtime directory (lock, PID, heartbeat state).
+
+    All files under this directory are ephemeral and may be cleaned up on
+    startup when no lock is held.
+    """
+    return get_config_dir() / "service"
+
+
 def get_security_dir() -> Path:
     """Get the directory for security-related files.
 
