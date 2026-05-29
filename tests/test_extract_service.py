@@ -23,8 +23,8 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from framekit.core.tools import ToolRegistry  # noqa: E402
-from framekit.modules.extract.models import (  # noqa: E402
+from ouro.core.tools import ToolRegistry  # noqa: E402
+from ouro.modules.extract.models import (  # noqa: E402
     AudioFormat,
     AudioTrack,
     ExtractionOptions,
@@ -77,7 +77,7 @@ class TestExtractionService:
             ],
         )
         monkeypatch.setattr(
-            "framekit.modules.extract.service.probe_media_file", lambda _: fake_info
+            "ouro.modules.extract.service.probe_media_file", lambda _: fake_info
         )
 
     @pytest.fixture
@@ -146,14 +146,14 @@ class TestExtractionService:
 
     def test_service_initialization(self, mock_registry):
         """Test service can be initialized with registry."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         service = ExtractionService(mock_registry)
         assert service.registry == mock_registry
 
     def test_extract_subtitles_single_file(self, mock_registry, mock_subtitle_extractor, tmp_path):
         """Test extracting subtitles from a single file."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         # Create test file
         test_file = tmp_path / "test.mkv"
@@ -161,7 +161,7 @@ class TestExtractionService:
 
         # Mock the extractor
         with patch(
-            "framekit.modules.extract.service.SubtitleExtractor",
+            "ouro.modules.extract.service.SubtitleExtractor",
             return_value=mock_subtitle_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -183,7 +183,7 @@ class TestExtractionService:
 
     def test_extract_subtitles_batch(self, mock_registry, mock_subtitle_extractor, tmp_path):
         """Test batch subtitle extraction from multiple files."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         # Create test files
         test_files = [tmp_path / f"test{i}.mkv" for i in range(3)]
@@ -191,7 +191,7 @@ class TestExtractionService:
             f.touch()
 
         with patch(
-            "framekit.modules.extract.service.SubtitleExtractor",
+            "ouro.modules.extract.service.SubtitleExtractor",
             return_value=mock_subtitle_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -209,14 +209,14 @@ class TestExtractionService:
 
     def test_extract_audio_single_file(self, mock_registry, mock_audio_extractor, tmp_path):
         """Test extracting audio from a single file."""
-        from framekit.modules.extract.models import AudioExtractionOptions
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.models import AudioExtractionOptions
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
         with patch(
-            "framekit.modules.extract.service.AudioExtractor",
+            "ouro.modules.extract.service.AudioExtractor",
             return_value=mock_audio_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -240,15 +240,15 @@ class TestExtractionService:
         self, mock_registry, mock_audio_extractor, tmp_path
     ):
         """Original/copy audio extraction must not emit invalid '.audio' files."""
-        from framekit.modules.extract.models import AudioExtractionOptions
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.models import AudioExtractionOptions
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "movie.mkv"
         test_file.touch()
         mock_audio_extractor.detect_audio_format.return_value = AudioFormat.AAC
 
         with patch(
-            "framekit.modules.extract.service.AudioExtractor",
+            "ouro.modules.extract.service.AudioExtractor",
             return_value=mock_audio_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -262,14 +262,14 @@ class TestExtractionService:
 
     def test_extract_video_single_file(self, mock_registry, mock_video_extractor, tmp_path):
         """Test extracting video from a single file."""
-        from framekit.modules.extract.models import VideoExtractionOptions
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.models import VideoExtractionOptions
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
         with patch(
-            "framekit.modules.extract.service.VideoExtractor",
+            "ouro.modules.extract.service.VideoExtractor",
             return_value=mock_video_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -293,8 +293,8 @@ class TestExtractionService:
         self, mock_registry, mock_audio_extractor, tmp_path, monkeypatch: pytest.MonkeyPatch
     ):
         """Audio output names should use LANG/ROLE and add index on collisions."""
-        from framekit.modules.extract.models import AudioExtractionOptions
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.models import AudioExtractionOptions
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "movie.mkv"
         test_file.touch()
@@ -332,11 +332,11 @@ class TestExtractionService:
             hdr_format=None,
             duration_ms=1000,
         )
-        monkeypatch.setattr("framekit.modules.extract.service.probe_media_file", lambda _: fake_info)
+        monkeypatch.setattr("ouro.modules.extract.service.probe_media_file", lambda _: fake_info)
         mock_audio_extractor.detect_audio_format.return_value = AudioFormat.AAC
 
         with patch(
-            "framekit.modules.extract.service.AudioExtractor",
+            "ouro.modules.extract.service.AudioExtractor",
             return_value=mock_audio_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -350,8 +350,8 @@ class TestExtractionService:
         self, mock_registry, mock_subtitle_extractor, tmp_path, monkeypatch: pytest.MonkeyPatch
     ):
         """Subtitle output names should use LANG and role labels."""
-        from framekit.modules.extract.models import ExtractionOptions
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.models import ExtractionOptions
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "movie.mkv"
         test_file.touch()
@@ -391,11 +391,11 @@ class TestExtractionService:
             hdr_format=None,
             duration_ms=1000,
         )
-        monkeypatch.setattr("framekit.modules.extract.service.probe_media_file", lambda _: fake_info)
+        monkeypatch.setattr("ouro.modules.extract.service.probe_media_file", lambda _: fake_info)
         mock_subtitle_extractor.detect_subtitle_format.return_value = SubtitleFormat.SRT
 
         with patch(
-            "framekit.modules.extract.service.SubtitleExtractor",
+            "ouro.modules.extract.service.SubtitleExtractor",
             return_value=mock_subtitle_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -407,7 +407,7 @@ class TestExtractionService:
 
     def test_progress_callback_invoked(self, mock_registry, mock_subtitle_extractor, tmp_path):
         """Test that progress callback is invoked during extraction."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
@@ -415,7 +415,7 @@ class TestExtractionService:
         progress_callback = Mock()
 
         with patch(
-            "framekit.modules.extract.service.SubtitleExtractor",
+            "ouro.modules.extract.service.SubtitleExtractor",
             return_value=mock_subtitle_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -432,7 +432,7 @@ class TestExtractionService:
 
     def test_error_handling_partial_success(self, mock_registry, mock_subtitle_extractor, tmp_path):
         """Test error handling with partial success."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         test_files = [tmp_path / f"test{i}.mkv" for i in range(3)]
         for f in test_files:
@@ -462,7 +462,7 @@ class TestExtractionService:
         ]
 
         with patch(
-            "framekit.modules.extract.service.SubtitleExtractor",
+            "ouro.modules.extract.service.SubtitleExtractor",
             return_value=mock_subtitle_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -482,7 +482,7 @@ class TestExtractionService:
 
     def test_output_directory_creation(self, mock_registry, mock_subtitle_extractor, tmp_path):
         """Test that output directory is created if it doesn't exist."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
@@ -491,7 +491,7 @@ class TestExtractionService:
         assert not output_dir.exists()
 
         with patch(
-            "framekit.modules.extract.service.SubtitleExtractor",
+            "ouro.modules.extract.service.SubtitleExtractor",
             return_value=mock_subtitle_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -510,7 +510,7 @@ class TestExtractionService:
 
     def test_extract_all_tracks(self, mock_registry, mock_subtitle_extractor, tmp_path):
         """Test extracting all tracks regardless of filters."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
@@ -532,7 +532,7 @@ class TestExtractionService:
         ]
 
         with patch(
-            "framekit.modules.extract.service.SubtitleExtractor",
+            "ouro.modules.extract.service.SubtitleExtractor",
             return_value=mock_subtitle_extractor,
         ):
             service = ExtractionService(mock_registry)
@@ -551,7 +551,7 @@ class TestExtractionService:
 
     def test_nonexistent_file_handling(self, mock_registry):
         """Test handling of nonexistent files."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         service = ExtractionService(mock_registry)
         options = ExtractionOptions(output_format=SubtitleFormat.SRT)
@@ -570,7 +570,7 @@ class TestExtractionService:
 
     def test_empty_file_list(self, mock_registry):
         """Test handling of empty file list."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         service = ExtractionService(mock_registry)
         options = ExtractionOptions(output_format=SubtitleFormat.SRT)
@@ -587,7 +587,7 @@ class TestExtractionService:
         self, mock_registry, mock_subtitle_extractor, tmp_path, monkeypatch: pytest.MonkeyPatch
     ):
         """Embedded font subtitle-like streams must be skipped."""
-        from framekit.modules.extract.service import ExtractionService
+        from ouro.modules.extract.service import ExtractionService
 
         test_file = tmp_path / "fonty.mkv"
         test_file.touch()
@@ -627,11 +627,11 @@ class TestExtractionService:
             ],
         )
         monkeypatch.setattr(
-            "framekit.modules.extract.service.probe_media_file", lambda _: fake_info
+            "ouro.modules.extract.service.probe_media_file", lambda _: fake_info
         )
 
         with patch(
-            "framekit.modules.extract.service.SubtitleExtractor",
+            "ouro.modules.extract.service.SubtitleExtractor",
             return_value=mock_subtitle_extractor,
         ):
             service = ExtractionService(mock_registry)

@@ -46,7 +46,7 @@ export function BatchPage() {
   const [autoMode, setAutoMode] = useState(true);
   const [manualMode, setManualMode] = useState(false);
   const [dashboard, setDashboard] = useState(false);
-  const [dryRun, setDryRun] = useState(false);
+  const [dryRun, setDryRun] = useState(true);
   const [confirmDestructive, setConfirmDestructive] = useState(true);
   const [asyncRun, setAsyncRun] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -96,7 +96,7 @@ export function BatchPage() {
     return args.join(" ").trim();
   }, [announce, autoMode, dashboard, dryRun, enabledModules, locale, manualMode, parentPath, pipelinePreset, prezPreset]);
 
-  const previewCommand = useMemo(() => `framekit batch ${argsText}`.trim(), [argsText]);
+  const previewCommand = useMemo(() => `ouro batch ${argsText}`.trim(), [argsText]);
 
   function toggleModule(moduleName: string, checked: boolean) {
     if (checked) {

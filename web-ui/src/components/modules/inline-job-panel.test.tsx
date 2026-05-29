@@ -77,7 +77,7 @@ function makeJob(overrides: Partial<ModuleJob> = {}): ModuleJob {
 function makeResult(overrides: Partial<RunModuleResult> = {}): RunModuleResult {
   return {
     ok: true,
-    argv: ["framekit"],
+    argv: ["ouro"],
     returncode: 0,
     stdout: "",
     stderr: "",
@@ -121,7 +121,7 @@ const VALIDATE_PAYLOAD = {
       severity: "warning",
       category: "nfo",
       message: "No NFO file found",
-      suggestion: "Run fk nfo",
+      suggestion: "Run ouro nfo",
     },
   ],
 };

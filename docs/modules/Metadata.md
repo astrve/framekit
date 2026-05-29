@@ -7,11 +7,11 @@ Fetches release metadata (title, year, poster, rating, overview, IMDb ID) from T
 ## Usage
 
 ```bash
-fk metadata /path/to/release [OPTIONS]
-fk metadata /path/to/release --language fr-FR
-fk metadata /path/to/release --refresh
-fk metadata --set-token
-fk metadata --status
+ouro metadata /path/to/release [OPTIONS]
+ouro metadata /path/to/release --language fr-FR
+ouro metadata /path/to/release --refresh
+ouro metadata --set-token
+ouro metadata --status
 ```
 
 ---
@@ -36,10 +36,10 @@ Get a free Read Access Token from [themoviedb.org/settings/api](https://www.them
 Store it:
 
 ```bash
-fk metadata --set-token
+ouro metadata --set-token
 ```
 
-When the security vault is enabled, the token is stored encrypted. Otherwise it is stored as plain text in `framekit.yaml`.
+When the security vault is enabled, the token is stored encrypted. Otherwise it is stored as plain text in `ouro.yaml`.
 
 ---
 
@@ -65,10 +65,10 @@ Additional providers may be added in future releases.
 
 ## Cache
 
-Responses are cached in `~/.cache/framekit/metadata/`. Clear with:
+Responses are cached in `~/.cache/ouro/metadata/`. Clear with:
 
 ```bash
-fk metadata /path/to/release --refresh
+ouro metadata /path/to/release --refresh
 ```
 
 Or adjust TTL:
@@ -96,7 +96,7 @@ metadata:
 ## Status output
 
 ```bash
-fk metadata --status
+ouro metadata --status
 ```
 
 Shows current token (masked), provider, language, and cache TTL.

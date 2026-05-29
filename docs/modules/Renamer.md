@@ -7,9 +7,9 @@ Renames release files and folders to a structured, consistent format. Works on M
 ## Usage
 
 ```bash
-fk renamer /path/to/release [OPTIONS]
-fk renamer /path/to/release --auto
-fk renamer /path/to/release --dry-run
+ouro renamer /path/to/release [OPTIONS]
+ouro renamer /path/to/release --auto
+ouro renamer /path/to/release --dry-run
 ```
 
 ---

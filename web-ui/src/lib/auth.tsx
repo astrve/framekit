@@ -1,12 +1,13 @@
 /**
- * Auth context for Framekit web UI.
+ * Auth context for Ouro web UI.
  * Stores JWT token in localStorage. Disabled when server has no users.
  */
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
+import { getAuthMe } from "@/lib/api/endpoints";
 import type { AuthUser } from "@/lib/api/schemas";
 
-const TOKEN_KEY = "framekit_token";
+const TOKEN_KEY = "ouro_token";
 
 interface AuthContextValue {
   token: string | null;
@@ -35,8 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return;
     }
-    import("@/lib/api/endpoints")
-      .then(({ getAuthMe }) => getAuthMe(stored))
+    getAuthMe(stored)
       .then((me) => {
         setToken(stored);
         setUser(me);
@@ -55,8 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(null);
       setUser(null);
     };
-    window.addEventListener("framekit:unauthorized", handleUnauthorized);
-    return () => window.removeEventListener("framekit:unauthorized", handleUnauthorized);
+    window.addEventListener("ouro:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("ouro:unauthorized", handleUnauthorized);
   }, []);
 
   const login = useCallback((newToken: string, newUser: AuthUser) => {

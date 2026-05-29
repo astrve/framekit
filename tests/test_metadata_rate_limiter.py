@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from framekit.modules.metadata.rate_limiter import RateLimit, RateLimiter
+from ouro.modules.metadata.rate_limiter import RateLimit, RateLimiter
 
 
 def test_rate_limit_dataclass():

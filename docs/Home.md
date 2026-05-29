@@ -1,6 +1,6 @@
-# Framekit
+# Ouro
 
-**Framekit** is a CLI-first toolkit for preparing and publishing media releases from local folders. It automates the full release workflow — renaming, MKV track cleaning, metadata fetching, NFO generation, BBCode/HTML presentations, torrent creation, and tracker uploads — with a composable pipeline that can run fully unattended.
+**Ouro** is a CLI-first toolkit for preparing and publishing media releases from local folders. It automates the full release workflow — renaming, MKV track cleaning, metadata fetching, NFO generation, BBCode/HTML presentations, torrent creation, and tracker uploads — with a composable pipeline that can run fully unattended.
 
 ---
 
@@ -13,8 +13,8 @@ folder → renamer → cleanmkv → metadata → nfo → prez → torrent → up
 Run the full pipeline interactively or in a single command:
 
 ```bash
-fk pipeline /path/to/release
-fk pipeline /path/to/release --auto --pipeline-preset multi_fr
+ouro pipeline /path/to/release
+ouro pipeline /path/to/release --auto --pipeline-preset multi_fr
 ```
 
 ---
@@ -23,7 +23,7 @@ fk pipeline /path/to/release --auto --pipeline-preset multi_fr
 
 | Topic | Page |
 |-------|------|
-| Install Framekit | [Installation](Installation.md) |
+| Install Ouro | [Installation](Installation.md) |
 | First-run walkthrough | [Quick Start](Quick-Start.md) |
 | All config keys | [Configuration](Configuration.md) |
 | All CLI commands | [CLI Reference](CLI-Reference.md) |
@@ -41,27 +41,27 @@ fk pipeline /path/to/release --auto --pipeline-preset multi_fr
 
 | Module | Command | Status |
 |--------|---------|--------|
-| Inspect release | `fk inspect` | Stable |
-| Rename files | `fk renamer` | Stable |
-| Clean MKV tracks | `fk cleanmkv` | Stable |
-| Fetch metadata | `fk metadata` | Stable |
-| Generate NFO | `fk nfo` | Stable |
-| Build presentation | `fk prez` | Stable |
-| Create torrent | `fk torrent` | Stable |
-| Validate release | `fk validate` | Stable |
-| Screenshot extraction | `fk screenshot` | Stable |
-| Video encoding | `fk encode` | Stable |
-| Batch processing | `fk batch` | Stable |
-| Upload to trackers | `fk upload` | Beta |
-| Stream extraction | `fk extract` | Beta |
-| Folder watcher | `fk watch` | Beta |
-| Seedbox transfer | `fk seedbox` | Beta |
+| Inspect release | `ouro inspect` | Stable |
+| Rename files | `ouro renamer` | Stable |
+| Clean MKV tracks | `ouro cleanmkv` | Stable |
+| Fetch metadata | `ouro metadata` | Stable |
+| Generate NFO | `ouro nfo` | Stable |
+| Build presentation | `ouro prez` | Stable |
+| Create torrent | `ouro torrent` | Stable |
+| Validate release | `ouro validate` | Stable |
+| Screenshot extraction | `ouro screenshot` | Stable |
+| Video encoding | `ouro encode` | Stable |
+| Batch processing | `ouro batch` | Stable |
+| Upload to trackers | `ouro upload` | Beta |
+| Stream extraction | `ouro extract` | Beta |
+| Folder watcher | `ouro watch` | Beta |
+| Seedbox transfer | `ouro seedbox` | Beta |
 
 ---
 
 ## External tools
 
-Framekit shells out to these — install them and keep them on `PATH`:
+Ouro shells out to these — install them and keep them on `PATH`:
 
 | Tool | Package | Used by |
 |------|---------|---------|
@@ -74,4 +74,4 @@ Framekit shells out to these — install them and keep them on `PATH`:
 
 ## Supported platforms
 
-Python **3.12+** on Linux, macOS, and Windows. Pre-built standalone binaries for `linux-x86_64`, `macos-arm64`, and `windows-x86_64` are published on the [Releases page](https://github.com/astrve/framekit/releases).
+Python **3.12+** on Linux, macOS, and Windows. Pre-built standalone binaries for `linux-x86_64`, `macos-arm64`, and `windows-x86_64` are published on the [Releases page](https://github.com/astrve/ouro/releases).

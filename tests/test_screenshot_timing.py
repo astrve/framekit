@@ -13,8 +13,8 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from framekit.core.tools import ToolRegistry  # noqa: E402
-from framekit.modules.screenshot.analyzer import FrameAnalyzer  # noqa: E402
+from ouro.core.tools import ToolRegistry  # noqa: E402
+from ouro.modules.screenshot.analyzer import FrameAnalyzer  # noqa: E402
 
 
 class TestTimestampMargins:

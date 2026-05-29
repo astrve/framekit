@@ -7,8 +7,8 @@ Read-only release scanner. Reports detected files, MKV track details, and pipeli
 ## Usage
 
 ```bash
-fk inspect /path/to/release
-fk inspect /path/to/release --json
+ouro inspect /path/to/release
+ouro inspect /path/to/release --json
 ```
 
 ---

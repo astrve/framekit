@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from framekit.core.models.metadata import (
+from ouro.core.models.metadata import (
     EpisodeMetadata,
     MetadataCandidate,
     MetadataLookupRequest,
     MovieMetadata,
     SeasonMetadata,
 )
-from framekit.modules.metadata.base import MetadataProvider
-from framekit.modules.metadata.chain import ProviderChain, ProviderResult
+from ouro.modules.metadata.base import MetadataProvider
+from ouro.modules.metadata.chain import ProviderChain, ProviderResult
 
 
 class MockProvider(MetadataProvider):

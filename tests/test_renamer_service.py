@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from framekit.core.models.renamer import RenamePlanItem
-from framekit.modules.renamer import service as renamer_service
+from ouro.core.models.renamer import RenamePlanItem
+from ouro.modules.renamer import service as renamer_service
 
 
 def test_renamer_service_reports_planned_collision_and_unchanged(monkeypatch, tmp_path):

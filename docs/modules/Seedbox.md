@@ -7,11 +7,11 @@ Transfers releases to remote seedboxes via rclone. Supports multiple named seedb
 ## Usage
 
 ```bash
-fk seedbox list
-fk seedbox send /path/to/release --to my-seedbox
-fk seedbox history
-fk seedbox history --seedbox my-seedbox
-fk seedbox add
+ouro seedbox list
+ouro seedbox send /path/to/release --to my-seedbox
+ouro seedbox history
+ouro seedbox history --seedbox my-seedbox
+ouro seedbox add
 ```
 
 ---
@@ -29,7 +29,7 @@ fk seedbox add
 
 ## Setup
 
-Seedbox profiles are stored in `framekit.yaml`. Credentials (remote paths, auth) are managed by rclone — Framekit only stores seedbox metadata.
+Seedbox profiles are stored in `ouro.yaml`. Credentials (remote paths, auth) are managed by rclone — Ouro only stores seedbox metadata.
 
 ### 1. Configure rclone
 
@@ -39,13 +39,13 @@ rclone config
 
 Add a remote for your seedbox (SFTP, FTP, WebDAV, etc.).
 
-### 2. Add a seedbox profile to Framekit
+### 2. Add a seedbox profile to Ouro
 
 ```bash
-fk seedbox add
+ouro seedbox add
 ```
 
-Or edit `framekit.yaml` directly:
+Or edit `ouro.yaml` directly:
 
 ```yaml
 seedbox:
@@ -62,7 +62,7 @@ seedbox:
 ## Sending a release
 
 ```bash
-fk seedbox send /path/to/Movie.2024.1080p.BluRay --to my-seedbox
+ouro seedbox send /path/to/Movie.2024.1080p.BluRay --to my-seedbox
 ```
 
 Calls `rclone copy` with the configured remote and path. Transfer timeout is 24 hours.
@@ -74,13 +74,13 @@ Calls `rclone copy` with the configured remote and path. Transfer timeout is 24 
 Transfer history is stored as newline-delimited JSON in:
 
 ```
-~/.config/framekit/seedbox/history.ndjson
+~/.config/ouro/seedbox/history.ndjson
 ```
 
 ```bash
-fk seedbox history              # last 50 transfers
-fk seedbox history --limit 20   # limit entries
-fk seedbox history --seedbox my-seedbox  # filter by profile
+ouro seedbox history              # last 50 transfers
+ouro seedbox history --limit 20   # limit entries
+ouro seedbox history --seedbox my-seedbox  # filter by profile
 ```
 
 ---

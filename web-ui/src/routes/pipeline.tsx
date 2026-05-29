@@ -61,7 +61,7 @@ export function PipelinePage() {
   }, [settingsEnabledModules]);
   const [autoMode, setAutoMode] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
-  const [dryRun, setDryRun] = useState(false);
+  const [dryRun, setDryRun] = useState(true);
   const [selectTemplates, setSelectTemplates] = useState(false);
   const [selectTerms, setSelectTerms] = useState(false);
   const [confirmDestructive, setConfirmDestructive] = useState(true);
@@ -119,7 +119,7 @@ export function PipelinePage() {
     return args.join(" ").trim();
   }, [announce, autoMode, dryRun, enabledModules, nfoLocale, pipelinePreset, prezPreset, previewMode, releasePath, removeTerms, selectTemplates, selectTerms]);
 
-  const previewCommand = useMemo(() => `framekit pipeline ${argsText}`.trim(), [argsText]);
+  const previewCommand = useMemo(() => `ouro pipeline ${argsText}`.trim(), [argsText]);
 
   function toggleModule(moduleName: string, checked: boolean) {
     if (checked) {

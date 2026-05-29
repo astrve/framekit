@@ -7,10 +7,10 @@ Runs the full pipeline over multiple release folders in one command. Displays a 
 ## Usage
 
 ```bash
-fk batch /path/to/releases/ [OPTIONS]
-fk batch /path/to/releases/ --auto --pipeline-preset multi_fr
-fk batch /path/to/releases/ --workers 2
-fk batch /path/to/releases/ --dry-run
+ouro batch /path/to/releases/ [OPTIONS]
+ouro batch /path/to/releases/ --auto --pipeline-preset multi_fr
+ouro batch /path/to/releases/ --workers 2
+ouro batch /path/to/releases/ --dry-run
 ```
 
 ---
@@ -30,7 +30,7 @@ fk batch /path/to/releases/ --dry-run
 
 ## Detection
 
-Batch scans the root directory for release folders. A subfolder is treated as a release if it contains at least one `.mkv` file. Framekit auto-detects whether each release is a movie, TV series, or episode pack.
+Batch scans the root directory for release folders. A subfolder is treated as a release if it contains at least one `.mkv` file. Ouro auto-detects whether each release is a movie, TV series, or episode pack.
 
 ---
 
@@ -62,10 +62,10 @@ Documentary.2023.720p.AMZN    ✗ Failed  metadata: no match found
 
 ## Error handling
 
-Failed releases do not stop the batch. Framekit logs the error, marks the release as failed, and continues with the next one. Check `fk logs --last` for details.
+Failed releases do not stop the batch. Ouro logs the error, marks the release as failed, and continues with the next one. Check `ouro logs --last` for details.
 
 ---
 
 ## Queue persistence
 
-The batch queue is saved between runs in `~/.local/share/framekit/batch_queue.json`. If the process is interrupted, re-run the same command to resume — already-completed releases are skipped.
+The batch queue is saved between runs in `~/.local/share/ouro/batch_queue.json`. If the process is interrupted, re-run the same command to resume — already-completed releases are skipped.

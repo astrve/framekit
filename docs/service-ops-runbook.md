@@ -1,4 +1,4 @@
-# Framekit Service Ops Runbook
+# Ouro Service Ops Runbook
 
 Operational runbook for service lifecycle, first-admin bootstrap, intake token flow,
 and backup/restore across Windows, Linux systemd user service, and Docker.
@@ -13,7 +13,7 @@ uv build --sdist --wheel
 ```
 
 Why:
-- Refresh packaged Web UI assets in `src/framekit/web/static`.
+- Refresh packaged Web UI assets in `src/ouro/web/static`.
 - Validate wheel/sdist include static bundle.
 
 ---
@@ -23,17 +23,17 @@ Why:
 ### Local (Windows/Linux)
 
 ```cmd
-framekit user add --admin
+ouro user add --admin
 ```
 
 ### Docker (before first `up` when binding `0.0.0.0`)
 
 ```bash
-docker compose -f docker-compose.service.yml run --rm framekit user add --admin
+docker compose -f docker-compose.service.yml run --rm ouro user add --admin
 ```
 
 Notes:
-- `framekit serve --host 0.0.0.0` requires auth/admin guard satisfied.
+- `ouro serve --host 0.0.0.0` requires auth/admin guard satisfied.
 - Admin record is persisted in mounted config volume.
 
 ---
@@ -43,23 +43,23 @@ Notes:
 ### Windows
 
 ```cmd
-framekit service install --mode=task
-framekit service start
-framekit service status
-framekit service logs -f
-framekit service stop
-framekit service uninstall
+ouro service install --mode=task
+ouro service start
+ouro service status
+ouro service logs -f
+ouro service stop
+ouro service uninstall
 ```
 
 ### Linux (`systemd --user`)
 
 ```bash
-framekit service install --mode=systemd
-framekit service start --mode=systemd
-framekit service status
-framekit service logs -f
-framekit service stop --mode=systemd
-framekit service uninstall --mode=systemd
+ouro service install --mode=systemd
+ouro service start --mode=systemd
+ouro service status
+ouro service logs -f
+ouro service stop --mode=systemd
+ouro service uninstall --mode=systemd
 ```
 
 ### Docker
@@ -67,7 +67,7 @@ framekit service uninstall --mode=systemd
 ```bash
 docker compose -f docker-compose.service.yml up -d
 docker compose -f docker-compose.service.yml ps
-docker compose -f docker-compose.service.yml logs -f framekit
+docker compose -f docker-compose.service.yml logs -f ouro
 docker compose -f docker-compose.service.yml down
 ```
 
@@ -141,8 +141,8 @@ curl -fsS -X POST http://127.0.0.1:8000/api/v1/intake/release \
 
 Backup these paths together:
 
-- config root (`FRAMEKIT_CONFIG_DIR` or platform default):
-  - `framekit.yaml`
+- config root (`OURO_CONFIG_DIR` or platform default):
+  - `ouro.yaml`
   - `users.db`
   - `intake_sources.json`
   - `webhooks.json`
@@ -150,7 +150,7 @@ Backup these paths together:
   - `runs/ledger.ndjson`
   - `security/vault.enc`
   - `security/master.key`
-- cache root (`FRAMEKIT_CACHE_DIR` or platform default):
+- cache root (`OURO_CACHE_DIR` or platform default):
   - `web/module_jobs.sqlite3`
 
 Notes:

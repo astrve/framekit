@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from framekit.core.reporting import OperationReport, ProgressMetrics
+from ouro.core.reporting import OperationReport, ProgressMetrics
 
 
 class TestProgressMetrics:
@@ -173,7 +173,7 @@ class TestProgressContext:
 
     def test_enhanced_progress_basic(self):
         """Test basic enhanced progress context."""
-        from framekit.ui.progress import enhanced_progress
+        from ouro.ui.progress import enhanced_progress
 
         with enhanced_progress("Test", total=10) as progress:
             assert progress is not None
@@ -181,7 +181,7 @@ class TestProgressContext:
 
     def test_enhanced_progress_with_metrics(self):
         """Test enhanced progress with metrics tracking."""
-        from framekit.ui.progress import enhanced_progress
+        from ouro.ui.progress import enhanced_progress
 
         with enhanced_progress("Test", total=10, show_metrics=True) as progress:
             progress(1, success=True)
@@ -190,7 +190,7 @@ class TestProgressContext:
 
     def test_enhanced_progress_with_bytes(self):
         """Test enhanced progress with byte tracking."""
-        from framekit.ui.progress import enhanced_progress
+        from ouro.ui.progress import enhanced_progress
 
         with enhanced_progress(
             "Test",
@@ -202,7 +202,7 @@ class TestProgressContext:
 
     def test_enhanced_progress_summary(self):
         """Test progress summary generation."""
-        from framekit.ui.progress import enhanced_progress
+        from ouro.ui.progress import enhanced_progress
 
         with enhanced_progress("Test", total=10, show_summary=True) as progress:
             for _ in range(8):
@@ -217,7 +217,7 @@ class TestProgressMetricsFormatting:
 
     def test_format_rate(self):
         """Test rate formatting."""
-        from framekit.ui.progress import format_rate
+        from ouro.ui.progress import format_rate
 
         assert format_rate(0.5) == "0.50 items/s"
         assert format_rate(1.0) == "1.00 items/s"
@@ -225,7 +225,7 @@ class TestProgressMetricsFormatting:
 
     def test_format_bytes_rate(self):
         """Test bytes rate formatting."""
-        from framekit.ui.progress import format_bytes_rate
+        from ouro.ui.progress import format_bytes_rate
 
         assert "B/s" in format_bytes_rate(100)
         assert "KB/s" in format_bytes_rate(1024 * 10)
@@ -233,7 +233,7 @@ class TestProgressMetricsFormatting:
 
     def test_format_compression_ratio(self):
         """Test compression ratio formatting."""
-        from framekit.ui.progress import format_compression_ratio
+        from ouro.ui.progress import format_compression_ratio
 
         assert format_compression_ratio(50.0) == "50.0%"
         assert format_compression_ratio(75.5) == "75.5%"

@@ -15,8 +15,8 @@ from typing import Any
 
 import pytest
 
-from framekit.core.cache.manager import CacheManager
-from framekit.core.cache.storage import CacheStorage
+from ouro.core.cache.manager import CacheManager
+from ouro.core.cache.storage import CacheStorage
 
 
 @pytest.fixture

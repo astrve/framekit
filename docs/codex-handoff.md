@@ -1,4 +1,10 @@
-# Codex Handoff — Framekit
+# Codex Handoff — Ouro
+
+Migration note:
+- Rename is strict: CLI command is `ouro` only.
+- Package/project name is `ouro-auto`.
+- Config/cache/service defaults now use `ouro` paths.
+- No automatic deletion/move of old `framekit` local data.
 
 ## Current completed state
 
@@ -19,8 +25,8 @@ Done:
 ### Service mode (S1–S5)
 
 Done:
-- `framekit serve` with lock/PID/heartbeat.
-- Packaged static first (`framekit/web/static`), source fallback second (`web-ui/dist`).
+- `ouro serve` with lock/PID/heartbeat.
+- Packaged static first (`ouro/web/static`), source fallback second (`web-ui/dist`).
 - DB-first queue, orphan recovery, Retry/Resume v1.
 - Queue fields: `attempts`, `max_attempts`, `next_retry_at`, `last_failure_kind`.
 - Embedded watcher supervision.
@@ -64,7 +70,7 @@ Done:
   - `npm run build`
   - targeted service/web tests
   - `uv build --sdist --wheel`
-  - wheel smoke install + `framekit serve` + `/healthz` + index check
+  - wheel smoke install + `ouro serve` + `/healthz` + index check
 - Pytest diagnostic CI job (non-blocking): collect order, durations, tracemalloc subset.
 
 ---
@@ -90,9 +96,9 @@ Runner caveat:
 ## Exact commands Codex should run first
 
 ```cmd
-uv run framekit --version
-uv run framekit serve --help
-uv run framekit service --help
+uv run ouro --version
+uv run ouro serve --help
+uv run ouro service --help
 npm run build
 uv build --sdist --wheel
 ```
@@ -100,9 +106,9 @@ uv build --sdist --wheel
 Optional wheel smoke (isolated config dir):
 
 ```cmd
-set FRAMEKIT_CONFIG_DIR=%CD%\.smoke-config
-set FRAMEKIT_CONFIG=%CD%\.smoke-config\framekit.yaml
-uv run framekit serve --host 127.0.0.1 --port 8765
+set OURO_CONFIG_DIR=%CD%\.smoke-config
+set OURO_CONFIG=%CD%\.smoke-config\ouro.yaml
+uv run ouro serve --host 127.0.0.1 --port 8765
 ```
 
 ---
@@ -132,9 +138,9 @@ WEB_UI_V1_PLAN.md
 Queue/service follow-up:
 
 ```text
-src/framekit/web/modules.py
-src/framekit/web/app.py
-src/framekit/core/service/events.py
+src/ouro/web/modules.py
+src/ouro/web/app.py
+src/ouro/core/service/events.py
 tests/test_web_modules_runner.py
 tests/test_web_api.py
 ```
@@ -144,8 +150,8 @@ Linux/Docker/service operations:
 ```text
 docs/linux-docker-service.md
 docs/service-ops-runbook.md
-src/framekit/core/service/linux.py
-src/framekit/commands/service.py
+src/ouro/core/service/linux.py
+src/ouro/commands/service.py
 Dockerfile
 docker-compose.service.yml
 ```

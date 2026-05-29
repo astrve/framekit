@@ -1,8 +1,14 @@
-# Framekit Service Mode — Current Status
+# Ouro Service Mode — Current Status
 
 Last updated after completing phases S1–S5, Web UI H1–H6, Intake UI, Service
 Events/SSE with persisted history, queue controls, watch rules API, CI packaging
 gate, and Retry/Resume Policy v1.
+
+Migration note:
+- Strict rename to Ouro: CLI is `ouro`.
+- Package/project name is `ouro-auto`.
+- Local config/cache/service paths now use `ouro` namespace.
+- Old `framekit` local data is not auto-migrated or deleted.
 
 ---
 
@@ -29,8 +35,8 @@ Additional UI work completed:
 
 ### Service mode (S1–S5)
 
-**S1 — `framekit serve` + durable service core**
-- `framekit serve` command runs FastAPI + uvicorn in foreground or service mode
+**S1 — `ouro serve` + durable service core**
+- `ouro serve` command runs FastAPI + uvicorn in foreground or service mode
 - Heartbeat thread writes `service.state.json` every 5 s
 - `service.pid` written on start, removed on clean stop
 - `service.lock` prevents duplicate instances
@@ -57,7 +63,7 @@ Additional UI work completed:
 - Claim query skips paused jobs and honors category concurrency limits from `settings.service.category_concurrency`
 
 **S1c — Embedded watcher**
-- `WatcherService` runs as a supervised in-process thread inside `framekit serve`
+- `WatcherService` runs as a supervised in-process thread inside `ouro serve`
 - File detection → job enqueue pipeline; no 7 200 s timeout workaround
 - Watch folder reconciliation on settings reload
 - Watch rules API added:
@@ -82,24 +88,24 @@ Additional UI work completed:
 - Intake creates pipeline jobs only; no arbitrary command execution
 
 **S4 — Windows service/task CLI**
-- `framekit service install --mode=task|nssm|sc|auto`
-- `framekit service start / stop / restart / status / logs / uninstall`
+- `ouro service install --mode=task|nssm|sc|auto`
+- `ouro service start / stop / restart / status / logs / uninstall`
 - `task` mode: bat wrapper with `>>` / `2>>` log redirection; CMD.EXE double-outer-quote convention for paths with spaces; no admin required (typically)
 - `nssm` mode: restart-on-failure, log rotation (requires admin)
 - `sc` mode: built-in fallback (requires admin, no log redirection)
 - Heartbeat + PID file read locally in `service status`; 401 on API query is expected when auth is enabled
 
 **S5 — Linux / Docker service support**
-- `framekit service` supports Linux user service mode (`systemd --user`)
+- `ouro service` supports Linux user service mode (`systemd --user`)
 - Linux lifecycle commands wired: `install`, `uninstall`, `start`, `stop`, `restart`, `status`, `logs`
-- User unit generated at `~/.config/systemd/user/framekit.service`
+- User unit generated at `~/.config/systemd/user/ouro.service`
 - Docker runtime added:
-  - `Dockerfile` runs `framekit serve` directly
+  - `Dockerfile` runs `ouro serve` directly
   - `docker-compose.service.yml` provides single-service example with config/cache/media volumes
   - No npm/Node required at runtime (packaged static assets served by Python package)
 
 **Service events / SSE**
-- In-process event bus/ring buffer implemented (`src/framekit/core/service/events.py`)
+- In-process event bus/ring buffer implemented (`src/ouro/core/service/events.py`)
 - Persisted history enabled: append-only `service/events.ndjson` with rotation
 - `GET /api/v1/events/recent` implemented with limit validation
 - `GET /api/v1/events/stream` implemented (`text/event-stream`, initial connected comment, keepalive ping, graceful disconnect)
@@ -108,10 +114,10 @@ Additional UI work completed:
 
 ### Production UI serving
 
-- `npm run build` copies `web-ui/dist/` into `src/framekit/web/static/`
-- Wheel/sdist include `framekit/web/static/index.html` and bundled assets
-- `framekit serve` static resolution order:
-  - packaged `framekit/web/static/`
+- `npm run build` copies `web-ui/dist/` into `src/ouro/web/static/`
+- Wheel/sdist include `ouro/web/static/index.html` and bundled assets
+- `ouro serve` static resolution order:
+  - packaged `ouro/web/static/`
   - source-tree `web-ui/dist/` fallback
   - fallback JSON hint if neither exists
 - SPA catch-all `/{full_path:path}` serves static assets + falls back to `index.html`
@@ -121,7 +127,7 @@ Additional UI work completed:
 
 ### Auth
 
-- Infinite reload loop on `/login` fixed: `fetchValidated` 401 dispatches `framekit:unauthorized` DOM event instead of `window.location.href = "/login"`
+- Infinite reload loop on `/login` fixed: `fetchValidated` 401 dispatches `ouro:unauthorized` DOM event instead of `window.location.href = "/login"`
 - `AuthProvider` clears token + user from React state on event
 - `AuthGuard` soft-navigates to `/login` via TanStack Router
 - `AppShell.profilesQuery` disabled on `/login` — server never receives `/api/v1/profiles` from unauthenticated login page
@@ -134,7 +140,7 @@ Additional UI work completed:
   - `npm run build`
   - targeted service/web tests
   - `uv build --sdist --wheel`
-  - wheel smoke install + `framekit serve` + `/healthz` + index check
+  - wheel smoke install + `ouro serve` + `/healthz` + index check
 - Pytest diagnostic CI job added (non-blocking): collect order + durations + tracemalloc subset
 
 ### Validation caveat (current runner)
@@ -153,31 +159,31 @@ REM 1. Build UI (from repo root)
 npm run build
 
 REM 2. Foreground smoke test
-uv run framekit serve
+uv run ouro serve
 REM → open http://127.0.0.1:8000 — dashboard loads, no loop, Ctrl+C
 
 REM 3. Install as scheduled task
-framekit service install --mode=task
+ouro service install --mode=task
 
 REM 4. Start and verify
-framekit service start
-framekit service status
-framekit service logs -f
+ouro service start
+ouro service status
+ouro service logs -f
 
 REM 5. Auth (optional — enables login)
-framekit user add --admin
+ouro user add --admin
 REM → open http://127.0.0.1:8000/login — form stable, no refresh loop
 
 REM 6. Intake API (optional test)
-REM   framekit intake source add --name qbit
+REM   ouro intake source add --name qbit
 REM   → use returned token as Bearer in:
 REM   curl -X POST http://127.0.0.1:8000/api/v1/intake/release \
 REM     -H "Authorization: Bearer <token>" \
 REM     -d '{"source":"qbit","path":"C:\\media\\Movie.mkv"}'
 
 REM 7. Clean up
-framekit service stop
-framekit service uninstall
+ouro service stop
+ouro service uninstall
 ```
 
 Cross-platform operations runbook:
@@ -203,8 +209,8 @@ Cross-platform operations runbook:
 | Area | Risk |
 |---|---|
 | `web-ui/src/lib/api/client.ts` 401 handler | DOM event approach just stabilized; test coverage limited |
-| `src/framekit/web/app.py` auth middleware + catch-all route | Non-API passthrough and SPA catch-all order is precise; wrong order breaks API or auth |
-| `src/framekit/core/service/windows.py` bat quoting | CMD.EXE double-outer-quote for paths with spaces is correct and subtle |
+| `src/ouro/web/app.py` auth middleware + catch-all route | Non-API passthrough and SPA catch-all order is precise; wrong order breaks API or auth |
+| `src/ouro/core/service/windows.py` bat quoting | CMD.EXE double-outer-quote for paths with spaces is correct and subtle |
 | SQLite claim semantics | `UPDATE … WHERE status='pending' LIMIT 1` + `RETURNING`; WAL mode; concurrent claimers need care |
 | `tsconfig.app.json` strict flags | `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` intentional; do not relax |
 
@@ -233,7 +239,7 @@ Cross-platform operations runbook:
 | Task | Files |
 |---|---|
 | Global handoff | `docs/codex-handoff.md` |
-| Linux/Docker service | `docs/linux-docker-service.md`, `src/framekit/core/service/linux.py`, `src/framekit/commands/service.py`, `Dockerfile`, `docker-compose.service.yml` |
-| Queue controls / retry follow-up | `src/framekit/web/modules.py`, `src/framekit/web/app.py`, `tests/test_web_modules_runner.py` |
-| Events persistence/history follow-up | `src/framekit/core/service/events.py`, `src/framekit/web/app.py`, `web-ui/src/routes/events.tsx` |
-| Windows smoke/docs polish | `docs/windows-service.md`, `src/framekit/core/service/windows.py`, `src/framekit/commands/service.py` |
+| Linux/Docker service | `docs/linux-docker-service.md`, `src/ouro/core/service/linux.py`, `src/ouro/commands/service.py`, `Dockerfile`, `docker-compose.service.yml` |
+| Queue controls / retry follow-up | `src/ouro/web/modules.py`, `src/ouro/web/app.py`, `tests/test_web_modules_runner.py` |
+| Events persistence/history follow-up | `src/ouro/core/service/events.py`, `src/ouro/web/app.py`, `web-ui/src/routes/events.tsx` |
+| Windows smoke/docs polish | `docs/windows-service.md`, `src/ouro/core/service/windows.py`, `src/ouro/commands/service.py` |

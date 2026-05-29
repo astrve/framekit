@@ -1,4 +1,4 @@
-"""Linux command-dispatch tests for ``framekit service`` CLI."""
+"""Linux command-dispatch tests for ``ouro service`` CLI."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from framekit.commands.service import service_group
+from ouro.commands.service import service_group
 
 
 def test_install_auto_uses_systemd_on_linux(monkeypatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     runner = CliRunner()
     with patch(
-        "framekit.core.service.linux.install_systemd_user",
+        "ouro.core.service.linux.install_systemd_user",
         return_value=(True, "installed"),
     ) as install_mock:
         result = runner.invoke(service_group, ["install", "--mode", "auto"])
@@ -35,7 +35,7 @@ def test_start_auto_uses_systemd_on_linux(monkeypatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     runner = CliRunner()
     with patch(
-        "framekit.core.service.linux.start_systemd_user",
+        "ouro.core.service.linux.start_systemd_user",
         return_value=(True, "started"),
     ) as start_mock:
         result = runner.invoke(service_group, ["start", "--mode", "auto"])
@@ -48,7 +48,7 @@ def test_uninstall_systemd_on_linux(monkeypatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     runner = CliRunner()
     with patch(
-        "framekit.core.service.linux.uninstall_systemd_user",
+        "ouro.core.service.linux.uninstall_systemd_user",
         return_value=(True, "removed"),
     ) as uninstall_mock:
         result = runner.invoke(service_group, ["uninstall", "--mode", "systemd", "--yes"])
@@ -61,7 +61,7 @@ def test_logs_linux_uses_journal(monkeypatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     runner = CliRunner()
     with patch(
-        "framekit.core.service.linux.journal_logs",
+        "ouro.core.service.linux.journal_logs",
         return_value=(True, "line1\nline2"),
     ) as logs_mock:
         result = runner.invoke(service_group, ["logs", "-n", "2"])
@@ -74,16 +74,16 @@ def test_status_linux_json_includes_systemd_block(monkeypatch, tmp_path) -> None
     monkeypatch.setattr(sys, "platform", "linux")
     runner = CliRunner()
     with patch(
-        "framekit.core.service.linux.query_http_status",
+        "ouro.core.service.linux.query_http_status",
         return_value=None,
     ), patch(
-        "framekit.core.service.linux.read_service_state",
+        "ouro.core.service.linux.read_service_state",
         return_value=None,
     ), patch(
-        "framekit.core.service.linux.query_systemd_status",
+        "ouro.core.service.linux.query_systemd_status",
         return_value={"state": "ACTIVE", "mainpid": "123"},
     ), patch(
-        "framekit.core.paths.get_service_dir",
+        "ouro.core.paths.get_service_dir",
         return_value=tmp_path,
     ):
         result = runner.invoke(service_group, ["status", "--json"])

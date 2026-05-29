@@ -1,9 +1,9 @@
 # Configuration
 
-All configuration lives in `~/.config/framekit/framekit.yaml`. Create the file and a skeleton config with:
+All configuration lives in `~/.config/ouro/ouro.yaml`. Create the file and a skeleton config with:
 
 ```bash
-fk init
+ouro init
 ```
 
 ---
@@ -65,7 +65,7 @@ paths:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `tmdb_read_access_token` | string | `""` | TMDb v4 Read Access Token. Store with `fk metadata --set-token` |
+| `tmdb_read_access_token` | string | `""` | TMDb v4 Read Access Token. Store with `ouro metadata --set-token` |
 | `provider` | string | `tmdb` | Metadata provider. Currently `tmdb` only |
 | `language` | string | `fr-FR` | BCP-47 locale for metadata (titles, overview). E.g. `en-US`, `fr-FR` |
 | `interactive_confirmation` | bool | `true` | Prompt to confirm the matched title before continuing |
@@ -142,10 +142,10 @@ See [Security](Security.md) for full details.
 
 ## Environment overrides
 
-All config keys can be overridden with environment variables using the pattern `FRAMEKIT_<SECTION>_<KEY>` (uppercase, underscores):
+All config keys can be overridden with environment variables using the pattern `OURO_<SECTION>_<KEY>` (uppercase, underscores):
 
 ```bash
-FRAMEKIT_METADATA_LANGUAGE=en-US fk metadata /path/to/release
+OURO_METADATA_LANGUAGE=en-US ouro metadata /path/to/release
 ```
 
 ---
@@ -153,7 +153,7 @@ FRAMEKIT_METADATA_LANGUAGE=en-US fk metadata /path/to/release
 ## Viewing current config
 
 ```bash
-fk settings show
-fk settings get metadata.language
-fk settings set metadata.language fr-FR
+ouro settings show
+ouro settings get metadata.language
+ouro settings set metadata.language fr-FR
 ```

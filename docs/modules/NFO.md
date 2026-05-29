@@ -7,9 +7,9 @@ Generates `.nfo` files describing the release. Uses Jinja2 templates and merges 
 ## Usage
 
 ```bash
-fk nfo /path/to/release [OPTIONS]
-fk nfo /path/to/release --template classic
-fk nfo /path/to/release --output-dir /some/other/dir
+ouro nfo /path/to/release [OPTIONS]
+ouro nfo /path/to/release --template classic
+ouro nfo /path/to/release --output-dir /some/other/dir
 ```
 
 ---
@@ -42,7 +42,7 @@ The NFO contains:
 
 ## Template system
 
-Templates live in `src/framekit/templates/nfo/` and use a `SandboxedEnvironment` with `trim_blocks=False`.
+Templates live in `src/ouro/templates/nfo/` and use a `SandboxedEnvironment` with `trim_blocks=False`.
 
 ### Built-in templates
 
@@ -52,10 +52,10 @@ Templates live in `src/framekit/templates/nfo/` and use a `SandboxedEnvironment`
 
 ### Custom templates
 
-Place `.jinja2` files in `~/.config/framekit/nfo_templates/`. Reference by filename stem:
+Place `.jinja2` files in `~/.config/ouro/nfo_templates/`. Reference by filename stem:
 
 ```bash
-fk nfo /path/to/release --template my_template
+ouro nfo /path/to/release --template my_template
 ```
 
 ### Variables
@@ -71,7 +71,7 @@ fk nfo /path/to/release --template my_template
 | `subtitle_tracks` | `list` | Subtitle track objects |
 | `mediainfo_text` | `str` | Raw MediaInfo CLI output |
 | `metadata` | `MetadataContext \| None` | TMDb metadata |
-| `nfo_version` | `str` | Framekit version string |
+| `nfo_version` | `str` | Ouro version string |
 
 ### Macros
 

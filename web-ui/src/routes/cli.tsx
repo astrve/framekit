@@ -52,7 +52,7 @@ function StatusPill({ status }: { status: ModuleJob["status"] }) {
 
 function JobEntry({ job }: { job: ModuleJob }) {
   const req = job.request as { module?: string; args_text?: string } | undefined;
-  const cmd = `$ framekit ${req?.module ?? ""}${req?.args_text ? " " + req.args_text : ""}`.trim();
+  const cmd = `$ ouro ${req?.module ?? ""}${req?.args_text ? " " + req.args_text : ""}`.trim();
   const stdout = job.live_stdout ?? job.result?.stdout ?? "";
   const stderr = job.live_stderr ?? job.result?.stderr ?? "";
 
@@ -243,7 +243,7 @@ export function CliPage() {
               letterSpacing: "0.06em",
             }}
           >
-            framekit — cli
+            ouro — cli
           </span>
           {feedJobs.length > 0 && !isRunning ? (
             <button

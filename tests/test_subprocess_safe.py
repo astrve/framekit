@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`framekit.core.subprocess_safe`.
+"""Unit tests for :mod:`ouro.core.subprocess_safe`.
 
 These tests cover the safety contract documented in ADR-0006: full-path
 resolution, mandatory timeout, secret redaction, and the typed error
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from framekit.core import subprocess_safe
-from framekit.core.subprocess_safe import (
+from ouro.core import subprocess_safe
+from ouro.core.subprocess_safe import (
     MissingToolError,
     SafeSubprocessError,
     _redact_argv,

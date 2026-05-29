@@ -15,7 +15,7 @@ from unittest.mock import Mock
 import httpx
 import pytest
 
-from framekit.core.http import (
+from ouro.core.http import (
     HttpCertificateError,
     HttpClient,
     HttpClientConfig,

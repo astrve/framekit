@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`framekit.modules.watch.validator`.
+"""Unit tests for :mod:`ouro.modules.watch.validator`.
 
 The validator exposes pure functions plus one ``is_stable`` method that
 polls ``Path.stat().st_size``. We monkeypatch :func:`time.sleep` to keep
@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from framekit.modules.watch import validator as validator_module
-from framekit.modules.watch.models import ValidationConfig
-from framekit.modules.watch.validator import FileValidator
+from ouro.modules.watch import validator as validator_module
+from ouro.modules.watch.models import ValidationConfig
+from ouro.modules.watch.validator import FileValidator
 
 
 @pytest.fixture

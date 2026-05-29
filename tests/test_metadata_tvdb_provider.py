@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from framekit.core.models.metadata import MetadataCandidate, MetadataLookupRequest
-from framekit.modules.metadata.providers.tvdb import TVDBProvider
-from framekit.modules.metadata.rate_limiter import RateLimiter
+from ouro.core.models.metadata import MetadataCandidate, MetadataLookupRequest
+from ouro.modules.metadata.providers.tvdb import TVDBProvider
+from ouro.modules.metadata.rate_limiter import RateLimiter
 
 
 def _mock_response(status_code: int = 200, data: dict | None = None) -> MagicMock:
@@ -90,9 +90,9 @@ class TestTVDBAuthentication:
         assert call_args[1]["json_body"]["apikey"] == "test_api_key"
 
     def test_authenticate_failure(self, tvdb_provider, mock_http_client):
-        """Test authentication failure raises FramekitMetadataError."""
-        from framekit.core.exceptions import FramekitMetadataError
-        from framekit.core.http import HttpAuthError
+        """Test authentication failure raises OuroMetadataError."""
+        from ouro.core.exceptions import OuroMetadataError
+        from ouro.core.http import HttpAuthError
 
         mock_http_client.post.side_effect = HttpAuthError(
             "Authentication failed",
@@ -100,7 +100,7 @@ class TestTVDBAuthentication:
             status_code=401,
         )
 
-        with pytest.raises(FramekitMetadataError, match="authentication failed"):
+        with pytest.raises(OuroMetadataError, match="authentication failed"):
             tvdb_provider._authenticate()
 
     def test_authenticate_caches_token(self, tvdb_provider, mock_http_client):
@@ -325,7 +325,7 @@ class TestTVDBErrorHandling:
 
     def test_handle_401_reauthenticate(self, tvdb_provider, mock_http_client, mock_rate_limiter):
         """Test 401 error triggers re-authentication."""
-        from framekit.core.http import HttpAuthError
+        from ouro.core.http import HttpAuthError
 
         tvdb_provider.token = "expired_token"
 
@@ -368,8 +368,8 @@ class TestTVDBErrorHandling:
 
     def test_handle_404_not_found(self, tvdb_provider, mock_http_client, mock_rate_limiter):
         """Test fetch_season raises on 404."""
-        from framekit.core.exceptions import FramekitMetadataError
-        from framekit.core.http import HttpError
+        from ouro.core.exceptions import OuroMetadataError
+        from ouro.core.http import HttpError
 
         tvdb_provider.token = "test_token"
 
@@ -390,5 +390,5 @@ class TestTVDBErrorHandling:
             reasons=["test"],
         )
 
-        with pytest.raises(FramekitMetadataError):
+        with pytest.raises(OuroMetadataError):
             tvdb_provider.fetch_season(candidate)

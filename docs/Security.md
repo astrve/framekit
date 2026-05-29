@@ -1,13 +1,13 @@
 # Security
 
-Framekit can encrypt sensitive values (API tokens, credentials) using an AES-GCM vault. The vault is optional — without it, secrets are stored as plain text in `framekit.yaml`.
+Ouro can encrypt sensitive values (API tokens, credentials) using an AES-GCM vault. The vault is optional — without it, secrets are stored as plain text in `ouro.yaml`.
 
 ---
 
 ## Enabling the vault
 
 ```bash
-fk settings set security.enabled true
+ouro settings set security.enabled true
 ```
 
 On first use, a random 256-bit key is generated and stored via the configured `key_backend`.
@@ -19,12 +19,12 @@ On first use, a random 256-bit key is generated and stored via the configured `k
 | Backend | Config value | Where the key lives |
 |---------|-------------|---------------------|
 | OS keyring (default) | `keyring` | System keychain (macOS Keychain, GNOME Keyring, Windows Credential Locker) |
-| File | `file` | `~/.config/framekit/.vault_key` (chmod 600) |
+| File | `file` | `~/.config/ouro/.vault_key` (chmod 600) |
 
 Set the backend:
 
 ```bash
-fk settings set security.key_backend keyring   # or: file
+ouro settings set security.key_backend keyring   # or: file
 ```
 
 The file backend is useful on headless servers where no keyring daemon is available.
@@ -33,11 +33,11 @@ The file backend is useful on headless servers where no keyring daemon is availa
 
 ## What gets encrypted
 
-When security is enabled, the following values are stored encrypted in the vault rather than plain text in `framekit.yaml`:
+When security is enabled, the following values are stored encrypted in the vault rather than plain text in `ouro.yaml`:
 
 - `metadata.tmdb_read_access_token`
 - `upload.trackers[*].api_key`
-- Any value stored with `fk metadata --set-token`
+- Any value stored with `ouro metadata --set-token`
 
 All other config values remain in plain text.
 
@@ -45,16 +45,16 @@ All other config values remain in plain text.
 
 ## VaultKeyMismatchError
 
-If Framekit cannot decrypt the vault (e.g. the key was rotated or the keyring was wiped), it raises `VaultKeyMismatchError`. Resolution:
+If Ouro cannot decrypt the vault (e.g. the key was rotated or the keyring was wiped), it raises `VaultKeyMismatchError`. Resolution:
 
-1. Clear the encrypted value: `fk metadata --set-token` (then re-enter your token)
-2. Or disable security: `fk settings set security.enabled false`
+1. Clear the encrypted value: `ouro metadata --set-token` (then re-enter your token)
+2. Or disable security: `ouro settings set security.enabled false`
 
 ---
 
 ## Subprocess safety
 
-Framekit never passes secrets as CLI arguments to child processes. API tokens are passed via environment variables or temporary files with restricted permissions. The `subprocess_safe` module ensures no secret appears in process listings.
+Ouro never passes secrets as CLI arguments to child processes. API tokens are passed via environment variables or temporary files with restricted permissions. The `subprocess_safe` module ensures no secret appears in process listings.
 
 ---
 
@@ -73,12 +73,12 @@ eyJh...xNiJ
 Every pipeline run and upload attempt is appended to:
 
 ```
-~/.local/share/framekit/logs/audit.ndjson
+~/.local/share/ouro/logs/audit.ndjson
 ```
 
 Entries include timestamp, command, path, and outcome — but never raw secret values.
 
 ```bash
-fk audit-log           # view recent entries
-fk audit-log --tail 20
+ouro audit-log           # view recent entries
+ouro audit-log --tail 20
 ```

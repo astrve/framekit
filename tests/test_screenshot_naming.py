@@ -10,7 +10,7 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from framekit.modules.screenshot.naming import (  # noqa: E402
+from ouro.modules.screenshot.naming import (  # noqa: E402
     generate_screenshot_filename,
     sanitize_release_name,
 )
@@ -130,7 +130,7 @@ class TestCollisionDetection:
 
     def test_no_collision(self, tmp_path):
         """Test when no collision exists."""
-        from framekit.modules.screenshot.naming import get_unique_filename
+        from ouro.modules.screenshot.naming import get_unique_filename
 
         output_dir = tmp_path / "screenshots"
         output_dir.mkdir()
@@ -140,7 +140,7 @@ class TestCollisionDetection:
 
     def test_collision_increments(self, tmp_path):
         """Test that collision increments the filename."""
-        from framekit.modules.screenshot.naming import get_unique_filename
+        from ouro.modules.screenshot.naming import get_unique_filename
 
         output_dir = tmp_path / "screenshots"
         output_dir.mkdir()
@@ -156,7 +156,7 @@ class TestCollisionDetection:
 
     def test_multiple_collisions(self, tmp_path):
         """Test handling multiple collisions."""
-        from framekit.modules.screenshot.naming import get_unique_filename
+        from ouro.modules.screenshot.naming import get_unique_filename
 
         output_dir = tmp_path / "screenshots"
         output_dir.mkdir()

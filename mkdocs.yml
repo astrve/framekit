@@ -1,7 +1,7 @@
-site_name: Framekit
-site_url: https://astrve.github.io/framekit/
-repo_url: https://github.com/astrve/framekit
-repo_name: astrve/framekit
+site_name: Ouro
+site_url: https://astrve.github.io/ouro/
+repo_url: https://github.com/astrve/ouro
+repo_name: astrve/ouro
 
 theme:
   name: material

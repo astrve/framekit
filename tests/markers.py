@@ -1,4 +1,4 @@
-"""Test markers documentation for Framekit test suite.
+"""Test markers documentation for Ouro test suite.
 
 This module documents all pytest markers used in the test suite.
 Markers help categorize and filter tests for different purposes.

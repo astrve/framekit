@@ -103,7 +103,7 @@ export function ModuleStudioPage() {
     return (
       <div className="space-y-4">
         <p>Unknown module studio: {module}</p>
-        <Link to="/jobs">Retour modules</Link>
+        <Link to="/jobs">Back to jobs</Link>
       </div>
     );
   }
@@ -114,7 +114,7 @@ export function ModuleStudioPage() {
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
         <h1 className="text-2xl font-semibold tracking-tight">Module Studio: {studioModule}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Page dédiée pour module avec args guidés + preview commande.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Dedicated module page with guided arguments and command preview.</p>
       </section>
 
       <Card>
@@ -123,7 +123,7 @@ export function ModuleStudioPage() {
             <Play className="h-4 w-4 text-primary" />
             Launcher
           </CardTitle>
-          <CardDescription>Génère commande `framekit {studioModule} ...`</CardDescription>
+          <CardDescription>Generates command `ouro {studioModule} ...`</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 md:grid-cols-2">
@@ -151,7 +151,7 @@ export function ModuleStudioPage() {
           </label>
 
           <pre className="max-h-40 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
-            framekit {studioModule} {builtArgs}
+            ouro {studioModule} {builtArgs}
           </pre>
 
           <div className="flex flex-wrap gap-2">
@@ -172,7 +172,7 @@ export function ModuleStudioPage() {
                 }
               }}
             >
-              Exécuter
+              Execute
             </Button>
             {lastJob ? (
               <Button
@@ -182,7 +182,7 @@ export function ModuleStudioPage() {
                   void navigate({ to: "/jobs/$jobId", params: { jobId: lastJob.id } });
                 }}
               >
-                Ouvrir dernier job
+                Open latest job
               </Button>
             ) : null}
           </div>
@@ -211,7 +211,7 @@ export function ModuleStudioPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Autres studios</CardTitle>
+          <CardTitle>Other studios</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {STUDIO_MODULES.map((name) => (

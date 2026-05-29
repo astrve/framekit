@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from framekit.core.i18n import get_locale, set_locale
-from framekit.core.models.metadata import EpisodeMetadata, MovieMetadata, SeasonMetadata
-from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData, TrackNfoData
-from framekit.modules.prez import service as prez_service
-from framekit.modules.prez.service import (
+from ouro.core.i18n import get_locale, set_locale
+from ouro.core.models.metadata import EpisodeMetadata, MovieMetadata, SeasonMetadata
+from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData, TrackNfoData
+from ouro.modules.prez import service as prez_service
+from ouro.modules.prez.service import (
     PrezBuildOptions,
     PrezService,
     available_bbcode_templates,

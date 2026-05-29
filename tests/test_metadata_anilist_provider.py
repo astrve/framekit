@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from framekit.core.models.metadata import MetadataLookupRequest
-from framekit.modules.metadata.providers.anilist import AniListProvider
-from framekit.modules.metadata.rate_limiter import RateLimiter
+from ouro.core.models.metadata import MetadataLookupRequest
+from ouro.modules.metadata.providers.anilist import AniListProvider
+from ouro.modules.metadata.rate_limiter import RateLimiter
 
 
 @pytest.fixture
@@ -215,7 +215,7 @@ class TestAniListFetchEpisode:
         }
         mock_http_client.request.return_value = mock_response
 
-        from framekit.core.models.metadata import MetadataCandidate
+        from ouro.core.models.metadata import MetadataCandidate
 
         candidate = MetadataCandidate(
             provider_name="anilist",
@@ -241,7 +241,7 @@ class TestAniListFetchEpisode:
         mock_response.status_code = 404
         mock_http_client.request.return_value = mock_response
 
-        from framekit.core.models.metadata import MetadataCandidate
+        from ouro.core.models.metadata import MetadataCandidate
 
         candidate = MetadataCandidate(
             provider_name="anilist",
@@ -289,7 +289,7 @@ class TestAniListFetchSeason:
         }
         mock_http_client.request.return_value = mock_response
 
-        from framekit.core.models.metadata import MetadataCandidate
+        from ouro.core.models.metadata import MetadataCandidate
 
         candidate = MetadataCandidate(
             provider_name="anilist",
@@ -340,7 +340,7 @@ class TestAniListFetchMovie:
         }
         mock_http_client.request.return_value = mock_response
 
-        from framekit.core.models.metadata import MetadataCandidate
+        from ouro.core.models.metadata import MetadataCandidate
 
         candidate = MetadataCandidate(
             provider_name="anilist",
@@ -400,7 +400,7 @@ class TestAniListGraphQLQueries:
         }
         mock_http_client.request.return_value = mock_response
 
-        from framekit.core.models.metadata import MetadataCandidate
+        from ouro.core.models.metadata import MetadataCandidate
 
         candidate = MetadataCandidate(
             provider_name="anilist",

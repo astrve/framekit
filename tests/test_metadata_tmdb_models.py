@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from framekit.core.models.metadata import (
+from ouro.core.models.metadata import (
     EpisodeMetadata,
     MetadataCandidate,
     MovieMetadata,
     SeasonMetadata,
 )
-from framekit.modules.metadata.providers.tmdb_models import (
+from ouro.modules.metadata.providers.tmdb_models import (
     TMDbCastMember,
     TMDbCrewMember,
     TMDbEpisode,

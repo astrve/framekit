@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from framekit.commands.main import cli
+from ouro.commands.main import cli
 
 
 def test_readme_command_table_matches_cli_commands() -> None:
@@ -33,5 +33,5 @@ def test_readme_command_table_matches_cli_commands() -> None:
 
 def test_readme_contains_no_backup_command_mentions() -> None:
     readme = Path("README.md").read_text(encoding="utf-8").lower()
-    assert "fk backup" not in readme
-    assert "framekit backup" not in readme
+    assert "ouro backup" not in readme
+    assert "ouro backup" not in readme

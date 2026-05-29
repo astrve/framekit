@@ -97,7 +97,7 @@ jobs:
           source .venv-smoke/bin/activate
           pip install --upgrade pip
           pip install dist/*.whl
-          python -m framekit serve --host 127.0.0.1 --port 8765 > /tmp/framekit-serve.log 2>&1 &
+          python -m ouro serve --host 127.0.0.1 --port 8765 > /tmp/ouro-serve.log 2>&1 &
           PID=$!
           sleep 4
           curl -fsS http://127.0.0.1:8765/healthz
@@ -183,16 +183,16 @@ jobs:
         shell: bash
         run: |
           pytest -v \
-            --cov=framekit.core.models \
-            --cov=framekit.core.subprocess_safe \
-            --cov=framekit.core.plugins \
-            --cov=framekit.core.runs \
-            --cov=framekit.core.audit_log \
-            --cov=framekit.modules.metadata.providers.anilist_models \
-            --cov=framekit.modules.metadata.providers.tmdb_models \
-            --cov=framekit.modules.metadata.providers.trakt_models \
-            --cov=framekit.modules.metadata.providers.tvdb_models \
-            --cov=framekit.modules.upload.adapters \
+            --cov=ouro.core.models \
+            --cov=ouro.core.subprocess_safe \
+            --cov=ouro.core.plugins \
+            --cov=ouro.core.runs \
+            --cov=ouro.core.audit_log \
+            --cov=ouro.modules.metadata.providers.anilist_models \
+            --cov=ouro.modules.metadata.providers.tmdb_models \
+            --cov=ouro.modules.metadata.providers.trakt_models \
+            --cov=ouro.modules.metadata.providers.tvdb_models \
+            --cov=ouro.modules.upload.adapters \
             --cov-report=xml \
             --cov-report=term-missing \
             --cov-branch \
@@ -234,12 +234,12 @@ jobs:
       - name: Run Xenon
         run: >
           xenon --max-absolute B --max-modules B --max-average A
-          src/framekit/core/audit_log.py
-          src/framekit/core/runs/ledger.py
-          src/framekit/core/runs/rollback.py
-          src/framekit/commands/plugin.py
-          src/framekit/commands/audit_log.py
-          src/framekit/commands/rollback.py
+          src/ouro/core/audit_log.py
+          src/ouro/core/runs/ledger.py
+          src/ouro/core/runs/rollback.py
+          src/ouro/commands/plugin.py
+          src/ouro/commands/audit_log.py
+          src/ouro/commands/rollback.py
 
       - name: Run Vulture
         run: vulture src tests --min-confidence 80
@@ -250,14 +250,14 @@ jobs:
       - name: Run Interrogate
         run: >
           interrogate
-          src/framekit/core/models
-          src/framekit/core/security
-          src/framekit/core/path_validation.py
-          src/framekit/core/subprocess_safe.py
-          src/framekit/core/plugins.py
-          src/framekit/modules/metadata/providers
-          src/framekit/modules/upload/adapters
-          src/framekit/modules/upload/service.py
+          src/ouro/core/models
+          src/ouro/core/security
+          src/ouro/core/path_validation.py
+          src/ouro/core/subprocess_safe.py
+          src/ouro/core/plugins.py
+          src/ouro/modules/metadata/providers
+          src/ouro/modules/upload/adapters
+          src/ouro/modules/upload/service.py
           --fail-under 75
 
   full-truth:
@@ -280,7 +280,7 @@ jobs:
 
       - name: Full coverage (truth)
         run: |
-          pytest -q --cov=src/framekit --cov-branch --cov-report=term-missing
+          pytest -q --cov=src/ouro --cov-branch --cov-report=term-missing
 
       - name: Full xenon (truth)
         run: |
@@ -366,16 +366,16 @@ jobs:
           PYTHONUTF8=1 python - <<'PY'
           from click_man.core import write_man_pages
 
-          from framekit.commands.main import cli
+          from ouro.commands.main import cli
 
-          write_man_pages("framekit", cli, version="2.0.0", target_dir="dist/man")
+          write_man_pages("ouro", cli, version="2.0.0", target_dir="dist/man")
           PY
           ls -la dist/man
 
       - name: Upload man pages
         uses: actions/upload-artifact@v7
         with:
-          name: framekit-man-pages
+          name: ouro-man-pages
           path: dist/man/*.1
 
   quality-gate:

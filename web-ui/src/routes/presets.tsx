@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { BookOpen, Check, ChevronDown, ChevronRight, Eye, EyeOff, FileText, Key, Layers, Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -211,14 +212,43 @@ export function PresetsPage() {
   const tvdbTokenQuery = useQuery({ queryKey: ["provider-token-tvdb"], queryFn: () => getProviderToken("tvdb") });
   const anilistTokenQuery = useQuery({ queryKey: ["provider-token-anilist"], queryFn: () => getProviderToken("anilist") });
   const traktTokenQuery = useQuery({ queryKey: ["provider-token-trakt"], queryFn: () => getProviderToken("trakt") });
+  const configuredTokenCount = [
+    tmdbTokenQuery.data?.is_set,
+    tvdbTokenQuery.data?.is_set,
+    anilistTokenQuery.data?.is_set,
+    traktTokenQuery.data?.is_set,
+  ].filter(Boolean).length;
+  const totalPresetCount =
+    (resources?.pipeline_presets.length ?? 0) +
+    (resources?.prez_presets.length ?? 0) +
+    (resources?.cleanmkv_presets?.length ?? 0) +
+    (resources?.renamer_profiles?.length ?? 0);
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Presets &amp; Profiles</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Browse available presets, templates, and profiles for all modules.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Presets &amp; Profiles</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Browse available presets, templates, and profiles for all modules.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/settings-setup"
+              className="inline-flex items-center rounded-md border border-border bg-transparent px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:bg-secondary/55"
+            >
+              Open Settings
+            </Link>
+            <Link
+              to="/pipeline"
+              className="inline-flex items-center rounded-md border border-border bg-transparent px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:bg-secondary/55"
+            >
+              Run Pipeline
+            </Link>
+          </div>
+        </div>
       </section>
 
       {isError ? (
@@ -226,6 +256,49 @@ export function PresetsPage() {
           Failed to load resources — is the API running?
         </p>
       ) : null}
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Preset Inventory</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{totalPresetCount}</p>
+            <p className="text-xs text-muted-foreground">Pipeline + Prez + CleanMKV + Renamer</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Tracker Announces</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{resources?.announces.length ?? 0}</p>
+            <p className="text-xs text-muted-foreground">
+              Active: {resources?.announces.filter((item) => item.is_selected).length ?? 0}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Token Coverage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{configuredTokenCount}/4</p>
+            <p className="text-xs text-muted-foreground">TMDB, TVDB, AniList, Trakt</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Template Catalog</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">
+              {(resources?.nfo_templates.length ?? 0) + (resources?.prez_templates.bbcode.length ?? 0) + (resources?.prez_templates.html.length ?? 0)}
+            </p>
+            <p className="text-xs text-muted-foreground">NFO + BBCode + HTML templates</p>
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Pipeline Presets */}
       <Section

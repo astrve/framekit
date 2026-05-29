@@ -1,6 +1,6 @@
 # Web UI Stack Reference
 
-Reference for Framekit web interface technical baseline.
+Reference for Ouro web interface technical baseline.
 
 ## Scope
 
@@ -74,7 +74,7 @@ Response validation must be represented in frontend Zod schemas under `src/lib/a
 Async jobs:
 - Backed by in-memory queue + SQLite persistence.
 - Status lifecycle: `pending -> running -> completed|failed|cancelled`.
-- Persisted in `get_cache_dir()/web/module_jobs.sqlite3` (`FRAMEKIT_CACHE_DIR` override supported).
+- Persisted in `get_cache_dir()/web/module_jobs.sqlite3` (`OURO_CACHE_DIR` override supported).
 - Jobs recovered at backend startup; `pending/running` jobs from previous process are marked failed (`Interrupted by backend restart.`).
 - Cancellation supported for `pending` and `running` jobs.
 - Rerun endpoint creates a new job from a previous job request payload.

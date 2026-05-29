@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`framekit.ui.unified_selector` (ADR-0004).
+"""Unit tests for :mod:`ouro.ui.unified_selector` (ADR-0004).
 
 Covers:
 
@@ -22,9 +22,9 @@ from typing import Any
 
 import pytest
 
-from framekit.core.exceptions import HeadlessAmbiguityError
-from framekit.ui import unified_selector as us_module
-from framekit.ui.unified_selector import (
+from ouro.core.exceptions import HeadlessAmbiguityError
+from ouro.ui import unified_selector as us_module
+from ouro.ui.unified_selector import (
     SelectionItem,
     SelectionResult,
     UnifiedSelector,

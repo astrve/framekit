@@ -5,30 +5,30 @@
 ### Breaking
 
 - Python 3.12+ required
-- `settings.json` → `framekit.yaml` (schema 14, auto-migrated on first start)
+- `settings.json` → `ouro.yaml` (schema 14, auto-migrated on first start)
 - Secrets moved to encrypted vault by default (`security.enabled: true`)
 
 ### Added
 
 **New commands**
 
-- `fk init` — create starter config
-- `fk alias` — custom command aliases
-- `fk logs` — view structured logs
-- `fk rollback` — undo tracked file operations
-- `fk validate` — pre-upload release checks
-- `fk batch` — process multiple releases
-- `fk encode` — ffmpeg encoding with presets
-- `fk screenshot` — capture release screenshots
-- `fk rename-parent` — rename parent folder from metadata
-- `fk browse` — browse folders in terminal
-- `fk sort` — sort release folders
-- `fk profile` — manage settings profiles
-- `fk seedbox` — seedbox transfer helpers
-- `fk examples` — show usage examples
-- `fk extract` *(beta)* — extract streams
-- `fk upload` *(beta)* — upload to tracker APIs
-- `fk watch` *(beta)* — folder monitoring automation
+- `ouro init` — create starter config
+- `ouro alias` — custom command aliases
+- `ouro logs` — view structured logs
+- `ouro rollback` — undo tracked file operations
+- `ouro validate` — pre-upload release checks
+- `ouro batch` — process multiple releases
+- `ouro encode` — ffmpeg encoding with presets
+- `ouro screenshot` — capture release screenshots
+- `ouro rename-parent` — rename parent folder from metadata
+- `ouro browse` — browse folders in terminal
+- `ouro sort` — sort release folders
+- `ouro profile` — manage settings profiles
+- `ouro seedbox` — seedbox transfer helpers
+- `ouro examples` — show usage examples
+- `ouro extract` *(beta)* — extract streams
+- `ouro upload` *(beta)* — upload to tracker APIs
+- `ouro watch` *(beta)* — folder monitoring automation
 
 **Pipeline**
 
@@ -45,7 +45,7 @@
 - Structured JSONL logging (Loguru)
 - Rollback ledger
 - Pydantic v2 data models
-- Plugin system via `framekit.modules` entry-points
+- Plugin system via `ouro.modules` entry-points
 - Desktop notifications
 - httpx + HTTP/2, retry via tenacity
 - `py.typed` marker (PEP 561)
@@ -61,14 +61,14 @@
 ### Changed
 
 - `ffmpeg` and `ffprobe` added as required external tools
-- `fk settings` outputs YAML
+- `ouro settings` outputs YAML
 - All dependencies use bounded version ranges
 - ruff target: `py312`
 
 ### Security
 
 - `cryptography>=46.0.7` — CVE-2026-26007, CVE-2026-34073, CVE-2026-39892
-- All subprocess calls via `framekit.core.subprocess_safe` wrappers
+- All subprocess calls via `ouro.core.subprocess_safe` wrappers
 - Bandit + pip-audit in CI
 
 ---
@@ -80,7 +80,7 @@
 - Renamer term picker (`--select-terms`)
 - NFO output mode: `global` / `per_file` / `both` (`--mode`)
 - `Encode Settings` field in detailed NFO templates (EN/FR/ES)
-- Single-file support for `fk md` and `fk nfo`
+- Single-file support for `ouro md` and `ouro nfo`
 - CleanMKV: pre-checked track selector
 - CleanMKV: explicit "no default" track flag (`audio_default_explicit`, `subtitle_default_explicit`)
 - Translation keys: `cleanmkv.error.invalid_file_type`, `cleanmkv.warning.different_bitrates`
@@ -91,8 +91,8 @@
 
 ### Fixed
 
-- Single MKV path to `fk md` / `fk nfo` raised "Folder not found"
-- `fk doctor` launched MediaInfo GUI on macOS `.app` installs
+- Single MKV path to `ouro md` / `ouro nfo` raised "Folder not found"
+- `ouro doctor` launched MediaInfo GUI on macOS `.app` installs
 - CleanMKV ignored explicit "no default subtitle" choice
 
 ---
@@ -101,7 +101,7 @@
 
 ### Fixed
 
-- `fk --version` created `settings.json` on first run
+- `ouro --version` created `settings.json` on first run
 - Fresh install defaulted to wrong locale (now always `en`)
 
 ### Changed
@@ -156,7 +156,7 @@
 
 ### Changed
 
-- `fk tor` defaults to media-aware `auto` mode
+- `ouro tor` defaults to media-aware `auto` mode
 - Sidecars excluded from torrent by default (NFO, Prez, TXT, screenshots)
 - CleanMKV and Renamer `--details` output
 
@@ -185,7 +185,7 @@
 
 ### Changed
 
-- `fk tor` defaults to `auto` mode
+- `ouro tor` defaults to `auto` mode
 - CleanMKV and Renamer summaries: "Planned changes" in preview mode
 
 ### Fixed
@@ -249,14 +249,14 @@
 
 ### Added
 
-- `fk inspect`
-- `fk pipe --preview` and `--explain`
+- `ouro inspect`
+- `ouro pipe --preview` and `--explain`
 - `--no-metadata` / `-nm`
 - Episode completeness detection
 
 ### Changed
 
-- `fk settings`: doctor-style overview instead of raw JSON
+- `ouro settings`: doctor-style overview instead of raw JSON
 - Metadata enabled by default for NFO, Prez, Pipeline
 - Prez: template selector, poster fallback, subtitle format labels
 - Timeline HTML templates
@@ -275,13 +275,13 @@
 
 - Pipeline module selection
 - Torrent: saved announce URLs, interactive selection
-- `fk prez --list-templates`, dry-run, template descriptions
+- `ouro prez --list-templates`, dry-run, template descriptions
 - Renamer: localized title suggestions
 
 ### Changed
 
-- `fk settings` overview
-- `fk doctor` output
+- `ouro settings` overview
+- `ouro doctor` output
 - Prez: grouped selector, average bitrate for season packs
 
 ### Fixed

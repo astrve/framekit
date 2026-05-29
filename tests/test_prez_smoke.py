@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import pytest
 
-from framekit.modules.prez import service as prez_service
+from ouro.modules.prez import service as prez_service
 
 
 def _minimal_release():
-    from framekit.core.models.nfo import ReleaseNfoData
+    from ouro.core.models.nfo import ReleaseNfoData
 
     return ReleaseNfoData(
         media_kind="movie",

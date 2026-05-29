@@ -21,49 +21,42 @@ type JobRecord = {
   error?: string | null;
   live_stdout?: string;
   live_stderr?: string;
+  attempts?: number;
+  max_attempts?: number;
+  retryable?: boolean;
 };
 
-test("modules async flow supports create cancel rerun", async ({ page }) => {
+async function mockShell(page: import("@playwright/test").Page) {
+  await page.route("http://127.0.0.1:8000/api/v1/auth/status", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        enabled: false,
+        has_users: false,
+        user_count: 0,
+      }),
+    });
+  });
+
+  await page.route("http://127.0.0.1:8000/api/v1/profiles", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        profiles: [],
+        active: null,
+      }),
+    });
+  });
+}
+
+test("jobs flow supports create, cancel, rerun, and detail drilldown", async ({ page }) => {
+  await mockShell(page);
+
   const now = () => new Date().toISOString();
   let sequence = 1;
   const jobs = new Map<string, JobRecord>();
-
-  await page.route("http://127.0.0.1:8000/api/v1/modules/catalog", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        modules: [
-          {
-            name: "inspect",
-            description: "Inspect release folder.",
-            destructive: false,
-            supports_dry_run: false,
-          },
-        ],
-      }),
-    });
-  });
-
-  await page.route("http://127.0.0.1:8000/api/v1/modules/presets", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        presets: [
-          {
-            id: "inspect-release",
-            label: "Inspect release",
-            module: "inspect",
-            args_text: '"C:/Releases/My.Release"',
-            dry_run: false,
-            auto_yes: false,
-            confirm_destructive: false,
-          },
-        ],
-      }),
-    });
-  });
 
   await page.route("http://127.0.0.1:8000/api/v1/modules/jobs**", async (route) => {
     const req = route.request();
@@ -94,6 +87,9 @@ test("modules async flow supports create cancel rerun", async ({ page }) => {
         error: null,
         live_stdout: "step 1: start\nstep 2: working",
         live_stderr: "warn: sample",
+        attempts: 1,
+        max_attempts: 3,
+        retryable: true,
       };
       jobs.set(id, created);
       await route.fulfill({
@@ -125,7 +121,7 @@ test("modules async flow supports create cancel rerun", async ({ page }) => {
         request: source.request,
         result: {
           ok: true,
-          argv: ["python", "-m", "framekit", "inspect"],
+          argv: ["python", "-m", "ouro", "watch", "list"],
           returncode: 0,
           stdout: '{"status":"rerun-ok"}',
           stderr: "",
@@ -133,6 +129,9 @@ test("modules async flow supports create cancel rerun", async ({ page }) => {
           parsed_payload: { status: "rerun-ok" },
         },
         error: null,
+        attempts: 2,
+        max_attempts: 3,
+        retryable: true,
       };
       jobs.set(id, rerun);
       await route.fulfill({
@@ -194,31 +193,32 @@ test("modules async flow supports create cancel rerun", async ({ page }) => {
     });
   });
 
-  await page.goto("/modules");
-  await expect(page.getByText("Modules Workbench")).toBeVisible();
+  await page.goto("/studio/watch");
+  await expect(page.getByRole("heading", { name: "Module Studio: watch" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Exécuter" }).click();
-  await expect(page.getByRole("button", { name: /job-1/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Cancel job" })).toBeVisible();
-  await page.getByRole("button", { name: "Ouvrir détail" }).click();
+  await page.getByRole("button", { name: "Execute" }).click();
+  await expect(page.getByRole("button", { name: "Open latest job" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Open latest job" }).click();
+  await expect(page.getByRole("heading", { name: "Job Detail" })).toBeVisible();
   await expect(page.getByText("step 1: start")).toBeVisible();
-  await page.getByRole("button", { name: "Pause follow" }).click();
-  await page.getByLabel("Filtre").fill("step 2");
-  await expect(page.getByText("step 2: working")).toBeVisible();
-  await page.getByRole("link", { name: "Retour modules" }).click();
-  await page.getByRole("button", { name: /job-1/ }).click();
 
+  await page.getByRole("button", { name: "Pause follow" }).click();
+  await page.getByLabel("Filter").fill("step 2");
+  await expect(page.getByText("step 2: working")).toBeVisible();
+  await page.getByRole("link", { name: "Back to Jobs" }).click();
+
+  await page.getByRole("button", { name: "job-1" }).click();
   await page.getByRole("button", { name: "Cancel job" }).click();
   await expect(page.getByText("Cancelled by user.")).toBeVisible();
 
   await page.getByRole("button", { name: "Rerun" }).click();
-  await expect(page.getByRole("button", { name: /job-2/ })).toBeVisible();
-  await expect(page.getByText("Return code: 0")).toBeVisible();
+  await expect(page.getByRole("button", { name: "job-2" })).toBeVisible();
   await expect(page.getByText('{"status":"rerun-ok"}')).toBeVisible();
 
-  await page.getByRole("button", { name: "Ouvrir détail" }).click();
-  await expect(page.getByRole("heading", { name: "Job detail" })).toBeVisible();
+  await page.getByRole("button", { name: "View Details" }).click();
+  await expect(page.getByRole("heading", { name: "Job Detail" })).toBeVisible();
   await expect(page.getByText("job-2")).toBeVisible();
   await expect(page.getByText("Return code: 0")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Retour modules" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to Jobs" })).toBeVisible();
 });

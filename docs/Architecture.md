@@ -1,14 +1,14 @@
 # Architecture
 
-High-level overview of Framekit's codebase structure and design decisions.
+High-level overview of Ouro's codebase structure and design decisions.
 
 ---
 
 ## Repository layout
 
 ```
-framekit/
-├── src/framekit/
+ouro/
+├── src/ouro/
 │   ├── commands/         CLI command definitions (Click)
 │   ├── core/             Shared infrastructure
 │   │   ├── settings.py   Config read/write
@@ -54,7 +54,7 @@ The `core/` package provides shared infrastructure with no business logic:
 
 | Module | Purpose |
 |--------|---------|
-| `settings.py` | Read/write `framekit.yaml`; environment var overrides |
+| `settings.py` | Read/write `ouro.yaml`; environment var overrides |
 | `i18n.py` | `tr(key, default, **kwargs)` — returns translated string or default |
 | `paths.py` | `PathResolver` — resolves start folder, output dirs |
 | `security.py` | AES-GCM vault, OS keyring and file backends |
@@ -126,14 +126,14 @@ Interactive prompts use `ui/unified_selector.py`:
 ### Custom templates
 
 Drop `.jinja2` files in:
-- `~/.config/framekit/nfo_templates/` for NFO
-- `~/.config/framekit/prez_templates/` for Prez
+- `~/.config/ouro/nfo_templates/` for NFO
+- `~/.config/ouro/prez_templates/` for Prez
 
 ### Plugin system (experimental)
 
 ```bash
-fk plugin list
-fk plugin install <package>
+ouro plugin list
+ouro plugin install <package>
 ```
 
-Plugins are Python packages that register Click commands under the `framekit.plugins` entry point group.
+Plugins are Python packages that register Click commands under the `ouro.plugins` entry point group.

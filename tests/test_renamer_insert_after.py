@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from framekit.modules.renamer.service import RenamerService
+from ouro.modules.renamer.service import RenamerService
 
 
 def test_renamer_insert_after_basic(tmp_path: Path) -> None:

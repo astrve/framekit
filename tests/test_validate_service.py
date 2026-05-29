@@ -1,8 +1,8 @@
-"""Unit tests for :mod:`framekit.modules.validate.service`.
+"""Unit tests for :mod:`ouro.modules.validate.service`.
 
 Covers ``ValidationResult`` accounting, the ``ValidationService`` orchestrator
 and each ``_check_*`` private helper. Media-info dependent checks
-monkeypatch :func:`framekit.modules.validate.service.probe_media_file` so
+monkeypatch :func:`ouro.modules.validate.service.probe_media_file` so
 the suite stays fast and never invokes ``mediainfo``/``ffprobe``.
 """
 
@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from framekit.modules.validate import service as validate_service
-from framekit.modules.validate.service import (
+from ouro.modules.validate import service as validate_service
+from ouro.modules.validate.service import (
     ValidationIssue,
     ValidationResult,
     ValidationRules,

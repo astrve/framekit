@@ -24,10 +24,10 @@ export const DEDICATED_MODULE_CONFIGS: DedicatedModuleConfig[] = [
   { slug: "browse", moduleName: "browse", title: "Browse", description: "Browse local media catalog.", presets: [{ id: "list", label: "List", args: "list" }] },
   { slug: "metadata", moduleName: "metadata", title: "Metadata", description: "Metadata validation and diagnostics.", presets: [{ id: "doctor", label: "Doctor", args: "doctor" }] },
   { slug: "validate", moduleName: "validate", title: "Validate", description: "Release structure validation.", presets: [{ id: "run", label: "Run", args: "\"\"" }] },
-  { slug: "logs", moduleName: "logs", title: "Logs", description: "Framekit log reader.", presets: [{ id: "tail", label: "Tail", args: "tail --lines 120" }] },
+  { slug: "logs", moduleName: "logs", title: "Logs", description: "Ouro log reader.", presets: [{ id: "tail", label: "Tail", args: "tail --lines 120" }] },
   { slug: "rename-parent", moduleName: "rename-parent", title: "Rename Parent", description: "Rename a release folder to match its contents. Name is auto-derived from files inside.", presets: [{ id: "dry", label: "Dry run", args: '"" --dry-run' }, { id: "live", label: "Apply", args: '""' }] },
-  { slug: "config", moduleName: "config", title: "Config", description: "Explain and validate Framekit configuration.", presets: [{ id: "explain", label: "Explain", args: "explain" }, { id: "doctor", label: "Doctor", args: "doctor" }] },
-  { slug: "setup", moduleName: "setup", title: "Setup", description: "Run the Framekit setup wizard to configure workspace settings.", presets: [{ id: "normal", label: "Normal mode", args: "--mode normal" }, { id: "advanced", label: "Advanced mode", args: "--mode advanced" }, { id: "wizard", label: "Wizard (beginner)", args: "--wizard --profile beginner" }] },
+  { slug: "config", moduleName: "config", title: "Config", description: "Explain and validate Ouro configuration.", presets: [{ id: "explain", label: "Explain", args: "explain" }, { id: "doctor", label: "Doctor", args: "doctor" }] },
+  { slug: "setup", moduleName: "setup", title: "Setup", description: "Run the Ouro setup wizard to configure workspace settings.", presets: [{ id: "normal", label: "Normal mode", args: "--mode normal" }, { id: "advanced", label: "Advanced mode", args: "--mode advanced" }, { id: "wizard", label: "Wizard (beginner)", args: "--wizard --profile beginner" }] },
 ];
 
 export function configBySlug(slug: string): DedicatedModuleConfig | null {

@@ -60,7 +60,7 @@ export function AliasesPage() {
       <section className="rounded-2xl border border-border bg-card p-5">
         <h1 className="text-2xl font-semibold tracking-tight">Aliases</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Command shortcuts that expand to full Framekit commands. User aliases can be created, enabled, or removed. Built-in aliases can only be toggled.
+          Command shortcuts that expand to full Ouro commands. User aliases can be created, enabled, or removed. Built-in aliases can only be toggled.
         </p>
       </section>
 

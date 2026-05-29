@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from framekit.core.models.metadata import MetadataCandidate, MetadataLookupRequest
-from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData
-from framekit.modules.metadata.cache import MetadataCache
-from framekit.modules.metadata.matcher import build_lookup_request
+from ouro.core.models.metadata import MetadataCandidate, MetadataLookupRequest
+from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData
+from ouro.modules.metadata.cache import MetadataCache
+from ouro.modules.metadata.matcher import build_lookup_request
 
 
 def test_build_lookup_request_movie():

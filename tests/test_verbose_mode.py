@@ -6,7 +6,7 @@ from io import StringIO
 
 from loguru import logger
 
-from framekit.core.verbose import (
+from ouro.core.verbose import (
     VerbosityLevel,
     configure_verbosity,
     get_verbosity_level,
@@ -181,7 +181,7 @@ class TestVerbosityIntegration:
 
     def test_verbosity_context_manager(self):
         """Test verbosity as context manager."""
-        from framekit.core.verbose import verbosity_context
+        from ouro.core.verbose import verbosity_context
 
         assert get_verbosity_level() == VerbosityLevel.NORMAL
 
@@ -205,7 +205,7 @@ class TestVerbosityHelpers:
 
     def test_should_show_progress(self):
         """Test should_show_progress helper."""
-        from framekit.core.verbose import should_show_progress
+        from ouro.core.verbose import should_show_progress
 
         # NORMAL: show progress
         configure_verbosity(0)
@@ -221,7 +221,7 @@ class TestVerbosityHelpers:
 
     def test_should_show_commands(self):
         """Test should_show_commands helper."""
-        from framekit.core.verbose import should_show_commands
+        from ouro.core.verbose import should_show_commands
 
         # NORMAL: don't show commands
         configure_verbosity(0)
@@ -241,7 +241,7 @@ class TestVerbosityHelpers:
 
     def test_should_show_subprocess_output(self):
         """Test should_show_subprocess_output helper."""
-        from framekit.core.verbose import should_show_subprocess_output
+        from ouro.core.verbose import should_show_subprocess_output
 
         # NORMAL: don't show subprocess output
         configure_verbosity(0)
@@ -261,7 +261,7 @@ class TestVerbosityHelpers:
 
     def test_get_log_level_string(self):
         """Test getting log level string for loguru."""
-        from framekit.core.verbose import get_log_level_string
+        from ouro.core.verbose import get_log_level_string
 
         configure_verbosity(0)
         assert get_log_level_string() == "WARNING"
@@ -289,7 +289,7 @@ class TestVerbosityLoggingHelpers:
 
     def test_log_command_at_debug_level(self):
         """Test log_command shows commands at DEBUG level."""
-        from framekit.core.verbose import log_command
+        from ouro.core.verbose import log_command
 
         configure_verbosity(2)  # DEBUG
         log_command(["ffmpeg", "-i", "input.mkv"], tool="ffmpeg")
@@ -297,7 +297,7 @@ class TestVerbosityLoggingHelpers:
 
     def test_log_command_not_shown_at_verbose(self):
         """Test log_command doesn't show at VERBOSE level."""
-        from framekit.core.verbose import log_command
+        from ouro.core.verbose import log_command
 
         configure_verbosity(1)  # VERBOSE
         log_command(["ffmpeg", "-i", "input.mkv"], tool="ffmpeg")
@@ -305,7 +305,7 @@ class TestVerbosityLoggingHelpers:
 
     def test_log_subprocess_output_at_trace(self):
         """Test log_subprocess_output shows at TRACE level."""
-        from framekit.core.verbose import log_subprocess_output
+        from ouro.core.verbose import log_subprocess_output
 
         configure_verbosity(3)  # TRACE
         log_subprocess_output("frame=  100 fps= 25 q=28.0 size=    1024kB", tool="ffmpeg")
@@ -313,7 +313,7 @@ class TestVerbosityLoggingHelpers:
 
     def test_log_subprocess_output_not_shown_at_debug(self):
         """Test log_subprocess_output doesn't show at DEBUG level."""
-        from framekit.core.verbose import log_subprocess_output
+        from ouro.core.verbose import log_subprocess_output
 
         configure_verbosity(2)  # DEBUG
         log_subprocess_output("frame=  100 fps= 25 q=28.0 size=    1024kB", tool="ffmpeg")
@@ -321,7 +321,7 @@ class TestVerbosityLoggingHelpers:
 
     def test_log_file_processing_at_verbose(self):
         """Test log_file_processing shows at VERBOSE level."""
-        from framekit.core.verbose import log_file_processing
+        from ouro.core.verbose import log_file_processing
 
         configure_verbosity(1)  # VERBOSE
         log_file_processing("/path/to/file.mkv", status="processing")
@@ -329,7 +329,7 @@ class TestVerbosityLoggingHelpers:
 
     def test_log_file_processing_not_shown_at_normal(self):
         """Test log_file_processing doesn't show at NORMAL level."""
-        from framekit.core.verbose import log_file_processing
+        from ouro.core.verbose import log_file_processing
 
         configure_verbosity(0)  # NORMAL
         log_file_processing("/path/to/file.mkv", status="processing")
@@ -356,10 +356,10 @@ class TestBackwardCompatibility:
     def test_existing_progress_bars_work(self):
         """Test that existing progress bars still work."""
         # This is a smoke test - actual progress bars tested in their modules
-        from framekit.ui.progress import framekit_progress
+        from ouro.ui.progress import ouro_progress
 
         # Should work without verbose configuration
-        with framekit_progress("Test", total=10) as advance:
+        with ouro_progress("Test", total=10) as advance:
             advance(1)
             advance(1)
 
@@ -368,10 +368,10 @@ class TestBackwardCompatibility:
         # Re-import should not change state
         import importlib
 
-        import framekit.core.verbose
+        import ouro.core.verbose
 
         level_before = get_verbosity_level()
-        importlib.reload(framekit.core.verbose)
+        importlib.reload(ouro.core.verbose)
         level_after = get_verbosity_level()
 
         assert level_before == level_after

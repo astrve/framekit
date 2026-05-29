@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # Project metadata (PEP 621)
 # ---------------------------------------------------------------------------
 [project]
-name = "framekit-cli"
+name = "ouro-auto"
 version = "2.0.0"
 description = "Headless-first media workflow toolkit (rename, MKV cleanup, NFO/Prez/torrent, batch & watch)."
 readme = "README.md"
@@ -78,11 +78,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/astrve/framekit"
-Repository    = "https://github.com/astrve/framekit"
-Issues        = "https://github.com/astrve/framekit/issues"
-Documentation = "https://github.com/astrve/framekit/blob/main/docs/Home.md"
-Changelog     = "https://github.com/astrve/framekit/blob/main/CHANGELOG.md"
+Homepage      = "https://github.com/astrve/ouro"
+Repository    = "https://github.com/astrve/ouro"
+Issues        = "https://github.com/astrve/ouro/issues"
+Documentation = "https://github.com/astrve/ouro/blob/main/docs/Home.md"
+Changelog     = "https://github.com/astrve/ouro/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -128,18 +128,17 @@ build-binary = [
 ]
 
 [project.scripts]
-framekit = "framekit.__main__:main"
-fk       = "framekit.__main__:main"
+ouro = "ouro.__main__:main"
 
 # Plugin discovery: third parties can register additional modules under
-# the ``framekit.modules`` entry-point and they will be loaded at startup.
+# the ``ouro.modules`` entry-point and they will be loaded at startup.
 # Example (in a separate package's pyproject.toml):
 #
-#   [project.entry-points."framekit.modules"]
-#   anilist = "framekit_plugin_anilist:register"
-[project.entry-points."framekit.modules"]
+#   [project.entry-points."ouro.modules"]
+#   anilist = "ouro_plugin_anilist:register"
+[project.entry-points."ouro.modules"]
 # (built-in modules are not exposed here on purpose; they are imported
-# directly by framekit.commands. This table is intentionally empty so
+# directly by ouro.commands. This table is intentionally empty so
 # third-party packages can populate it without conflicts.)
 
 # ---------------------------------------------------------------------------
@@ -151,13 +150,13 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["framekit*"]
+include = ["ouro*"]
 
 [tool.setuptools.cmdclass]
-build_py = "framekit._build.FramekitBuildPy"
+build_py = "ouro._build.OuroBuildPy"
 
 [tool.setuptools.package-data]
-"framekit" = [
+"ouro" = [
   "py.typed",
   "locales/*.json",
   "templates/**/*.jinja2",
@@ -241,14 +240,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**"    = ["S101", "D", "B017", "B904", "F841", "RUF043", "RUF059", "TID251"]
 "**/__main__.py" = ["D"]              # entry-point glue: minimal docs
-"src/framekit/core/subprocess_safe.py" = ["TID251"]  # Centralized subprocess wrapper owns low-level calls
+"src/ouro/core/subprocess_safe.py" = ["TID251"]  # Centralized subprocess wrapper owns low-level calls
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-"subprocess.run".msg = "Use framekit.core.subprocess_safe.run_safe."
-"subprocess.Popen".msg = "Use framekit.core.subprocess_safe.popen_safe."
+"subprocess.run".msg = "Use ouro.core.subprocess_safe.run_safe."
+"subprocess.Popen".msg = "Use ouro.core.subprocess_safe.popen_safe."
 
 [tool.ruff.format]
 quote-style    = "double"
@@ -263,7 +262,7 @@ line-ending    = "auto"
 # two ``reportMissingType*`` rules below are individually disabled because
 # they fire on values returned by libraries that do not ship PEP 561 stubs
 # (``click``, ``rich``, ``yaml``, ``ruamel.yaml``, ``pymediainfo``, etc.).
-# Every other strict check stays on so type errors in Framekit's own code
+# Every other strict check stays on so type errors in Ouro's own code
 # are not buried under upstream noise.
 [tool.pyright]
 pythonVersion          = "3.12"
@@ -285,10 +284,10 @@ reportMissingParameterType = false
 # Rich-click uses adjacent string literals for help — intentional.
 reportImplicitStringConcatenation = false
 
-# Framekit deliberately re-exports underscore-prefixed helpers from its
+# Ouro deliberately re-exports underscore-prefixed helpers from its
 # pipeline facade (see ADR-0002 and ``tests/test_pipeline_smoke.py``). The
 # underscore is a "module-internal by default" convention; the explicit
-# ``__all__`` in :mod:`framekit.commands.pipeline` is the actual public
+# ``__all__`` in :mod:`ouro.commands.pipeline` is the actual public
 # contract. Enabling reportPrivateUsage would only generate noise on
 # legitimate facade imports.
 reportPrivateUsage = false
@@ -321,7 +320,7 @@ ignore_names   = ["cli", "main", "*_command", "*_group", "register"]
 # Coverage
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
-source   = ["src/framekit"]
+source   = ["src/ouro"]
 branch   = true
 parallel = true
 omit = [
@@ -331,53 +330,53 @@ omit = [
   "*/.venv/*",
   "*/venv/*",
   # CLI entrypoints and Rich/Click adapters: smoke-tested separately, low unit-value for branch coverage.
-  "src/framekit/__main__.py",
-  "src/framekit/commands/*",
-  "src/framekit/ui/*",
+  "src/ouro/__main__.py",
+  "src/ouro/commands/*",
+  "src/ouro/ui/*",
   # Interactive/optional orchestration surfaces with heavy external-tool coupling.
-  "src/framekit/modules/batch/*",
-  "src/framekit/modules/setup/*",
-  "src/framekit/modules/upload/*",
-  "src/framekit/modules/upload/adapters/*",
-  "src/framekit/modules/watch/*",
+  "src/ouro/modules/batch/*",
+  "src/ouro/modules/setup/*",
+  "src/ouro/modules/upload/*",
+  "src/ouro/modules/upload/adapters/*",
+  "src/ouro/modules/watch/*",
   # Thin wrappers around external tools or interactive shells; core planners/models stay covered.
-  "src/framekit/modules/cleanmkv/diff.py",
-  "src/framekit/modules/cleanmkv/service.py",
-  "src/framekit/modules/cleanmkv/wizard.py",
-  "src/framekit/modules/encoder/presets.py",
-  "src/framekit/modules/encoder/service.py",
-  "src/framekit/modules/encoder/validator.py",
-  "src/framekit/modules/metadata/ui.py",
-  "src/framekit/modules/metadata/workflow.py",
-  "src/framekit/modules/nfo/formatting.py",
-  "src/framekit/modules/nfo/logo_tools.py",
-  "src/framekit/modules/nfo/scanner.py",
-  "src/framekit/modules/nfo/selector.py",
-  "src/framekit/modules/nfo/service.py",
-  "src/framekit/modules/nfo/templates.py",
-  "src/framekit/modules/prez/banner_selector.py",
-  "src/framekit/modules/prez/template_selector.py",
-  "src/framekit/modules/prez/theme_loader.py",
+  "src/ouro/modules/cleanmkv/diff.py",
+  "src/ouro/modules/cleanmkv/service.py",
+  "src/ouro/modules/cleanmkv/wizard.py",
+  "src/ouro/modules/encoder/presets.py",
+  "src/ouro/modules/encoder/service.py",
+  "src/ouro/modules/encoder/validator.py",
+  "src/ouro/modules/metadata/ui.py",
+  "src/ouro/modules/metadata/workflow.py",
+  "src/ouro/modules/nfo/formatting.py",
+  "src/ouro/modules/nfo/logo_tools.py",
+  "src/ouro/modules/nfo/scanner.py",
+  "src/ouro/modules/nfo/selector.py",
+  "src/ouro/modules/nfo/service.py",
+  "src/ouro/modules/nfo/templates.py",
+  "src/ouro/modules/prez/banner_selector.py",
+  "src/ouro/modules/prez/template_selector.py",
+  "src/ouro/modules/prez/theme_loader.py",
   # Optional runtime helpers and convenience facades.
-  "src/framekit/core/banners/*",
-  "src/framekit/core/diagnostics.py",
-  "src/framekit/core/destructive.py",
-  "src/framekit/core/error_suggestions.py",
-  "src/framekit/core/json_output.py",
-  "src/framekit/core/languages.py",
-  "src/framekit/core/mediainfo.py",
-  "src/framekit/core/naming.py",
-  "src/framekit/core/parallel.py",
-  "src/framekit/core/performance.py",
-  "src/framekit/core/release_inspection.py",
-  "src/framekit/core/security/permissions.py",
-  "src/framekit/core/settings/high_level.py",
-  "src/framekit/core/settings/profiles.py",
-  "src/framekit/core/settings_singleton.py",
-  "src/framekit/core/update_check.py",
+  "src/ouro/core/banners/*",
+  "src/ouro/core/diagnostics.py",
+  "src/ouro/core/destructive.py",
+  "src/ouro/core/error_suggestions.py",
+  "src/ouro/core/json_output.py",
+  "src/ouro/core/languages.py",
+  "src/ouro/core/mediainfo.py",
+  "src/ouro/core/naming.py",
+  "src/ouro/core/parallel.py",
+  "src/ouro/core/performance.py",
+  "src/ouro/core/release_inspection.py",
+  "src/ouro/core/security/permissions.py",
+  "src/ouro/core/settings/high_level.py",
+  "src/ouro/core/settings/profiles.py",
+  "src/ouro/core/settings_singleton.py",
+  "src/ouro/core/update_check.py",
   # Selector and detection helpers still lack dedicated branch-focused tests.
-  "src/framekit/modules/renamer/detector.py",
-  "src/framekit/modules/renamer/term_selector.py",
+  "src/ouro/modules/renamer/detector.py",
+  "src/ouro/modules/renamer/term_selector.py",
 ]
 
 [tool.coverage.report]
@@ -408,13 +407,13 @@ output = "coverage.xml"
 [tool.deptry]
 
 [tool.deptry.package_module_name_map]
-"framekit-cli" = "framekit"
+"ouro-auto" = "ouro"
 PyYAML = "yaml"
 "ruamel.yaml" = "ruamel"
 
 # Per-rule ignores
 [tool.deptry.per_rule_ignores]
-DEP001 = ["framekit"]
+DEP001 = ["ouro"]
 DEP002 = [
     "pytest",
     "pytest-cov",
@@ -449,7 +448,7 @@ DEP002 = [
     "pyinstaller",
     "language-data",
 ]
-DEP003 = ["framekit"]
+DEP003 = ["ouro"]
 
 # ---------------------------------------------------------------------------
 # Bandit (security linter)
@@ -485,7 +484,7 @@ ignore-nested-classes = true
 # Codespell
 # ---------------------------------------------------------------------------
 [tool.codespell]
-skip = ".git,.venv,venv,.mypy_cache,.pytest_cache,.ruff_cache,.hypothesis,.benchmarks,site,dist,build,htmlcov,*.egg-info,.coverage,coverage.xml,bandit-report.json,*.lock,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.webp,*.ico,locales,templates,docs,Presets,framekit.example.yaml"
+skip = ".git,.venv,venv,.mypy_cache,.pytest_cache,.ruff_cache,.hypothesis,.benchmarks,site,dist,build,htmlcov,*.egg-info,.coverage,coverage.xml,bandit-report.json,*.lock,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.webp,*.ico,locales,templates,docs,Presets,ouro.example.yaml"
 ignore-words-list = "ADN,Informations,Objets,Presse,Serie,Sinopsis,ans,preselect,preselected,reuses,reusing"
 
 # ---------------------------------------------------------------------------
@@ -498,7 +497,7 @@ ignore-words-list = "ADN,Informations,Objets,Presse,Serie,Sinopsis,ans,preselect
 # module-by-module as the suite grows. ``runner`` is the test command the
 # runner invokes for every mutant; ``-x`` short-circuits on first failure.
 [tool.mutmut]
-paths_to_mutate = "src/framekit/core/security,src/framekit/core/settings/normalize.py,src/framekit/core/naming.py"
+paths_to_mutate = "src/ouro/core/security,src/ouro/core/settings/normalize.py,src/ouro/core/naming.py"
 backup = false
 runner = "pytest -x --tb=no -q"
 tests_dir = "tests/"

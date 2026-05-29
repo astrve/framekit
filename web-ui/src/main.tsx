@@ -8,6 +8,11 @@ import { AuthProvider } from "@/lib/auth";
 import { queryClient } from "@/lib/query-client";
 import { router } from "@/router";
 
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
+  window.location.reload();
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

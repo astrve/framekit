@@ -7,10 +7,10 @@ Creates a `.torrent` file for the release. Supports single announce URL, multi-t
 ## Usage
 
 ```bash
-fk torrent /path/to/release [OPTIONS]
-fk torrent /path/to/release --announce https://tracker.example.com/announce
-fk torrent /path/to/release --piece-length 4096
-fk torrent /path/to/release --output-dir /tmp/torrents
+ouro torrent /path/to/release [OPTIONS]
+ouro torrent /path/to/release --announce https://tracker.example.com/announce
+ouro torrent /path/to/release --piece-length 4096
+ouro torrent /path/to/release --output-dir /tmp/torrents
 ```
 
 ---
@@ -65,7 +65,7 @@ torrent:
 Or on the CLI:
 
 ```bash
-fk torrent /path/to/release \
+ouro torrent /path/to/release \
   --announce https://primary.tracker.com/announce \
   --add-announce https://secondary.tracker.com/announce
 ```

@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData, TrackNfoData
-from framekit.modules.nfo.builder import build_release_nfo
-from framekit.modules.nfo.service import NfoService
-from framekit.modules.nfo.templates import list_all_templates
+from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData, TrackNfoData
+from ouro.modules.nfo.builder import build_release_nfo
+from ouro.modules.nfo.service import NfoService
+from ouro.modules.nfo.templates import list_all_templates
 
 
 def _track(
@@ -446,7 +446,7 @@ def test_list_templates_collapses_localized_builtin_variants():
 
 def test_render_template_uses_requested_locale():
     """Test that templates render with the correct locale."""
-    from framekit.modules.nfo.templates import render_template
+    from ouro.modules.nfo.templates import render_template
 
     rendered_fr = render_template("movie_default", _minimal_render_context(), locale="fr")
     rendered_es = render_template("movie_default", _minimal_render_context(), locale="es")
@@ -462,6 +462,6 @@ def test_render_template_uses_requested_locale():
 
 def test_aspect_ratio_display_handles_two_to_one():
     """Test that 2:1 aspect ratio is correctly formatted."""
-    from framekit.modules.nfo.scanner import _aspect_ratio_display
+    from ouro.modules.nfo.scanner import _aspect_ratio_display
 
     assert _aspect_ratio_display("2.000") == "2.000 (2:1)"

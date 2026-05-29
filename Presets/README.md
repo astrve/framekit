@@ -1,6 +1,6 @@
-# Framekit Presets
+# Ouro Presets
 
-This directory contains preset configurations for various Framekit modules. Presets allow you to save and reuse common configurations, making your workflow more efficient.
+This directory contains preset configurations for various Ouro modules. Presets allow you to save and reuse common configurations, making your workflow more efficient.
 
 ## Directory Structure
 
@@ -23,13 +23,13 @@ CleanMKV presets control which audio and subtitle tracks to keep when remuxing M
 **Example Usage:**
 ```bash
 # Create a preset using the wizard
-framekit cleanmkv --wizard --save-preset "my_preset"
+ouro cleanmkv --wizard --save-preset "my_preset"
 
 # Use a saved preset
-framekit cleanmkv --external-preset "my_preset"
+ouro cleanmkv --external-preset "my_preset"
 
 # List available presets
-framekit cleanmkv --list-presets
+ouro cleanmkv --list-presets
 ```
 
 **See:** `CleanMKV/example.yaml` for detailed examples and documentation.
@@ -43,10 +43,10 @@ Prez presets define how release presentations are generated, including template 
 **Example Usage:**
 ```bash
 # Use a preset
-framekit prez --preset tracker
+ouro prez --preset tracker
 
 # Override preset values
-framekit prez --preset tracker --html-template cinema
+ouro prez --preset tracker --html-template cinema
 ```
 
 **See:** `Prez/example.yaml` for detailed examples and documentation.
@@ -60,10 +60,10 @@ Pipeline presets define complete workflows that combine multiple modules (Rename
 **Example Usage:**
 ```bash
 # Run a complete pipeline
-framekit pipeline --preset complete_release
+ouro pipeline --preset complete_release
 
 # Batch process multiple releases
-framekit pipeline --preset complete_release --batch
+ouro pipeline --preset complete_release --batch
 ```
 
 **See:** `Pipeline/example.yaml` for detailed examples and documentation.
@@ -75,7 +75,7 @@ framekit pipeline --preset complete_release --batch
 The easiest way to create CleanMKV presets is using the interactive wizard:
 
 ```bash
-framekit cleanmkv --wizard --save-preset "my_custom_preset"
+ouro cleanmkv --wizard --save-preset "my_custom_preset"
 ```
 
 This will guide you through selecting tracks and save the preset automatically.
@@ -89,20 +89,20 @@ This will guide you through selecting tracks and save the preset automatically.
 
 ### Method 3: Copying Existing Presets
 
-If you have presets in the legacy location (`~/.config/framekit/presets/`), they will still work. However, we recommend copying them to the new location for better organization:
+If you have presets in the legacy location (`~/.config/ouro/presets/`), they will still work. However, we recommend copying them to the new location for better organization:
 
 ```bash
 # Copy from legacy location to new location
-cp ~/.config/framekit/presets/my_preset.json Presets/CleanMKV/
+cp ~/.config/ouro/presets/my_preset.json Presets/CleanMKV/
 ```
 
 ## Backward Compatibility
 
-Framekit maintains backward compatibility with presets stored in the legacy location:
-- **Legacy Location:** `~/.config/framekit/presets/` (or equivalent on your OS)
+Ouro maintains backward compatibility with presets stored in the legacy location:
+- **Legacy Location:** `~/.config/ouro/presets/` (or equivalent on your OS)
 - **New Location:** `Presets/CleanMKV/` (in your project directory)
 
-When loading presets, Framekit checks:
+When loading presets, Ouro checks:
 1. New project-level `Presets/CleanMKV/` directory first
 2. Legacy config directory as fallback
 
@@ -120,7 +120,7 @@ When saving new presets, they are saved to the new `Presets/CleanMKV/` directory
 
 When multiple presets exist with the same name:
 1. Project-level presets (`Presets/CleanMKV/`) take priority
-2. Legacy presets (`~/.config/framekit/presets/`) are used as fallback
+2. Legacy presets (`~/.config/ouro/presets/`) are used as fallback
 3. Built-in presets are used if no external preset is found
 
 ## Tips and Best Practices
@@ -183,7 +183,7 @@ If a preset fails to load:
 ### Legacy Presets Not Loading
 
 If legacy presets aren't loading:
-1. Verify they exist in `~/.config/framekit/presets/`
+1. Verify they exist in `~/.config/ouro/presets/`
 2. Check file permissions
 3. Try copying to new location: `Presets/CleanMKV/`
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from framekit.core.dry_run import (
+from ouro.core.dry_run import (
     DryRunOperation,
     DryRunRecorder,
     dry_run_mode,

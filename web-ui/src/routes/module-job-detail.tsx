@@ -100,7 +100,7 @@ export function ModuleJobDetailPage() {
         <p className="mt-1 text-sm text-muted-foreground">{jobId}</p>
         <div className="mt-3">
           <Button asChild variant="outline">
-            <Link to="/jobs">Back To Modules</Link>
+            <Link to="/jobs">Back to Jobs</Link>
           </Button>
         </div>
       </section>
@@ -112,10 +112,10 @@ export function ModuleJobDetailPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <RunTimeline items={timelineItems} />
-          {jobQuery.isLoading ? <p className="text-sm text-muted-foreground">Chargement...</p> : null}
+          {jobQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
           {jobQuery.error ? (
             <p className="rounded-md border border-rose-300 bg-rose-100 p-3 text-sm text-rose-800">
-              Impossible de charger le job.
+              Failed to load job.
             </p>
           ) : null}
           {job ? (
@@ -165,7 +165,7 @@ export function ModuleJobDetailPage() {
 
               {commandText ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Commande</p>
+                  <p className="text-sm font-medium">Command</p>
                   <pre className="max-h-60 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
                     {commandText}
                   </pre>
@@ -185,14 +185,14 @@ export function ModuleJobDetailPage() {
                     }}
                   >
                     <Copy className="mr-2 h-4 w-4" />
-                    {copied ? "Commande copiée" : "Copier commande"}
+                    {copied ? "Command copied" : "Copy command"}
                   </Button>
                 </div>
               ) : null}
 
               {job.result ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Résultat</p>
+                  <p className="text-sm font-medium">Result</p>
                   <p className="text-sm">Return code: {job.result.returncode}</p>
                   <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
                     {job.result.stdout || "(stdout empty)"}
@@ -222,21 +222,21 @@ export function ModuleJobDetailPage() {
                         setFollowLogs(true);
                       }}
                     >
-                      {followLogs ? "Pause follow" : "Reprendre follow"}
+                      {followLogs ? "Pause follow" : "Resume follow"}
                     </Button>
                   </div>
                   <label className="space-y-1 text-sm" htmlFor="logs-filter">
-                    Filtre
+                    Filter
                     <input
                       id="logs-filter"
                       className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                       value={logFilter}
                       onChange={(event) => setLogFilter(event.target.value)}
-                      placeholder="contient..."
+                      placeholder="contains..."
                     />
                   </label>
                   <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
-                    {filteredStdout || "(stdout en attente)"}
+                    {filteredStdout || "(stdout pending)"}
                   </pre>
                   {filteredStderr ? (
                     <pre className="max-h-72 overflow-auto rounded-md border border-rose-300 bg-rose-100 p-3 text-xs text-rose-800">

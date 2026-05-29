@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Clock3, RotateCcw, Square } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -18,6 +18,7 @@ import {
 } from "@/lib/api/endpoints";
 import type { ModuleJob } from "@/lib/api/schemas";
 import { runTimeline } from "@/lib/progress";
+import { cn } from "@/lib/utils";
 
 type JobStatusFilter = "all" | "pending" | "running" | "completed" | "failed" | "cancelled";
 
@@ -207,8 +208,19 @@ export function ModulesPage() {
       <section className="rounded-2xl border border-border bg-card p-5">
         <h1 className="text-2xl font-semibold tracking-tight">Jobs</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          History and debug surface. View, cancel, and rerun background jobs. Use dedicated module pages to start new runs.
+          Central queue and execution history. Filter, inspect, cancel, and rerun from one place.
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/pipeline">Run Pipeline</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/batch">Run Batch</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/studios">Open Modules</Link>
+          </Button>
+        </div>
       </section>
 
       <Card>
@@ -216,9 +228,9 @@ export function ModulesPage() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-primary" />
-              Job history
+              Queue and history
             </CardTitle>
-            <CardDescription>All background jobs — filter, search, and inspect.</CardDescription>
+            <CardDescription>All background jobs with retry metadata and direct drilldown.</CardDescription>
           </div>
           {confirmClear ? (
             <div className="flex items-center gap-2">
@@ -294,57 +306,96 @@ export function ModulesPage() {
             Showing: {filteredJobs.length} / {jobsQuery.data?.jobs.length ?? 0}
           </p>
 
-          {filteredJobs.map((job) => (
-            <div
-              key={job.id}
-              className="grid w-full gap-2 rounded-md border border-border p-3 text-left md:grid-cols-[1fr_auto_auto_auto]"
-            >
-              <button type="button" className="text-left" onClick={() => { setSelectedJobId(job.id); }}>
-                <p className="text-xs text-muted-foreground">{job.id}</p>
-              </button>
-              <div>
-                <p className="font-medium">{String((job.request["module"] as string) ?? "-")}</p>
-                <p className="text-xs text-muted-foreground font-mono">
-                  attempts {job.attempts}/{job.max_attempts}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge
-                  variant={
-                    job.status === "completed"
-                      ? "success"
-                      : job.status === "failed" || job.status === "cancelled"
-                        ? "danger"
-                        : "secondary"
-                  }
-                >
-                  {job.status}
-                </Badge>
-                {job.origin ? (
-                  <Badge variant="secondary" className="font-mono text-[10px]">
-                    {job.origin}
-                  </Badge>
-                ) : null}
-                {job.last_failure_kind ? (
-                  <Badge variant="warning" className="font-mono text-[10px]">
-                    {job.last_failure_kind}
-                  </Badge>
-                ) : null}
-                {job.next_retry_at ? (
-                  <Badge variant="secondary" className="font-mono text-[10px]">
-                    retry {new Date(job.next_retry_at).toLocaleTimeString()}
-                  </Badge>
-                ) : null}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => { void navigate({ to: "/jobs/$jobId", params: { jobId: job.id } }); }}
-              >
-                Details
-              </Button>
+          {filteredJobs.length === 0 ? (
+            <p className="rounded-md border border-border bg-secondary/25 px-3 py-6 text-center text-sm text-muted-foreground">
+              No jobs match the current filters.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-md border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/35">
+                  <tr className="border-b border-border/70 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-2 font-semibold">Job</th>
+                    <th className="px-3 py-2 font-semibold">Module</th>
+                    <th className="px-3 py-2 font-semibold">Status</th>
+                    <th className="px-3 py-2 font-semibold">Retry</th>
+                    <th className="px-3 py-2 text-right font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/70">
+                  {filteredJobs.map((job) => (
+                    <tr
+                      key={job.id}
+                      className={cn(
+                        "hover:bg-secondary/35",
+                        selectedJobId === job.id ? "bg-primary/5" : "",
+                      )}
+                    >
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          className="text-left font-mono text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => { setSelectedJobId(job.id); }}
+                        >
+                          {job.id}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 font-medium">
+                        {String((job.request["module"] as string) ?? "-")}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge
+                            variant={
+                              job.status === "completed"
+                                ? "success"
+                                : job.status === "failed" || job.status === "cancelled"
+                                  ? "danger"
+                                  : "secondary"
+                            }
+                          >
+                            {job.status}
+                          </Badge>
+                          {job.origin ? (
+                            <Badge variant="secondary" className="font-mono text-[10px]">
+                              {job.origin}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="font-mono text-muted-foreground">
+                            {job.attempts}/{job.max_attempts}
+                          </span>
+                          {job.last_failure_kind ? (
+                            <Badge variant="warning" className="font-mono text-[10px]">
+                              {job.last_failure_kind}
+                            </Badge>
+                          ) : null}
+                          {job.next_retry_at ? (
+                            <Badge variant="secondary" className="font-mono text-[10px]">
+                              {new Date(job.next_retry_at).toLocaleTimeString()}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { void navigate({ to: "/jobs/$jobId", params: { jobId: job.id } }); }}
+                        >
+                          Details
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
           {(jobsQuery.data?.jobs.length ?? 0) >= jobsLimit && jobsLimit < 100 ? (
             <Button
               type="button"

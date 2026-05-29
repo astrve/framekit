@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from framekit.commands import pipeline as pipeline_module
+from ouro.commands import pipeline as pipeline_module
 
 
 class _TtyStdin:
@@ -39,7 +39,7 @@ def test_pipeline_tmdb_prompt_can_store_token(monkeypatch: pytest.MonkeyPatch) -
     }
     store = _FakeStore(settings)
 
-    monkeypatch.delenv("FRAMEKIT_TMDB_READ_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("OURO_TMDB_READ_ACCESS_TOKEN", raising=False)
     monkeypatch.setattr(pipeline_module.sys, "stdin", _TtyStdin())
     monkeypatch.setattr(pipeline_module, "select_one", lambda **_kwargs: "add")
     monkeypatch.setattr(
@@ -76,7 +76,7 @@ def test_pipeline_tmdb_prompt_can_disable_future_reminder(
     }
     store = _FakeStore(settings)
 
-    monkeypatch.delenv("FRAMEKIT_TMDB_READ_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("OURO_TMDB_READ_ACCESS_TOKEN", raising=False)
     monkeypatch.setattr(pipeline_module.sys, "stdin", _TtyStdin())
     monkeypatch.setattr(pipeline_module, "select_one", lambda **_kwargs: "never")
 
@@ -102,7 +102,7 @@ def test_pipeline_tmdb_prompt_skips_current_run(monkeypatch: pytest.MonkeyPatch)
     }
     store = _FakeStore(settings)
 
-    monkeypatch.delenv("FRAMEKIT_TMDB_READ_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("OURO_TMDB_READ_ACCESS_TOKEN", raising=False)
     monkeypatch.setattr(pipeline_module.sys, "stdin", _TtyStdin())
     monkeypatch.setattr(pipeline_module, "select_one", lambda **_kwargs: "skip")
 

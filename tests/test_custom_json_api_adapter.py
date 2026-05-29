@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from framekit.core.http import HttpResponse
-from framekit.modules.upload.adapters.custom_json_api_v1 import CustomJsonApiAdapter
-from framekit.modules.upload.models import TorrentFile, TorrentMetadata, TrackerConfig
+from ouro.core.http import HttpResponse
+from ouro.modules.upload.adapters.custom_json_api_v1 import CustomJsonApiAdapter
+from ouro.modules.upload.models import TorrentFile, TorrentMetadata, TrackerConfig
 
 
 def _make_config() -> TrackerConfig:

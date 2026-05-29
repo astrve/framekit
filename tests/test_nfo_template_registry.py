@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from framekit.modules.nfo.template_registry import (
+from ouro.modules.nfo.template_registry import (
     NfoTemplateRecord,
     NfoTemplateRegistry,
     builtin_template_records,

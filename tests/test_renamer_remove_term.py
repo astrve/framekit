@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from framekit.modules.renamer.service import RenamerService
+from ouro.modules.renamer.service import RenamerService
 
 
 def test_renamer_remove_terms(tmp_path: Path) -> None:

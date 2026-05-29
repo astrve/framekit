@@ -1,8 +1,8 @@
 """Roundtrip property tests for the bencode encoder + decoder pair.
 
-The encoder lives in ``framekit.modules.torrent.service._bencode`` and the
-decoder in ``framekit.commands.torrent._bdecode``. Together they handle
-``.torrent`` payloads produced by Framekit. Roundtrip stability is a hard
+The encoder lives in ``ouro.modules.torrent.service._bencode`` and the
+decoder in ``ouro.commands.torrent._bdecode``. Together they handle
+``.torrent`` payloads produced by Ouro. Roundtrip stability is a hard
 contract: BitTorrent v1 clients must receive bit-identical metainfo bytes
 across encode/decode cycles, otherwise torrent infohashes drift.
 
@@ -21,8 +21,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from framekit.commands.torrent import _bdecode
-from framekit.modules.torrent.service import _bencode
+from ouro.commands.torrent import _bdecode
+from ouro.modules.torrent.service import _bencode
 
 pytestmark = pytest.mark.benchmark
 

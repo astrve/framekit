@@ -1,6 +1,6 @@
-# Framekit Web UI
+# Ouro Web UI
 
-Frontend SPA for local Framekit dashboard.
+Frontend SPA for local Ouro dashboard.
 
 ## Stack
 
@@ -51,5 +51,5 @@ Default API base URL: `http://127.0.0.1:8000`.
 Override:
 
 ```bash
-VITE_FRAMEKIT_API_BASE_URL=http://127.0.0.1:9000
+VITE_OURO_API_BASE_URL=http://127.0.0.1:9000
 ```

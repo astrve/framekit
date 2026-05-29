@@ -1,6 +1,6 @@
-"""Property tests for :func:`framekit.modules.torrent.service._bencode`.
+"""Property tests for :func:`ouro.modules.torrent.service._bencode`.
 
-Bencode is the BitTorrent v1 payload format. Framekit emits it when
+Bencode is the BitTorrent v1 payload format. Ouro emits it when
 generating ``.torrent`` files. The encoder must:
 
 * Round-trip any int/bytes/str/list/dict that contains only the supported
@@ -17,7 +17,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from framekit.modules.torrent.service import _bencode
+from ouro.modules.torrent.service import _bencode
 
 pytestmark = pytest.mark.benchmark
 

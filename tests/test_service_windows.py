@@ -1,4 +1,4 @@
-"""Tests for framekit.core.service.windows — Windows service management helpers.
+"""Tests for ouro.core.service.windows — Windows service management helpers.
 
 Most functions call external binaries (nssm, sc, schtasks) or make HTTP requests.
 All external calls are mocked so tests run on any platform.
@@ -26,7 +26,7 @@ import pytest
 
 def _import_windows():
     """Import the module under test."""
-    from framekit.core.service import windows
+    from ouro.core.service import windows
     return windows
 
 
@@ -52,7 +52,7 @@ class TestRun:
             mock_run.return_value = MagicMock(
                 returncode=1, stdout="", stderr="permission denied"
             )
-            ok, out = w._run(["sc", "create", "Framekit"])
+            ok, out = w._run(["sc", "create", "Ouro"])
         assert ok is False
         assert "permission denied" in out
 
@@ -295,7 +295,7 @@ class TestInstallTask:
         w = _import_windows()
         with patch.object(w, "_run", return_value=(True, "SUCCESS")):
             w.install_task("python", "127.0.0.1", 8000, service_dir=tmp_path)
-        assert (tmp_path / "framekit-serve.bat").exists(), "bat must be written"
+        assert (tmp_path / "ouro-serve.bat").exists(), "bat must be written"
 
     def test_bat_file_has_log_redirection(self, monkeypatch, tmp_path):
         """Bat file must redirect stdout and stderr to the log files."""
@@ -303,7 +303,7 @@ class TestInstallTask:
         w = _import_windows()
         with patch.object(w, "_run", return_value=(True, "SUCCESS")):
             w.install_task("python", "127.0.0.1", 8000, service_dir=tmp_path)
-        content = (tmp_path / "framekit-serve.bat").read_bytes().decode("utf-8")
+        content = (tmp_path / "ouro-serve.bat").read_bytes().decode("utf-8")
         assert ">>" in content, "stdout redirect must appear"
         assert "2>>" in content, "stderr redirect must appear"
         assert "service.out.log" in content
@@ -316,7 +316,7 @@ class TestInstallTask:
         python_with_spaces = r"C:\Program Files\Python\python.exe"
         with patch.object(w, "_run", return_value=(True, "SUCCESS")):
             w.install_task(python_with_spaces, "127.0.0.1", 8000, service_dir=tmp_path)
-        content = (tmp_path / "framekit-serve.bat").read_bytes().decode("utf-8")
+        content = (tmp_path / "ouro-serve.bat").read_bytes().decode("utf-8")
         assert f'"{python_with_spaces}"' in content
 
 
@@ -328,16 +328,16 @@ class TestInstallTask:
 class TestBuildTaskTr:
     def test_path_without_spaces(self):
         w = _import_windows()
-        bat_path = Path(r"C:\service\framekit-serve.bat")
+        bat_path = Path(r"C:\service\ouro-serve.bat")
         tr = w._build_task_tr(bat_path)
-        assert tr == r'cmd.exe /c "C:\service\framekit-serve.bat"'
+        assert tr == r'cmd.exe /c "C:\service\ouro-serve.bat"'
 
     def test_path_with_spaces(self):
         """Paths with spaces use CMD.EXE double-outer-quote convention."""
         w = _import_windows()
-        bat_path = Path(r"E:\Framekit Folder\service\framekit-serve.bat")
+        bat_path = Path(r"E:\Ouro Folder\service\ouro-serve.bat")
         tr = w._build_task_tr(bat_path)
-        assert tr == r'cmd.exe /c ""E:\Framekit Folder\service\framekit-serve.bat""'
+        assert tr == r'cmd.exe /c ""E:\Ouro Folder\service\ouro-serve.bat""'
 
 
 # ---------------------------------------------------------------------------
@@ -474,7 +474,7 @@ class TestStartStop:
 
 class TestQueryScStatus:
     SC_RUNNING_OUTPUT = (
-        "SERVICE_NAME: Framekit\n"
+        "SERVICE_NAME: Ouro\n"
         "        TYPE               : 10  WIN32_OWN_PROCESS\n"
         "        STATE              : 4  RUNNING\n"
         "                                (STOPPABLE, NOT_PAUSABLE, ACCEPTS_SHUTDOWN)\n"
@@ -485,7 +485,7 @@ class TestQueryScStatus:
     )
 
     SC_STOPPED_OUTPUT = (
-        "SERVICE_NAME: Framekit\n"
+        "SERVICE_NAME: Ouro\n"
         "        STATE              : 1  STOPPED\n"
     )
 
@@ -515,7 +515,7 @@ class TestQueryScStatus:
 
 class TestQueryTaskStatus:
     TASK_LIST_OUTPUT = (
-        "TaskName:                             Framekit\n"
+        "TaskName:                             Ouro\n"
         "Status:                               Ready\n"
         "Next Run Time:                        N/A\n"
         "Last Run Time:                        N/A\n"

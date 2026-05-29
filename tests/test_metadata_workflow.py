@@ -1,10 +1,10 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from framekit.core.models.metadata import MetadataCandidate
-from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData
-from framekit.modules.metadata.base import MetadataProvider
-from framekit.modules.metadata.workflow import _detect_content_type, run_metadata_workflow
+from ouro.core.models.metadata import MetadataCandidate
+from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData
+from ouro.modules.metadata.base import MetadataProvider
+from ouro.modules.metadata.workflow import _detect_content_type, run_metadata_workflow
 
 
 class DummyProvider(MetadataProvider):
@@ -42,7 +42,7 @@ class DummyProvider(MetadataProvider):
         ]
 
     def fetch_movie(self, candidate):
-        from framekit.core.models.metadata import MovieMetadata
+        from ouro.core.models.metadata import MovieMetadata
 
         return MovieMetadata(
             provider_name="tmdb",
@@ -55,7 +55,7 @@ class DummyProvider(MetadataProvider):
         )
 
     def fetch_episode(self, candidate):
-        from framekit.core.models.metadata import EpisodeMetadata
+        from ouro.core.models.metadata import EpisodeMetadata
 
         return EpisodeMetadata(
             provider_name="tmdb",
@@ -71,7 +71,7 @@ class DummyProvider(MetadataProvider):
         )
 
     def fetch_season(self, candidate):
-        from framekit.core.models.metadata import SeasonMetadata
+        from ouro.core.models.metadata import SeasonMetadata
 
         return SeasonMetadata(
             provider_name="tmdb",
@@ -145,7 +145,7 @@ def test_run_metadata_workflow_resolved(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "framekit.modules.metadata.workflow.build_metadata_provider",
+        "ouro.modules.metadata.workflow.build_metadata_provider",
         lambda settings, **kwargs: DummyProvider(),
     )
 
@@ -192,7 +192,7 @@ def test_run_metadata_workflow_passes_language_override_to_provider(monkeypatch)
         return DummyProvider()
 
     monkeypatch.setattr(
-        "framekit.modules.metadata.workflow.build_metadata_provider",
+        "ouro.modules.metadata.workflow.build_metadata_provider",
         fake_build_metadata_provider,
     )
 
@@ -207,7 +207,7 @@ def test_run_metadata_workflow_passes_language_override_to_provider(monkeypatch)
         },
         auto_accept=True,
         show_ui=False,
-        env={"FRAMEKIT_METADATA_LANGUAGE": "en-US"},
+        env={"OURO_METADATA_LANGUAGE": "en-US"},
         language_override="es-ES",
     )
 
@@ -233,7 +233,7 @@ def test_run_metadata_workflow_with_cover_selection_headless(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "framekit.modules.metadata.workflow.build_metadata_provider",
+        "ouro.modules.metadata.workflow.build_metadata_provider",
         lambda settings, **kwargs: DummyProvider(),
     )
 
@@ -280,7 +280,7 @@ def test_run_metadata_workflow_cover_in_context(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "framekit.modules.metadata.workflow.build_metadata_provider",
+        "ouro.modules.metadata.workflow.build_metadata_provider",
         lambda settings, **kwargs: DummyProvider(),
     )
 
@@ -329,7 +329,7 @@ def test_run_metadata_workflow_no_posters_available(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "framekit.modules.metadata.workflow.build_metadata_provider",
+        "ouro.modules.metadata.workflow.build_metadata_provider",
         lambda settings, **kwargs: NoPostersProvider(),
     )
 

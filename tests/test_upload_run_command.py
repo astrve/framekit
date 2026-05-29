@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from framekit.commands import upload as upload_command
+from ouro.commands import upload as upload_command
 
 
 def test_upload_run_requires_description_in_non_interactive_mode(monkeypatch, tmp_path):

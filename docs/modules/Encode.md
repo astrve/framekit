@@ -7,10 +7,10 @@ Re-encodes video files using FFmpeg presets. Supports single-file and batch (dir
 ## Usage
 
 ```bash
-fk encode /path/to/file.mkv --preset hevc_crf20
-fk encode /path/to/folder/ --preset hevc_crf20
-fk encode /path/to/folder/ --preset hevc_crf20 --recursive
-fk encode /path/to/file.mkv --preset-file /path/to/preset.yaml
+ouro encode /path/to/file.mkv --preset hevc_crf20
+ouro encode /path/to/folder/ --preset hevc_crf20
+ouro encode /path/to/folder/ --preset hevc_crf20 --recursive
+ouro encode /path/to/file.mkv --preset-file /path/to/preset.yaml
 ```
 
 ---
@@ -51,7 +51,7 @@ container: mkv
 extra_args: ["-map", "0:v:0", "-map", "0:a:0"]
 ```
 
-Store presets in `~/.config/framekit/encoder_presets/` or `./encoder_presets/`.
+Store presets in `~/.config/ouro/encoder_presets/` or `./encoder_presets/`.
 
 ---
 

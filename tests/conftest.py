@@ -31,10 +31,10 @@ def isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, s
         Dictionary of environment variables set for the test.
     """
     env_vars_to_clear = [
-        "FRAMEKIT_LOG_FILE",
-        "FRAMEKIT_DEBUG",
-        "FRAMEKIT_CONFIG",
-        "FRAMEKIT_CACHE_DIR",
+        "OURO_LOG_FILE",
+        "OURO_DEBUG",
+        "OURO_CONFIG",
+        "OURO_CACHE_DIR",
     ]
     for var in env_vars_to_clear:
         monkeypatch.delenv(var, raising=False)
@@ -45,8 +45,8 @@ def isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, s
     config_dir.mkdir(parents=True, exist_ok=True)
 
     env = {
-        "FRAMEKIT_CACHE_DIR": str(cache_dir),
-        "FRAMEKIT_CONFIG": str(config_dir / "framekit.yaml"),
+        "OURO_CACHE_DIR": str(cache_dir),
+        "OURO_CONFIG": str(config_dir / "ouro.yaml"),
     }
 
     for key, value in env.items():
@@ -64,7 +64,7 @@ def mock_settings_data() -> dict[str, Any]:
     the same shape as production code. The fixture intentionally re-exports
     the real defaults rather than maintaining a parallel literal that drifts.
     """
-    from framekit.core.settings import DEFAULT_SETTINGS
+    from ouro.core.settings import DEFAULT_SETTINGS
 
     return deepcopy(DEFAULT_SETTINGS)
 
@@ -104,9 +104,9 @@ def reset_locale_and_diagnostics() -> Generator[None, None, None]:
     Tests rely on a clean slate: locale, diagnostics, and path security
     settings must not leak into the next test or the same xdist worker.
     """
-    from framekit.core.diagnostics import reset_diagnostics
-    from framekit.core.i18n import set_locale
-    from framekit.core.path_validation import configure_security
+    from ouro.core.diagnostics import reset_diagnostics
+    from ouro.core.i18n import set_locale
+    from ouro.core.path_validation import configure_security
 
     set_locale("en")
     reset_diagnostics()
@@ -163,7 +163,7 @@ def sample_video_path(tmp_path: Path) -> Path:
 @pytest.fixture
 def capture_logs(tmp_path: Path) -> Path:
     """Route diagnostic logs to a temporary file for the test."""
-    from framekit.core.diagnostics import configure_diagnostics
+    from ouro.core.diagnostics import configure_diagnostics
 
     log_file = tmp_path / "test.log"
     configure_diagnostics(debug=True, log_file=log_file)
@@ -173,9 +173,9 @@ def capture_logs(tmp_path: Path) -> Path:
 @pytest.fixture
 def temp_settings_store(tmp_path: Path):
     """A ``SettingsStore`` pointing at a temporary YAML file."""
-    from framekit.core.settings import SettingsStore
+    from ouro.core.settings import SettingsStore
 
-    return SettingsStore(tmp_path / "framekit.yaml")
+    return SettingsStore(tmp_path / "ouro.yaml")
 
 
 @pytest.fixture

@@ -7,9 +7,9 @@ import json
 import pytest
 from click.testing import CliRunner
 
-from framekit.commands.alias import alias_command
-from framekit.commands.main import cli
-from framekit.core.settings import SettingsStore
+from ouro.commands.alias import alias_command
+from ouro.commands.main import cli
+from ouro.core.settings import SettingsStore
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def cli_runner():
 @pytest.fixture
 def settings_with_aliases(tmp_path):
     """Create settings with some test aliases."""
-    settings_file = tmp_path / "framekit.yaml"
+    settings_file = tmp_path / "ouro.yaml"
     store = SettingsStore(settings_file)
     settings = store.load()
 
@@ -37,12 +37,12 @@ def settings_with_aliases(tmp_path):
 
 
 class TestAliasListCommand:
-    """Test 'fk alias list' command."""
+    """Test 'ouro alias list' command."""
 
     def test_list_all_aliases(self, cli_runner, tmp_path, monkeypatch):
         """Test listing all aliases."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["list"])
 
@@ -52,7 +52,7 @@ class TestAliasListCommand:
 
     def test_list_user_aliases_only(self, cli_runner, settings_with_aliases, monkeypatch):
         """Test listing only user aliases."""
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_with_aliases))
+        monkeypatch.setenv("OURO_CONFIG", str(settings_with_aliases))
 
         result = cli_runner.invoke(alias_command, ["list", "--user"])
 
@@ -61,8 +61,8 @@ class TestAliasListCommand:
 
     def test_list_builtin_aliases_only(self, cli_runner, tmp_path, monkeypatch):
         """Test listing only builtin aliases."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["list", "--builtin"])
 
@@ -71,8 +71,8 @@ class TestAliasListCommand:
 
     def test_list_aliases_json_format(self, cli_runner, tmp_path, monkeypatch):
         """Test listing aliases in JSON format."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["list", "--json"])
 
@@ -83,11 +83,11 @@ class TestAliasListCommand:
 
 
 class TestAliasShowCommand:
-    """Test 'fk alias show' command."""
+    """Test 'ouro alias show' command."""
 
     def test_show_existing_alias(self, cli_runner, settings_with_aliases, monkeypatch):
         """Test showing an existing alias."""
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_with_aliases))
+        monkeypatch.setenv("OURO_CONFIG", str(settings_with_aliases))
 
         result = cli_runner.invoke(alias_command, ["show", "test-alias"])
 
@@ -97,8 +97,8 @@ class TestAliasShowCommand:
 
     def test_show_nonexistent_alias(self, cli_runner, tmp_path, monkeypatch):
         """Test showing a nonexistent alias."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["show", "nonexistent"])
 
@@ -107,8 +107,8 @@ class TestAliasShowCommand:
 
     def test_show_builtin_alias(self, cli_runner, tmp_path, monkeypatch):
         """Test showing a builtin alias."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["show", "ren"])
 
@@ -118,12 +118,12 @@ class TestAliasShowCommand:
 
 
 class TestAliasAddCommand:
-    """Test 'fk alias add' command."""
+    """Test 'ouro alias add' command."""
 
     def test_add_simple_alias(self, cli_runner, tmp_path, monkeypatch):
         """Test adding a simple alias."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["add", "my-alias", "pipeline run"])
 
@@ -132,8 +132,8 @@ class TestAliasAddCommand:
 
     def test_add_alias_with_description(self, cli_runner, tmp_path, monkeypatch):
         """Test adding an alias with description."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(
             alias_command, ["add", "my-alias", "pipeline run", "--description", "My custom alias"]
@@ -143,8 +143,8 @@ class TestAliasAddCommand:
 
     def test_add_alias_with_invalid_name(self, cli_runner, tmp_path, monkeypatch):
         """Test adding an alias with invalid name."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["add", "invalid name", "cmd"])
 
@@ -153,8 +153,8 @@ class TestAliasAddCommand:
 
     def test_add_alias_conflicts_with_builtin(self, cli_runner, tmp_path, monkeypatch):
         """Test adding an alias that conflicts with builtin command."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["add", "pipeline", "custom_pipeline"])
 
@@ -163,8 +163,8 @@ class TestAliasAddCommand:
 
     def test_user_alias_routes_from_top_level_cli(self, cli_runner, tmp_path, monkeypatch):
         """User aliases must dispatch from the root CLI, not only appear in alias list."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         add_result = cli_runner.invoke(alias_command, ["add", "box", "seedbox"])
         assert add_result.exit_code == 0
@@ -177,11 +177,11 @@ class TestAliasAddCommand:
 
 
 class TestAliasRemoveCommand:
-    """Test 'fk alias remove' command."""
+    """Test 'ouro alias remove' command."""
 
     def test_remove_user_alias(self, cli_runner, settings_with_aliases, monkeypatch):
         """Test removing a user alias."""
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_with_aliases))
+        monkeypatch.setenv("OURO_CONFIG", str(settings_with_aliases))
 
         result = cli_runner.invoke(alias_command, ["remove", "test-alias", "--force"])
 
@@ -192,8 +192,8 @@ class TestAliasRemoveCommand:
         self, cli_runner, tmp_path, monkeypatch
     ):
         """Test removing a builtin alias hides it from list and root dispatch."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["remove", "ren", "--force"])
 
@@ -209,8 +209,8 @@ class TestAliasRemoveCommand:
 
     def test_pull_builtin_alias_routes_to_seedbox_pull(self, cli_runner, tmp_path, monkeypatch):
         """Test the built-in pull alias routes to seedbox pull."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(cli, ["pull", "--help"])
 
@@ -219,8 +219,8 @@ class TestAliasRemoveCommand:
 
     def test_remove_nonexistent_alias(self, cli_runner, tmp_path, monkeypatch):
         """Test removing a nonexistent alias."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["remove", "nonexistent", "--force"])
 
@@ -229,7 +229,7 @@ class TestAliasRemoveCommand:
 
     def test_remove_with_confirmation(self, cli_runner, settings_with_aliases, monkeypatch):
         """Test removing with confirmation (uses --force to bypass interactive selector)."""
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_with_aliases))
+        monkeypatch.setenv("OURO_CONFIG", str(settings_with_aliases))
 
         result = cli_runner.invoke(
             alias_command,
@@ -240,12 +240,12 @@ class TestAliasRemoveCommand:
 
 
 class TestAliasEnableCommand:
-    """Test 'fk alias enable' command."""
+    """Test 'ouro alias enable' command."""
 
     def test_enable_disabled_alias(self, cli_runner, tmp_path, monkeypatch):
         """Test enabling a disabled alias."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         # First add and disable an alias
         cli_runner.invoke(alias_command, ["add", "test-alias", "cmd"])
@@ -259,8 +259,8 @@ class TestAliasEnableCommand:
 
     def test_enable_nonexistent_alias(self, cli_runner, tmp_path, monkeypatch):
         """Test enabling a nonexistent alias."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["enable", "nonexistent"])
 
@@ -269,11 +269,11 @@ class TestAliasEnableCommand:
 
 
 class TestAliasDisableCommand:
-    """Test 'fk alias disable' command."""
+    """Test 'ouro alias disable' command."""
 
     def test_disable_alias(self, cli_runner, settings_with_aliases, monkeypatch):
         """Test disabling an alias."""
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_with_aliases))
+        monkeypatch.setenv("OURO_CONFIG", str(settings_with_aliases))
 
         result = cli_runner.invoke(alias_command, ["disable", "test-alias"])
 
@@ -282,8 +282,8 @@ class TestAliasDisableCommand:
 
     def test_disable_nonexistent_alias(self, cli_runner, tmp_path, monkeypatch):
         """Test disabling a nonexistent alias."""
-        settings_file = tmp_path / "framekit.yaml"
-        monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+        settings_file = tmp_path / "ouro.yaml"
+        monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
         result = cli_runner.invoke(alias_command, ["disable", "nonexistent"])
 

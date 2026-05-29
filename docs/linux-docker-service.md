@@ -1,6 +1,6 @@
-# Framekit — Linux and Docker Service Quick Start
+# Ouro — Linux and Docker Service Quick Start
 
-Run Framekit as persistent background service on Linux via systemd user-unit,
+Run Ouro as persistent background service on Linux via systemd user-unit,
 or in Docker with packaged Web UI assets (no npm/runtime Node).
 
 For full operations (backup/restore, intake token lifecycle, queue
@@ -12,40 +12,45 @@ drain/shutdown controls), see `docs/service-ops-runbook.md`.
 
 Prerequisites:
 - Linux with `systemd --user`
-- `framekit` installed and on PATH
+- `ouro` installed and on PATH
+
+Migration note:
+- Framekit-era unit/config paths are not migrated automatically.
+- New user unit path is `~/.config/systemd/user/ouro.service`.
+- Copy old local data manually if continuity is required.
 
 Install user unit:
 
 ```bash
-framekit service install --mode=systemd
+ouro service install --mode=systemd
 ```
 
 Start / stop / restart:
 
 ```bash
-framekit service start --mode=systemd
-framekit service stop --mode=systemd
-framekit service restart --mode=systemd
+ouro service start --mode=systemd
+ouro service stop --mode=systemd
+ouro service restart --mode=systemd
 ```
 
 Status / logs:
 
 ```bash
-framekit service status
-framekit service logs -n 100
-framekit service logs -f
+ouro service status
+ouro service logs -n 100
+ouro service logs -f
 ```
 
 Uninstall:
 
 ```bash
-framekit service uninstall --mode=systemd
+ouro service uninstall --mode=systemd
 ```
 
 Unit path:
 
 ```text
-~/.config/systemd/user/framekit.service
+~/.config/systemd/user/ouro.service
 ```
 
 ---
@@ -59,24 +64,24 @@ Files:
 Build image:
 
 ```bash
-docker build -t framekit-service:local .
+docker build -t ouro-service:local .
 ```
 
 Auth note:
-- `framekit serve --host 0.0.0.0` requires auth active.
+- `ouro serve --host 0.0.0.0` requires auth active.
 - Create admin user once in persisted config volume before first `up`.
 
 Bootstrap admin user:
 
 ```bash
-docker compose -f docker-compose.service.yml run --rm framekit user add --admin
+docker compose -f docker-compose.service.yml run --rm ouro user add --admin
 ```
 
 Why this works:
-- Image entrypoint is `framekit`
+- Image entrypoint is `ouro`
 - Default command is `serve --host 0.0.0.0 --port 8000`
-- `docker compose run ... framekit user add --admin` overrides command with `user add --admin`
-- Admin user is written into mounted config volume (`/var/lib/framekit/config`)
+- `docker compose run ... ouro user add --admin` overrides command with `user add --admin`
+- Admin user is written into mounted config volume (`/var/lib/ouro/config`)
 
 Run service:
 
@@ -88,14 +93,14 @@ Check:
 
 ```bash
 docker compose -f docker-compose.service.yml ps
-docker compose -f docker-compose.service.yml logs -f framekit
+docker compose -f docker-compose.service.yml logs -f ouro
 ```
 
 Default volumes:
-- config: `/var/lib/framekit/config`
-- cache: `/var/lib/framekit/cache`
+- config: `/var/lib/ouro/config`
+- cache: `/var/lib/ouro/cache`
 - media: `/media` (bind from `./Workspace`)
 
 Web UI:
 - `http://127.0.0.1:8000`
-- Static bundle served from packaged `framekit/web/static`.
+- Static bundle served from packaged `ouro/web/static`.

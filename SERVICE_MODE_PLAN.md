@@ -12,7 +12,7 @@ Got enough. Writing plan.
 
 ---
 
-# Framekit Service Mode — Architecture Plan
+# Ouro Service Mode — Architecture Plan
 
 ## 1. Current Architecture and Reusable Pieces
 
@@ -20,18 +20,18 @@ Got enough. Writing plan.
 
 | Concern | Location | Storage | Notes |
 |---|---|---|---|
-| Settings | `core/settings/store.py` | `framekit.yaml` (platformdirs / project-local / `FRAMEKIT_CONFIG`) | filelock, YAML round-trip preserves comments. Shared between CLI/Web. |
+| Settings | `core/settings/store.py` | `ouro.yaml` (platformdirs / project-local / `OURO_CONFIG`) | filelock, YAML round-trip preserves comments. Shared between CLI/Web. |
 | Profiles | `core/settings/profiles.py` | Same YAML + overlays | Active profile name persisted. |
 | Vault | `core/security/vault.py` | `<config>/security/vault.enc` (Fernet) + `master.key` | Fail-closed contract. Stores TMDB token, image host keys, torrent-client password, provider tokens. |
 | Webhooks | `core/webhooks.py` | `<config>/webhooks.json` | httpx POST in daemon thread. Events: `job.started`, `job.completed`, `job.failed`, `watch.file_detected`. |
 | Aliases | `core/aliases.py` | YAML | CRUD only. |
 | Run ledger | `core/runs/ledger.py` | `<config>/runs/ledger.ndjson` | NDJSON, append-only. Drives `rollback`. |
 | Job runner | `web/modules.py` | `<cache>/web/module_jobs.sqlite3` | One table `web_module_jobs(id, created_at, status, payload_json)`. ThreadPoolExecutor max_workers=2. Pending/running jobs marked failed on restart. |
-| Subprocess shim | `core/subprocess_safe.py` | n/a | `popen_safe` / `run_safe`. Env `NO_COLOR=1`, `FRAMEKIT_WEB_JOB=1`. |
-| Watch | `modules/watch/service.py` + `commands/watch.py` | `.framekit_watch.pid` in CWD | `watchfiles` lib. Per-process. SIGTERM / CTRL_BREAK_EVENT. |
+| Subprocess shim | `core/subprocess_safe.py` | n/a | `popen_safe` / `run_safe`. Env `NO_COLOR=1`, `OURO_WEB_JOB=1`. |
+| Watch | `modules/watch/service.py` + `commands/watch.py` | `.ouro_watch.pid` in CWD | `watchfiles` lib. Per-process. SIGTERM / CTRL_BREAK_EVENT. |
 | Watch via Web | `web/app.py:654` | n/a | Wraps `watch start --all` in a 7200s web job. Dies on backend restart or timeout. |
 | Auth | `core/auth/` | `<config>/users.db` | bcrypt + JWT HS256. Opt-in by user-count. |
-| FastAPI app | `web/app.py:328 create_app()` | n/a | Single-file routes, in-process. No `framekit web` Click command exposed. |
+| FastAPI app | `web/app.py:328 create_app()` | n/a | Single-file routes, in-process. No `ouro web` Click command exposed. |
 | Webhooks dispatcher | inline in `modules.py:1765/1800/1826` | n/a | Fired from job runner — already a "service event bus" of sorts. |
 
 ### Already reusable for service mode
@@ -50,7 +50,7 @@ Got enough. Writing plan.
 2. Web backend and Watch daemon are independent processes with no shared lifecycle, no IPC. Web "controls" Watch only by spawning a child of itself.
 3. Job queue is in-process only; if uvicorn dies, queue dies. SQLite persistence is for restart-recovery audit only, not work resumption.
 4. No intake API. External downloaders can only drop files in watched folders.
-5. No service-mode CLI entry (`framekit serve`, `framekit service install`).
+5. No service-mode CLI entry (`ouro serve`, `ouro service install`).
 6. No supervisor — when watch crashes, nothing restarts it.
 
 ---
@@ -59,7 +59,7 @@ Got enough. Writing plan.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  framekit service (single long-running process)                 │
+│  ouro service (single long-running process)                 │
 │                                                                 │
 │  ┌────────────────────────────────────────────────────────┐    │
 │  │  Supervisor / async main loop                          │    │
@@ -104,7 +104,7 @@ One OS process hosting:
 ### CLI keeps two modes
 
 - **Ad-hoc CLI** (today's behavior): one-shot invocations using same settings. Independent of service.
-- **Service control CLI**: `framekit service {start|stop|status|install|uninstall}` — talks to service via OS service manager (Windows SCM / systemd) and/or HTTP.
+- **Service control CLI**: `ouro service {start|stop|status|install|uninstall}` — talks to service via OS service manager (Windows SCM / systemd) and/or HTTP.
 
 ### Web UI keeps shared YAML/vault
 
@@ -156,21 +156,21 @@ CLI remains the authoritative one-shot tool. No behavior change to existing comm
 
 | Command | Purpose |
 |---|---|
-| `framekit serve` | Run service in foreground (development, Docker). Equivalent to `uvicorn` + supervisor. Honors `--host`, `--port`, `--workers=1`. |
-| `framekit service install` | Register as Windows service (via NSSM or native `sc.exe`) or write systemd unit. Print next-steps. |
-| `framekit service uninstall` | Remove OS service entry. |
-| `framekit service start/stop/restart/status` | Wrapper that talks to OS service manager. Falls back to HTTP `/service/status` for status when manager unavailable. |
-| `framekit service logs` | Tail service log file. |
+| `ouro serve` | Run service in foreground (development, Docker). Equivalent to `uvicorn` + supervisor. Honors `--host`, `--port`, `--workers=1`. |
+| `ouro service install` | Register as Windows service (via NSSM or native `sc.exe`) or write systemd unit. Print next-steps. |
+| `ouro service uninstall` | Remove OS service entry. |
+| `ouro service start/stop/restart/status` | Wrapper that talks to OS service manager. Falls back to HTTP `/service/status` for status when manager unavailable. |
+| `ouro service logs` | Tail service log file. |
 
 ### Existing watch CLI behavior
 
-- `framekit watch start` keeps working as foreground watcher for users who want ad-hoc watching without a service.
+- `ouro watch start` keeps working as foreground watcher for users who want ad-hoc watching without a service.
 - Long-term, this becomes a thin client that hits `/api/v1/service/status` when a service is running and offers to defer to it.
 - Do not break or remove the existing in-process watcher.
 
 ### CLI ↔ service contention
 
-- CLI subprocess jobs (e.g. user runs `framekit pipeline X` manually) do **not** go through the service queue. They write to the run ledger and to subprocess logs as today.
+- CLI subprocess jobs (e.g. user runs `ouro pipeline X` manually) do **not** go through the service queue. They write to the run ledger and to subprocess logs as today.
 - This is acceptable; release pipelines run by humans are by design ad-hoc.
 
 ---
@@ -191,7 +191,7 @@ Web UI is control + monitoring, never the runtime.
 
 - If the service is not running, the Web UI degrades:
   - Existing in-process job runner still works (today's behavior).
-  - Watch service status card shows "service not running — install with `framekit service install`".
+  - Watch service status card shows "service not running — install with `ouro service install`".
   - No intake endpoints.
 
 ---
@@ -203,8 +203,8 @@ Existing locations stay. One new column / DB needed.
 ### Filesystem layout (unchanged unless noted)
 
 ```
-<config_dir>/                          (platformdirs / FRAMEKIT_CONFIG_DIR)
-├── framekit.yaml                       Settings (CLI + service + Web UI share)
+<config_dir>/                          (platformdirs / OURO_CONFIG_DIR)
+├── ouro.yaml                       Settings (CLI + service + Web UI share)
 ├── webhooks.json                       Webhooks
 ├── users.db                            Auth (sqlite)
 ├── runs/
@@ -268,12 +268,12 @@ Two install paths supported; user picks one.
 
 #### Windows lifecycle
 
-1. `framekit service install` → writes:
-   - Service definition (NSSM `nssm install Framekit <python> -m framekit serve --service`).
+1. `ouro service install` → writes:
+   - Service definition (NSSM `nssm install Ouro <python> -m ouro serve --service`).
    - `Start=auto`, recovery actions: restart on failure (1st/2nd: 60s).
    - Service runs as LocalService by default; user can switch via NSSM GUI.
    - Logs piped to `<config>/service/service.out.log` and `service.err.log`.
-2. Service start → `framekit serve --service`:
+2. Service start → `ouro serve --service`:
    - Acquire `service.lock`. Refuse if already held.
    - Write `service.pid`.
    - Init SettingsStore, Vault, Job DB, Watcher, FastAPI, Webhook bus.
@@ -284,15 +284,15 @@ Two install paths supported; user picks one.
 
 #### Watch reconciliation on Windows
 
-Replace the project-local `.framekit_watch.pid` model for the service. Service owns one single watcher subsystem internally; PID file no longer needed for watch. The ad-hoc `framekit watch start` foreground mode still uses the legacy PID file unchanged.
+Replace the project-local `.ouro_watch.pid` model for the service. Service owns one single watcher subsystem internally; PID file no longer needed for watch. The ad-hoc `ouro watch start` foreground mode still uses the legacy PID file unchanged.
 
 ### Linux / Docker (later — Phase S5)
 
 | Mode | Mechanism |
 |---|---|
-| systemd | `framekit service install` writes user-unit `~/.config/systemd/user/framekit.service`. `ExecStart=framekit serve --service`. `Restart=on-failure`. |
-| Docker | `docker run -v <config>:/config -v <media>:/media -p 7848:7848 framekit:latest serve --service`. Image entrypoint = `framekit serve --service`. |
-| Linux daemon (no systemd) | Same `framekit serve --service` foreground, user supervises. |
+| systemd | `ouro service install` writes user-unit `~/.config/systemd/user/ouro.service`. `ExecStart=ouro serve --service`. `Restart=on-failure`. |
+| Docker | `docker run -v <config>:/config -v <media>:/media -p 7848:7848 ouro:latest serve --service`. Image entrypoint = `ouro serve --service`. |
+| Linux daemon (no systemd) | Same `ouro serve --service` foreground, user supervises. |
 
 Same lock + pid file + state file layout; only the supervisor differs.
 
@@ -332,7 +332,7 @@ POST /api/v1/service/drain      (admin)  → stop accepting new jobs, finish run
 POST /api/v1/service/shutdown   (admin)  → graceful exit (SCM still primary)
 ```
 
-Start is **not** an HTTP endpoint — only OS service manager can start the service. The Web UI exposes a button that runs `framekit service start` via a tiny privileged helper or instructs the user. Reason: starting a process from inside a web request that is itself supposed to be that process is incoherent.
+Start is **not** an HTTP endpoint — only OS service manager can start the service. The Web UI exposes a button that runs `ouro service start` via a tiny privileged helper or instructs the user. Reason: starting a process from inside a web request that is itself supposed to be that process is incoherent.
 
 ### 8.2 Queue / Jobs
 
@@ -424,18 +424,18 @@ Same names already wired to webhook dispatcher → unification.
 
 - `POST /api/v1/watch/service/start` enqueues a module job with `module=watch args_text="start --all --no-status-updates"` and a **7200 s timeout**.
 - Runs inside the web backend's job thread pool. If backend restarts, watch dies (job marked failed).
-- `framekit watch start` from CLI writes `.framekit_watch.pid` to CWD — directory-scoped, easily orphaned.
+- `ouro watch start` from CLI writes `.ouro_watch.pid` to CWD — directory-scoped, easily orphaned.
 
 ### Migration steps (no breaking changes for CLI users)
 
-1. **Keep** `framekit watch start` foreground mode and its CLI flow exactly as-is. CLI users without a service installed see no change.
+1. **Keep** `ouro watch start` foreground mode and its CLI flow exactly as-is. CLI users without a service installed see no change.
 2. **Replace** the web's `/watch/service/start` implementation:
-   - When `mode=service`: route returns 409 + instruction to use `framekit service start`.
+   - When `mode=service`: route returns 409 + instruction to use `ouro service start`.
    - When `mode=ephemeral` (no service installed yet, today's reality): keep current 2h spawn behavior so we don't ship a regression — but log a deprecation warning and surface "install service" CTA in Web UI.
 3. **Move** watch subsystem from "started as a child of the web backend job runner" to "subsystem inside the service process". The web app inside the service does not re-spawn watch; it just reads watcher subsystem state from the supervisor.
-4. **Decouple** the watcher PID file from `.framekit_watch.pid` in CWD:
+4. **Decouple** the watcher PID file from `.ouro_watch.pid` in CWD:
    - Service mode: watcher state lives in the service itself; no PID file.
-   - Standalone CLI watch: keep `.framekit_watch.pid` for backward compat.
+   - Standalone CLI watch: keep `.ouro_watch.pid` for backward compat.
 5. **Preserve** the existing `WatcherService` engine; only its host changes. `_setup_signal_handlers` already skips when not in main thread → good for embedding.
 6. **Webhooks** already emit `watch.file_detected` — keep call site, just emitted from the service-owned watcher instead.
 
@@ -449,10 +449,10 @@ Same names already wired to webhook dispatcher → unification.
 
 ### Phase S1 — Durable service core (highest value, smallest blast radius)
 
-**Goal:** A single `framekit serve --service` process that hosts the existing FastAPI app + a real watcher subsystem + a claim-based job worker, with one lock and one PID file. No new APIs yet, no intake.
+**Goal:** A single `ouro serve --service` process that hosts the existing FastAPI app + a real watcher subsystem + a claim-based job worker, with one lock and one PID file. No new APIs yet, no intake.
 
 Work:
-1. Add `framekit serve` click command in `src/framekit/commands/`. Loads `web.app:create_app`, runs uvicorn programmatically with `workers=1`.
+1. Add `ouro serve` click command in `src/ouro/commands/`. Loads `web.app:create_app`, runs uvicorn programmatically with `workers=1`.
 2. Add `core/service/supervisor.py`:
    - On startup: acquire `service.lock`, write `service.pid`, init SettingsStore, Vault, Jobs DB migration.
    - Spawn watcher subsystem as in-process threads (`WatcherService.start()` minus `signal.signal` path — already supported).
@@ -498,11 +498,11 @@ Work:
 **Goal:** Easy install on Windows.
 
 Work:
-1. `framekit service install` Click command. Two flavors:
+1. `ouro service install` Click command. Two flavors:
    - `--mode=service` (NSSM if present, else `sc.exe`).
-   - `--mode=task` (`schtasks /Create /TN Framekit /TR "..." /SC ONLOGON`).
+   - `--mode=task` (`schtasks /Create /TN Ouro /TR "..." /SC ONLOGON`).
 2. Detect NSSM availability; if missing, link instructions and fall back to scheduled task with a warning.
-3. `framekit service status` reads SCM via `sc query Framekit` (subprocess); fall back to HTTP `/service/status`.
+3. `ouro service status` reads SCM via `sc query Ouro` (subprocess); fall back to HTTP `/service/status`.
 4. Log file rotation policy (handed off to NSSM rotation or our own simple sized rotator).
 5. Restart-on-failure recovery actions configured at install time.
 
@@ -511,9 +511,9 @@ Work:
 **Goal:** Cross-platform parity.
 
 Work:
-1. systemd user-unit generator (`framekit service install` on Linux).
+1. systemd user-unit generator (`ouro service install` on Linux).
 2. Dockerfile + compose example. Volumes: `<config>`, media roots. Healthcheck = `curl /healthz`. Default user-id mapping for media.
-3. Documentation for non-systemd Linux (foreground `framekit serve`).
+3. Documentation for non-systemd Linux (foreground `ouro serve`).
 
 ---
 
@@ -541,7 +541,7 @@ Work:
    - Intake path validation (traversal, allowlist).
    - Webhook event emission for each lifecycle transition.
 2. **Integration**
-   - Spawn `framekit serve --service` in subprocess against tmp config dir.
+   - Spawn `ouro serve --service` in subprocess against tmp config dir.
    - Drop files in watched folder → assert job created → assert job completes with mocked CLI subprocess (or via a no-op preset).
    - POST intake → job created → webhook fired.
    - Kill service mid-job → restart → assert orphan recovery (job either resumed or marked failed deterministically per `attempts`).
@@ -553,7 +553,7 @@ Work:
    - All existing CLI watch tests keep passing untouched.
    - All existing web/modules tests keep passing; add migration test for new columns (additive, default values backfill).
 5. **Doc tests**
-   - `framekit service status` output schema is the same JSON used by Web UI dashboard card — snapshot test.
+   - `ouro service status` output schema is the same JSON used by Web UI dashboard card — snapshot test.
 
 ---
 
@@ -569,7 +569,7 @@ To keep the first cut shippable:
 - **Web UI starts the service process directly.** Always defer to OS service manager; no privilege-escalation helper from inside FastAPI.
 - **Encrypted-at-rest jobs DB.** SQLite jobs DB stays plain — it contains argv/stdout, no secrets if vault is used correctly.
 - **Cross-machine intake auth (mTLS / OAuth).** Phase 1 = static per-source tokens; revisit later.
-- **Auto-update / self-upgrade of the service.** User upgrades via `pip` then `framekit service restart`.
+- **Auto-update / self-upgrade of the service.** User upgrades via `pip` then `ouro service restart`.
 - **GUI tray / system notification daemon** beyond what `WindowsNotifier` already does inside watcher.
 - **Replacing the existing per-request CLI subprocess execution with in-process import.** Subprocess is still the cleanest isolation boundary and lets us reuse all existing CLI code. Defer until profiling shows it matters.
 
@@ -577,4 +577,4 @@ To keep the first cut shippable:
 
 ### Inspection summary (read-only)
 
-Files inspected (no modifications): [CLAUDE.md](CLAUDE.md), [AGENTS.md](AGENTS.md), [WEB_UI_V1_PLAN.md](WEB_UI_V1_PLAN.md), [paths.py](src/framekit/core/paths.py), [watch.py](src/framekit/commands/watch.py), [watch/service.py](src/framekit/modules/watch/service.py), [runs/ledger.py](src/framekit/core/runs/ledger.py), [webhooks.py](src/framekit/core/webhooks.py), [web/modules.py](src/framekit/web/modules.py) (relevant ranges), [web/app.py](src/framekit/web/app.py), [settings/store.py](src/framekit/core/settings/store.py), [auth/models.py](src/framekit/core/auth/models.py), [__main__.py](src/framekit/__main__.py). No code touched.
+Files inspected (no modifications): [CLAUDE.md](CLAUDE.md), [AGENTS.md](AGENTS.md), [WEB_UI_V1_PLAN.md](WEB_UI_V1_PLAN.md), [paths.py](src/ouro/core/paths.py), [watch.py](src/ouro/commands/watch.py), [watch/service.py](src/ouro/modules/watch/service.py), [runs/ledger.py](src/ouro/core/runs/ledger.py), [webhooks.py](src/ouro/core/webhooks.py), [web/modules.py](src/ouro/web/modules.py) (relevant ranges), [web/app.py](src/ouro/web/app.py), [settings/store.py](src/ouro/core/settings/store.py), [auth/models.py](src/ouro/core/auth/models.py), [__main__.py](src/ouro/__main__.py). No code touched.

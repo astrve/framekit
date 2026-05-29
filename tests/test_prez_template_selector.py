@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from framekit.modules.prez.template_categories import (
+from ouro.modules.prez.template_categories import (
     BBCODE_CATEGORIES,
     HTML_CATEGORIES,
     categorize_templates,
@@ -13,7 +13,7 @@ from framekit.modules.prez.template_categories import (
     get_ordered_categories,
     get_template_category,
 )
-from framekit.modules.prez.template_selector import (
+from ouro.modules.prez.template_selector import (
     ExpandCollapseSelector,
     select_template_collapsible,
     select_template_simple,
@@ -657,7 +657,7 @@ class TestSimpleTemplateSelector:
         """Test that selector only includes existing templates."""
         with (
             patch("sys.stdin.isatty", return_value=True),
-            patch("framekit.modules.prez.template_selector.available_html_templates") as mock_avail,
+            patch("ouro.modules.prez.template_selector.available_html_templates") as mock_avail,
             patch.object(ExpandCollapseSelector, "__init__", return_value=None) as mock_init,
             patch.object(ExpandCollapseSelector, "show", return_value="timeline"),
         ):

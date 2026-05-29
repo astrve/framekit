@@ -13,14 +13,15 @@ export function AboutPage() {
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
         <h1 className="text-2xl font-semibold tracking-tight">About</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Version and runtime information for this Framekit instance.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Self-hosted media workflow automation.</p>
+        <p className="text-xs text-muted-foreground">Operator-focused tooling for release preparation and publishing.</p>
       </section>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Info className="h-4 w-4 text-primary" />
-            Framekit
+            Ouro
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -28,7 +29,7 @@ export function AboutPage() {
             <tbody className="divide-y divide-border">
               <tr>
                 <td className="py-2 pr-6 text-muted-foreground font-medium w-40">Application</td>
-                <td className="py-2 font-semibold">Framekit</td>
+                <td className="py-2 font-semibold">Ouro</td>
               </tr>
               <tr>
                 <td className="py-2 pr-6 text-muted-foreground font-medium">Version</td>
@@ -66,7 +67,7 @@ export function AboutPage() {
           <CardTitle className="text-sm font-semibold">License</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-1">
-          <p>Framekit is proprietary software.</p>
+          <p>Ouro is proprietary software.</p>
           <p>Unauthorized distribution or modification is prohibited.</p>
         </CardContent>
       </Card>

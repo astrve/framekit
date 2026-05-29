@@ -1,0 +1,1 @@
+"""Bundled Ouro locale catalogs."""

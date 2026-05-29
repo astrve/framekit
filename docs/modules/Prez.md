@@ -7,10 +7,10 @@ Builds BBCode and HTML presentations for a release. Supports multiple templates,
 ## Usage
 
 ```bash
-fk prez /path/to/release [OPTIONS]
-fk prez /path/to/release --template classic --language fr
-fk prez /path/to/release --banner-design minimal_blue --language en
-fk prez /path/to/release --no-html
+ouro prez /path/to/release [OPTIONS]
+ouro prez /path/to/release --template classic --language fr
+ouro prez /path/to/release --banner-design minimal_blue --language en
+ouro prez /path/to/release --no-html
 ```
 
 ---
@@ -55,7 +55,7 @@ Banners are PNG section header images hosted on the `feature/banners` GitHub bra
 
 ### Selecting a banner
 
-In interactive mode, `fk prez` (standalone) asks whether to fetch banners, then shows a design selector. In the pipeline, the default is **text-only** (`textual`) to avoid accidental selections.
+In interactive mode, `ouro prez` (standalone) asks whether to fetch banners, then shows a design selector. In the pipeline, the default is **text-only** (`textual`) to avoid accidental selections.
 
 ### Banner sections
 

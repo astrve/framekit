@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from framekit.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
-from framekit.modules.cleanmkv.planner import build_remux_plan
-from framekit.modules.cleanmkv.tracks import track_reference_key, track_reference_label
+from ouro.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
+from ouro.modules.cleanmkv.planner import build_remux_plan
+from ouro.modules.cleanmkv.tracks import track_reference_key, track_reference_label
 
 
 def _audio(

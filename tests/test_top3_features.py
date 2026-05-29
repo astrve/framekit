@@ -12,8 +12,8 @@ class TestPrezSubtitleDedup:
 
     def test_subtitle_table_has_variant_column(self):
         """Test that BBCode subtitle table includes Variant column."""
-        from framekit.modules.prez.models import PrezTrack
-        from framekit.modules.prez.service import _render_subtitle_tracks_bbcode
+        from ouro.modules.prez.models import PrezTrack
+        from ouro.modules.prez.service import _render_subtitle_tracks_bbcode
 
         tracks = [
             PrezTrack(
@@ -51,7 +51,7 @@ class TestPrezSubtitleDedup:
 
     def test_empty_subtitle_table_renders(self):
         """Test empty subtitle table has correct column count."""
-        from framekit.modules.prez.service import _render_subtitle_tracks_bbcode
+        from ouro.modules.prez.service import _render_subtitle_tracks_bbcode
 
         result = _render_subtitle_tracks_bbcode([])
         # 6 columns: Track, Language, Variant, Format, Default, Forced
@@ -63,7 +63,7 @@ class TestUploadRateLimiter:
 
     def test_tracker_config_has_rate_limit_fields(self):
         """Test TrackerConfig includes rate limit configuration."""
-        from framekit.modules.upload.models import TrackerConfig
+        from ouro.modules.upload.models import TrackerConfig
 
         config = TrackerConfig(
             name="test",
@@ -79,7 +79,7 @@ class TestUploadRateLimiter:
 
     def test_tracker_config_default_rate_limits(self):
         """Test TrackerConfig has sensible default rate limits."""
-        from framekit.modules.upload.models import TrackerConfig
+        from ouro.modules.upload.models import TrackerConfig
 
         config = TrackerConfig(
             name="test",
@@ -93,7 +93,7 @@ class TestUploadRateLimiter:
 
     def test_token_bucket_acquire(self):
         """Test token bucket basic acquire/exhaust behavior."""
-        from framekit.modules.upload.rate_limiter import _TokenBucket
+        from ouro.modules.upload.rate_limiter import _TokenBucket
 
         bucket = _TokenBucket(capacity=3, period=60.0)
 
@@ -106,7 +106,7 @@ class TestUploadRateLimiter:
 
     def test_token_bucket_refill(self):
         """Test token bucket refills over time."""
-        from framekit.modules.upload.rate_limiter import _TokenBucket
+        from ouro.modules.upload.rate_limiter import _TokenBucket
 
         bucket = _TokenBucket(capacity=1, period=0.1)
 
@@ -119,8 +119,8 @@ class TestUploadRateLimiter:
 
     def test_registry_creates_per_tracker_limiter(self):
         """Test registry creates separate limiters per tracker."""
-        from framekit.modules.upload.models import TrackerConfig
-        from framekit.modules.upload.rate_limiter import TrackerRateLimiterRegistry
+        from ouro.modules.upload.models import TrackerConfig
+        from ouro.modules.upload.rate_limiter import TrackerRateLimiterRegistry
 
         registry = TrackerRateLimiterRegistry()
 
@@ -150,8 +150,8 @@ class TestUploadRateLimiter:
 
     def test_registry_thread_safety(self):
         """Test registry is thread-safe under concurrent access."""
-        from framekit.modules.upload.models import TrackerConfig
-        from framekit.modules.upload.rate_limiter import TrackerRateLimiterRegistry
+        from ouro.modules.upload.models import TrackerConfig
+        from ouro.modules.upload.rate_limiter import TrackerRateLimiterRegistry
 
         registry = TrackerRateLimiterRegistry()
         config = TrackerConfig(
@@ -184,7 +184,7 @@ class TestUnifiedSelector:
 
     def test_selection_item_creation(self):
         """Test SelectionItem dataclass."""
-        from framekit.ui.unified_selector import SelectionItem
+        from ouro.ui.unified_selector import SelectionItem
 
         item = SelectionItem(
             value="tmdb",
@@ -199,7 +199,7 @@ class TestUnifiedSelector:
 
     def test_selection_result_properties(self):
         """Test SelectionResult helper properties."""
-        from framekit.ui.unified_selector import SelectionResult
+        from ouro.ui.unified_selector import SelectionResult
 
         empty = SelectionResult()
         assert empty.is_empty
@@ -216,7 +216,7 @@ class TestUnifiedSelector:
 
     def test_headless_fallback_preselected(self):
         """Test headless mode returns preselected item."""
-        from framekit.ui.unified_selector import SelectionItem, UnifiedSelector
+        from ouro.ui.unified_selector import SelectionItem, UnifiedSelector
 
         selector = UnifiedSelector(
             title="Pick one",
@@ -236,7 +236,7 @@ class TestUnifiedSelector:
 
     def test_headless_fallback_default(self):
         """Test headless mode returns explicit default."""
-        from framekit.ui.unified_selector import SelectionItem, UnifiedSelector
+        from ouro.ui.unified_selector import SelectionItem, UnifiedSelector
 
         selector = UnifiedSelector(
             title="Pick one",
@@ -255,7 +255,7 @@ class TestUnifiedSelector:
 
     def test_headless_fallback_first_enabled(self):
         """Test headless mode skips disabled items."""
-        from framekit.ui.unified_selector import SelectionItem, UnifiedSelector
+        from ouro.ui.unified_selector import SelectionItem, UnifiedSelector
 
         selector = UnifiedSelector(
             title="Pick one",
@@ -273,7 +273,7 @@ class TestUnifiedSelector:
 
     def test_build_entries_with_groups(self):
         """Test group dividers are inserted correctly."""
-        from framekit.ui.unified_selector import SelectionItem, SelectorDivider, UnifiedSelector
+        from ouro.ui.unified_selector import SelectionItem, SelectorDivider, UnifiedSelector
 
         selector = UnifiedSelector(
             title="test",
@@ -295,7 +295,7 @@ class TestUnifiedSelector:
 
     def test_select_or_default(self):
         """Test select_or_default returns default on headless."""
-        from framekit.ui.unified_selector import SelectionItem, UnifiedSelector
+        from ouro.ui.unified_selector import SelectionItem, UnifiedSelector
 
         selector = UnifiedSelector(
             title="test",
@@ -310,7 +310,7 @@ class TestUnifiedSelector:
 
     def test_empty_items_returns_cancelled(self):
         """Test empty item list returns cancelled."""
-        from framekit.ui.unified_selector import UnifiedSelector
+        from ouro.ui.unified_selector import UnifiedSelector
 
         selector = UnifiedSelector(title="test", items=[])
 

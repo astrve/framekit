@@ -8,8 +8,8 @@ import json
 
 import pytest
 
-import framekit.core.security.keyring as keyring_module
-from framekit.core.security import KeyStorage, KeyStorageError
+import ouro.core.security.keyring as keyring_module
+from ouro.core.security import KeyStorage, KeyStorageError
 
 
 class TestKeyStorageFileMode:

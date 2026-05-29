@@ -16,8 +16,8 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from framekit.core.path_validation import PathValidationError  # noqa: E402
-from framekit.modules.encoder.service import EncoderService  # noqa: E402
+from ouro.core.path_validation import PathValidationError  # noqa: E402
+from ouro.modules.encoder.service import EncoderService  # noqa: E402
 
 
 class TestEncoderSubprocessInjection:
@@ -26,7 +26,7 @@ class TestEncoderSubprocessInjection:
     @pytest.fixture
     def _make_preset(self):
         """Create a valid EncodePreset for testing."""
-        from framekit.modules.encoder.models import (
+        from ouro.modules.encoder.models import (
             AdvancedConfig,
             AudioConfig,
             ChapterConfig,
@@ -57,7 +57,7 @@ class TestEncoderSubprocessInjection:
         """Test that input file path is validated before building command."""
         preset = _make_preset()
 
-        with patch("framekit.modules.encoder.service.EncoderService._validate_ffmpeg_executable"):
+        with patch("ouro.modules.encoder.service.EncoderService._validate_ffmpeg_executable"):
             service = EncoderService(preset)
 
         malicious_input = tmp_path / "-i /etc/passwd"
@@ -70,7 +70,7 @@ class TestEncoderSubprocessInjection:
         """Test that output file path is validated before building command."""
         preset = _make_preset()
 
-        with patch("framekit.modules.encoder.service.EncoderService._validate_ffmpeg_executable"):
+        with patch("ouro.modules.encoder.service.EncoderService._validate_ffmpeg_executable"):
             service = EncoderService(preset)
 
         input_file = tmp_path / "input.mkv"
@@ -85,14 +85,14 @@ class TestEncoderSubprocessInjection:
         """Test that FFmpeg command uses -i properly to prevent option injection."""
         preset = _make_preset()
 
-        with patch("framekit.modules.encoder.service.EncoderService._validate_ffmpeg_executable"):
+        with patch("ouro.modules.encoder.service.EncoderService._validate_ffmpeg_executable"):
             service = EncoderService(preset)
 
         input_file = tmp_path / "input.mkv"
         input_file.write_text("fake video")
         output_file = tmp_path / "output.mkv"
 
-        with patch("framekit.core.path_validation.validate_file_path") as mock_validate:
+        with patch("ouro.core.path_validation.validate_file_path") as mock_validate:
             mock_validate.side_effect = lambda p, **kwargs: Path(p)
 
             cmd = service.build_ffmpeg_command(input_file, output_file)
@@ -106,7 +106,7 @@ class TestEncoderSubprocessInjection:
         """Test handling of special characters in filenames."""
         preset = _make_preset()
 
-        with patch("framekit.modules.encoder.service.EncoderService._validate_ffmpeg_executable"):
+        with patch("ouro.modules.encoder.service.EncoderService._validate_ffmpeg_executable"):
             service = EncoderService(preset)
 
         special_chars = ["'", '"', "`", "$", "&", "|", ";"]
@@ -118,7 +118,7 @@ class TestEncoderSubprocessInjection:
                 output_file = tmp_path / f"test{char}output.mkv"
 
                 try:
-                    with patch("framekit.core.path_validation.validate_file_path") as mock_validate:
+                    with patch("ouro.core.path_validation.validate_file_path") as mock_validate:
                         mock_validate.side_effect = lambda p, **kwargs: Path(p)
                         cmd = service.build_ffmpeg_command(input_file, output_file)
 
@@ -138,9 +138,9 @@ class TestCleanMKVSubprocessInjection:
 
     def test_remuxer_validates_source_path(self, tmp_path):
         """Test that source file path is validated before remuxing."""
-        from framekit.core.models.cleanmkv import RemuxPlan
-        from framekit.core.tools import ToolRegistry
-        from framekit.modules.cleanmkv.remuxer import apply_remux_plan
+        from ouro.core.models.cleanmkv import RemuxPlan
+        from ouro.core.tools import ToolRegistry
+        from ouro.modules.cleanmkv.remuxer import apply_remux_plan
 
         # Create malicious source path
         malicious_source = tmp_path / "-o /tmp/evil.mkv"
@@ -164,9 +164,9 @@ class TestCleanMKVSubprocessInjection:
 
     def test_remuxer_validates_target_path(self, tmp_path):
         """Test that target file path is validated before remuxing."""
-        from framekit.core.models.cleanmkv import RemuxPlan
-        from framekit.core.tools import ToolRegistry
-        from framekit.modules.cleanmkv.remuxer import apply_remux_plan
+        from ouro.core.models.cleanmkv import RemuxPlan
+        from ouro.core.tools import ToolRegistry
+        from ouro.modules.cleanmkv.remuxer import apply_remux_plan
 
         # Create valid source
         source = tmp_path / "input.mkv"
@@ -193,9 +193,9 @@ class TestCleanMKVSubprocessInjection:
 
     def test_mkvmerge_command_structure(self, tmp_path):
         """Test that mkvmerge command has proper structure."""
-        from framekit.core.models.cleanmkv import RemuxPlan
-        from framekit.core.tools import ToolRegistry
-        from framekit.modules.cleanmkv.remuxer import apply_remux_plan
+        from ouro.core.models.cleanmkv import RemuxPlan
+        from ouro.core.tools import ToolRegistry
+        from ouro.modules.cleanmkv.remuxer import apply_remux_plan
 
         # Create valid files
         source = tmp_path / "input.mkv"
@@ -215,7 +215,7 @@ class TestCleanMKVSubprocessInjection:
         registry = ToolRegistry()
 
         # Mock subprocess.run to capture command
-        with patch("framekit.modules.cleanmkv.remuxer._run") as mock_run:
+        with patch("ouro.modules.cleanmkv.remuxer._run") as mock_run:
             mock_result = MagicMock()
             mock_result.returncode = 0
             mock_run.return_value = mock_result
@@ -245,7 +245,7 @@ class TestSubprocessArgumentSanitization:
         calls use list arguments (not shell strings), so dashes are treated
         as literal filenames, not as option flags.
         """
-        from framekit.core.path_validation import validate_file_path
+        from ouro.core.path_validation import validate_file_path
 
         malicious_paths = [
             tmp_path / "-i",
@@ -268,7 +268,7 @@ class TestSubprocessArgumentSanitization:
         The security guarantee is subprocess list-arg usage, not path-level
         rejection.
         """
-        from framekit.core.path_validation import validate_file_path
+        from ouro.core.path_validation import validate_file_path
 
         malicious_path = str(tmp_path / "test.mkv") + "\x00.txt"
 
@@ -284,7 +284,7 @@ class TestSubprocessArgumentSanitization:
         On some platforms, newlines are valid in filenames. The security
         guarantee comes from subprocess list-arg usage, not path filtering.
         """
-        from framekit.core.path_validation import validate_file_path
+        from ouro.core.path_validation import validate_file_path
 
         malicious_path = str(tmp_path / "test\n.mkv")
 
@@ -296,9 +296,9 @@ class TestSubprocessArgumentSanitization:
 
     def test_subprocess_uses_list_not_shell(self, tmp_path):
         """Test that subprocess calls use list arguments, not shell=True."""
-        from framekit.core.models.cleanmkv import RemuxPlan
-        from framekit.core.tools import ToolRegistry
-        from framekit.modules.cleanmkv.remuxer import apply_remux_plan
+        from ouro.core.models.cleanmkv import RemuxPlan
+        from ouro.core.tools import ToolRegistry
+        from ouro.modules.cleanmkv.remuxer import apply_remux_plan
 
         source = tmp_path / "input.mkv"
         source.write_text("fake video")
@@ -316,7 +316,7 @@ class TestSubprocessArgumentSanitization:
 
         registry = ToolRegistry()
 
-        with patch("framekit.modules.cleanmkv.remuxer._run") as mock_run:
+        with patch("ouro.modules.cleanmkv.remuxer._run") as mock_run:
             mock_result = MagicMock()
             mock_result.returncode = 0
             mock_run.return_value = mock_result
@@ -338,7 +338,7 @@ class TestPathTraversalPrevention:
 
     def test_path_traversal_in_input_rejected(self, tmp_path):
         """Test that path traversal in input paths is rejected."""
-        from framekit.core.path_validation import validate_file_path
+        from ouro.core.path_validation import validate_file_path
 
         # Attempt path traversal
         traversal_path = tmp_path / ".." / ".." / "etc" / "passwd"
@@ -359,7 +359,7 @@ class TestPathTraversalPrevention:
         if platform.system() == "Windows":
             pytest.skip("Unix symlink test")
 
-        from framekit.core.path_validation import configure_security, validate_file_path
+        from ouro.core.path_validation import configure_security, validate_file_path
 
         # Create a symlink
         real_dir = tmp_path / "real"

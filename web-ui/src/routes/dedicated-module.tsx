@@ -10,8 +10,8 @@ export function DedicatedModulePage() {
   if (!config) {
     return (
       <div className="space-y-4">
-        <p>Module dédié inconnu: {moduleSlug}</p>
-        <Link to="/jobs">Retour modules</Link>
+        <p>Unknown dedicated module: {moduleSlug}</p>
+        <Link to="/jobs">Back to jobs</Link>
       </div>
     );
   }

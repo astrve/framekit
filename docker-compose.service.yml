@@ -1,20 +1,20 @@
 services:
-  framekit:
+  ouro:
     build:
       context: .
       dockerfile: Dockerfile
-    image: framekit-service:local
+    image: ouro-service:local
     environment:
-      FRAMEKIT_CONFIG_DIR: /var/lib/framekit/config
-      FRAMEKIT_CACHE_DIR: /var/lib/framekit/cache
+      OURO_CONFIG_DIR: /var/lib/ouro/config
+      OURO_CACHE_DIR: /var/lib/ouro/cache
     ports:
       - "8000:8000"
     volumes:
-      - framekit_config:/var/lib/framekit/config
-      - framekit_cache:/var/lib/framekit/cache
+      - ouro_config:/var/lib/ouro/config
+      - ouro_cache:/var/lib/ouro/cache
       - ./Workspace:/media
     restart: unless-stopped
 
 volumes:
-  framekit_config:
-  framekit_cache:
+  ouro_config:
+  ouro_cache:

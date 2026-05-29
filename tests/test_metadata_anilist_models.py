@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from framekit.core.models.metadata import EpisodeMetadata, MetadataCandidate, SeasonMetadata
-from framekit.modules.metadata.providers.anilist_models import (
+from ouro.core.models.metadata import EpisodeMetadata, MetadataCandidate, SeasonMetadata
+from ouro.modules.metadata.providers.anilist_models import (
     AniListCoverImage,
     AniListDate,
     AniListMedia,

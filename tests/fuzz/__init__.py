@@ -1,4 +1,4 @@
-"""Property-based + fuzz tests for Framekit parsers.
+"""Property-based + fuzz tests for Ouro parsers.
 
 Uses Hypothesis to generate diverse inputs (~thousands per session) and
 validates that the parsers never crash, never leak secrets, and always
@@ -6,13 +6,13 @@ return well-typed results — even on malformed payloads.
 
 Four parsers are targeted in S2 of the pro-grade roadmap:
 
-* ``framekit.core.naming.release_name_from_mkv_paths`` — accepts arbitrary
+* ``ouro.core.naming.release_name_from_mkv_paths`` — accepts arbitrary
   filename lists; must always return ``str``.
-* ``framekit.modules.torrent.service._bencode`` (and its decoder) — must
+* ``ouro.modules.torrent.service._bencode`` (and its decoder) — must
   round-trip valid bencoded payloads and reject malformed ones cleanly.
-* ``framekit.modules.nfo.scanner`` ingestion — given arbitrary folder
+* ``ouro.modules.nfo.scanner`` ingestion — given arbitrary folder
   structures, must never raise an unhandled exception.
-* ``framekit.modules.extract.audio_extractor.AudioExtractor.validate_bitrate`` —
+* ``ouro.modules.extract.audio_extractor.AudioExtractor.validate_bitrate`` —
   bitrate parser must reject malformed values and keep strict range bounds.
 
 Run locally:

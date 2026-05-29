@@ -1,6 +1,6 @@
-# Framekit — Windows Service Quick Start
+# Ouro — Windows Service Quick Start
 
-Run Framekit as a persistent background process on Windows so the Web UI
+Run Ouro as a persistent background process on Windows so the Web UI
 is available after login without keeping a terminal open.
 
 For full cross-platform operations (backup/restore, intake token lifecycle,
@@ -10,9 +10,14 @@ drain/shutdown queue controls), see `docs/service-ops-runbook.md`.
 
 ## 1. Prerequisites
 
-- Framekit installed (`uv pip install -e .` or equivalent)
-- `framekit` available on PATH (verify: `framekit --version`)
+- Ouro installed (`uv pip install -e .` or equivalent)
+- `ouro` available on PATH (verify: `ouro --version`)
 - Web UI built (see step 2)
+
+Migration note:
+- Old `framekit` service/config paths are not removed automatically.
+- New default service path uses `ouro` namespace.
+- Copy old local state manually if you need to preserve it.
 
 ---
 
@@ -25,7 +30,7 @@ npm run build
 ```
 
 This builds `web-ui/dist/` then syncs static assets into
-`src/framekit/web/static/`. `framekit serve` resolves packaged static first,
+`src/ouro/web/static/`. `ouro serve` resolves packaged static first,
 then source-tree fallback.
 
 For Linux/Docker service setup, see `docs/linux-docker-service.md`.
@@ -37,7 +42,7 @@ For Linux/Docker service setup, see `docs/linux-docker-service.md`.
 Before installing as a service, confirm the server starts cleanly:
 
 ```cmd
-uv run framekit serve
+uv run ouro serve
 ```
 
 Expected output:
@@ -47,19 +52,19 @@ INFO:     Started server process [12345]
 INFO:     Uvicorn running on http://127.0.0.1:8000
 ```
 
-Open `http://127.0.0.1:8000` in a browser. The Framekit dashboard should
+Open `http://127.0.0.1:8000` in a browser. The Ouro dashboard should
 load. Press `Ctrl+C` to stop.
 
 ---
 
 ## 4. Install as a scheduled task
 
-The `task` mode registers a Windows Scheduled Task that starts Framekit
+The `task` mode registers a Windows Scheduled Task that starts Ouro
 automatically when you log in. It typically does **not** require admin
 rights, though an elevated shell or restrictive group policy may block it.
 
 ```cmd
-framekit service install --mode=task
+ouro service install --mode=task
 ```
 
 Other install modes (require admin):
@@ -74,7 +79,7 @@ Other install modes (require admin):
 Custom host/port:
 
 ```cmd
-framekit service install --mode=task --host 127.0.0.1 --port 8000
+ouro service install --mode=task --host 127.0.0.1 --port 8000
 ```
 
 ---
@@ -84,17 +89,17 @@ framekit service install --mode=task --host 127.0.0.1 --port 8000
 **Start** (triggers the scheduled task or service immediately):
 
 ```cmd
-framekit service start
+ouro service start
 ```
 
 **Status** (reads the service heartbeat file and queries the API):
 
 ```cmd
-framekit service status
+ouro service status
 ```
 
 > **Note on 401 in status output:** If auth is enabled (you have created at
-> least one user with `framekit user add --admin`), `service status` queries
+> least one user with `ouro user add --admin`), `service status` queries
 > `GET /api/v1/service/status` without credentials and may show a 401
 > warning alongside the process/heartbeat data. The service is running
 > normally — the 401 just means the status API endpoint requires login.
@@ -103,31 +108,31 @@ framekit service status
 **Tail logs** (stdout):
 
 ```cmd
-framekit service logs -f
+ouro service logs -f
 ```
 
 **Show last 100 lines of stderr**:
 
 ```cmd
-framekit service logs --stderr -n 100
+ouro service logs --stderr -n 100
 ```
 
 **Stop**:
 
 ```cmd
-framekit service stop
+ouro service stop
 ```
 
 **Restart** (stop then start):
 
 ```cmd
-framekit service restart
+ouro service restart
 ```
 
 **Uninstall** (removes the task/service entry; does not delete logs):
 
 ```cmd
-framekit service uninstall
+ouro service uninstall
 ```
 
 ---
@@ -137,22 +142,22 @@ framekit service uninstall
 All service state lives under the platform config directory:
 
 ```
-%LOCALAPPDATA%\framekit\framekit\service\
+%LOCALAPPDATA%\ouro\ouro\service\
 ```
 
-Typical path: `C:\Users\<you>\AppData\Local\framekit\framekit\service\`
+Typical path: `C:\Users\<you>\AppData\Local\ouro\ouro\service\`
 
 | File                     | Purpose                                      |
 |--------------------------|----------------------------------------------|
 | `service.pid`            | PID of the running server process            |
 | `service.state.json`     | Heartbeat snapshot (status, uptime, etc.)    |
-| `framekit-serve.bat`     | Wrapper script used by the scheduled task    |
-| `framekit-serve.out.log` | stdout log (written by the bat wrapper)      |
-| `framekit-serve.err.log` | stderr log (written by the bat wrapper)      |
+| `ouro-serve.bat`     | Wrapper script used by the scheduled task    |
+| `ouro-serve.out.log` | stdout log (written by the bat wrapper)      |
+| `ouro-serve.err.log` | stderr log (written by the bat wrapper)      |
 
 > **Log note:** In `task` mode, logs are only written after the first task
-> run. If `framekit service logs` shows no output immediately after install,
-> start the service (`framekit service start`) and wait a few seconds.
+> run. If `ouro service logs` shows no output immediately after install,
+> start the service (`ouro service start`) and wait a few seconds.
 
 ---
 
@@ -160,11 +165,11 @@ Typical path: `C:\Users\<you>\AppData\Local\framekit\framekit\service\`
 
 - **Task mode logs**: the bat wrapper captures stdout/stderr to log files.
   The logs appear only after the task has run at least once.
-- **Non-loopback binding**: `framekit serve` refuses `--host 0.0.0.0`
-  unless at least one admin user exists (`framekit user add --admin`).
+- **Non-loopback binding**: `ouro serve` refuses `--host 0.0.0.0`
+  unless at least one admin user exists (`ouro user add --admin`).
   Create the user before installing the service if you need LAN access.
-- **Web UI must be built**: `framekit serve` serves `web-ui/dist/`. If the
-  packaged static directory is missing, `framekit serve` falls back to
+- **Web UI must be built**: `ouro serve` serves `web-ui/dist/`. If the
+  packaged static directory is missing, `ouro serve` falls back to
   source-tree `web-ui/dist/`; if neither exists, root returns JSON hint
   instead of UI. Re-run `npm run build` after frontend changes.
 - **Token expiry**: JWT tokens expire. Users will be redirected to `/login`
@@ -173,16 +178,16 @@ Typical path: `C:\Users\<you>\AppData\Local\framekit\framekit\service\`
   does not restart if the process crashes. Use `nssm` mode for
   restart-on-failure behaviour (requires admin).
 - **Single host**: the service is designed for single-machine use. Running
-  two Framekit instances pointing at the same config directory is not
+  two Ouro instances pointing at the same config directory is not
   supported.
 
 ---
 
 ## 8. Upgrading
 
-1. Stop the service: `framekit service stop`
-2. Upgrade Framekit: `uv pip install --upgrade framekit` (or `uv sync`)
+1. Stop the service: `ouro service stop`
+2. Upgrade Ouro: `uv pip install --upgrade ouro-auto` (or `uv sync`)
 3. Rebuild the Web UI: `npm run build`
-4. Start the service: `framekit service start`
+4. Start the service: `ouro service start`
 
 No re-install is needed unless the CLI entry point path changes.

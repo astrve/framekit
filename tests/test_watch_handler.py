@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`framekit.modules.watch.handler`.
+"""Unit tests for :mod:`ouro.modules.watch.handler`.
 
 Covers event routing (``on_created`` / ``on_modified`` / ``on_moved``), the
 failed-file relocation helper, status snapshot, log-event truncation and
@@ -14,15 +14,15 @@ from typing import Any
 
 import pytest
 
-from framekit.modules.watch.handler import FileHandler
-from framekit.modules.watch.models import (
+from ouro.modules.watch.handler import FileHandler
+from ouro.modules.watch.models import (
     ErrorHandlingConfig,
     NotificationConfig,
     ValidationConfig,
     WatchConfig,
 )
-from framekit.modules.watch.notifier import WindowsNotifier
-from framekit.modules.watch.validator import FileValidator
+from ouro.modules.watch.notifier import WindowsNotifier
+from ouro.modules.watch.validator import FileValidator
 
 
 @pytest.fixture

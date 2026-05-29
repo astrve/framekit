@@ -5,15 +5,15 @@ include CHANGELOG.md
 include LICENSE
 include CONTRIBUTING.md
 include SECURITY.md
-include framekit.example.yaml
+include ouro.example.yaml
 include pyproject.toml
 include MANIFEST.in
 include mkdocs.yml
 
 recursive-include docs *.md
 recursive-include tests *.py *.md
-recursive-include src/framekit *.py *.typed *.yaml *.json *.jinja2 *.txt *.md
-recursive-include src/framekit/web/static *
+recursive-include src/ouro *.py *.typed *.yaml *.json *.jinja2 *.txt *.md
+recursive-include src/ouro/web/static *
 
 global-exclude __pycache__/*
 global-exclude *.py[cod]

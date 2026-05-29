@@ -1,4 +1,4 @@
-# Release pipeline for Framekit.
+# Release pipeline for Ouro.
 #
 # Trigger: a ``v*.*.*`` tag push (``v2.0.0``, ``v2.1.0`` …) or manual
 # dispatch with a tag/branch.
@@ -11,7 +11,7 @@
 #   5. binaries  — PyInstaller standalone builds for win/macos/linux
 #   6. release   — GitHub release with all artefacts attached
 #
-# Release binaries package Framekit itself. External tools such as ffmpeg,
+# Release binaries package Ouro itself. External tools such as ffmpeg,
 # mkvtoolnix, and mediainfo remain system dependencies.
 
 name: Release
@@ -141,7 +141,7 @@ jobs:
       - name: Upload dist
         uses: actions/upload-artifact@v7
         with:
-          name: framekit-dist
+          name: ouro-dist
           path: dist/
 
   sign:
@@ -154,7 +154,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: framekit-dist
+          name: ouro-dist
           path: dist/
 
       - name: Sign with Sigstore
@@ -167,7 +167,7 @@ jobs:
       - name: Upload signature bundles
         uses: actions/upload-artifact@v7
         with:
-          name: framekit-sigstore
+          name: ouro-sigstore
           path: |
             dist/*.sigstore.json
 
@@ -180,13 +180,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            asset_name: framekit-linux-x86_64
+            asset_name: ouro-linux-x86_64
             ext: ""
           - os: windows-latest
-            asset_name: framekit-windows-x86_64
+            asset_name: ouro-windows-x86_64
             ext: ".exe"
           - os: macos-latest
-            asset_name: framekit-macos-arm64
+            asset_name: ouro-macos-arm64
             ext: ""
     steps:
       - uses: actions/checkout@v6
@@ -201,16 +201,16 @@ jobs:
           pip install -e ".[build-binary]"
 
       - name: Build standalone binary
-        run: pyinstaller --onefile --name framekit --collect-data framekit src/framekit/__main__.py
+        run: pyinstaller --onefile --name ouro --collect-data ouro src/ouro/__main__.py
 
       - name: Smoke-test binary
         shell: bash
         run: |
-          ./dist/framekit${{ matrix.ext }} --version
+          ./dist/ouro${{ matrix.ext }} --version
 
       - name: Rename for upload
         shell: bash
-        run: mv dist/framekit${{ matrix.ext }} dist/${{ matrix.asset_name }}${{ matrix.ext }}
+        run: mv dist/ouro${{ matrix.ext }} dist/${{ matrix.asset_name }}${{ matrix.ext }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
@@ -233,7 +233,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: artefacts
-          pattern: "framekit-*"
+          pattern: "ouro-*"
           merge-multiple: true
 
       - name: Extract changelog entry for this version
@@ -254,7 +254,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.validate.outputs.version }}
-          name: Framekit v${{ needs.validate.outputs.version }}
+          name: Ouro v${{ needs.validate.outputs.version }}
           body_path: release_notes.md
           draft: false
           prerelease: ${{ contains(needs.validate.outputs.version, 'a') || contains(needs.validate.outputs.version, 'b') || contains(needs.validate.outputs.version, 'rc') }}
@@ -262,8 +262,8 @@ jobs:
             artefacts/*.whl
             artefacts/*.tar.gz
             artefacts/*.sigstore.json
-            artefacts/framekit-linux-x86_64
-            artefacts/framekit-windows-x86_64.exe
-            artefacts/framekit-macos-arm64
+            artefacts/ouro-linux-x86_64
+            artefacts/ouro-windows-x86_64.exe
+            artefacts/ouro-macos-arm64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

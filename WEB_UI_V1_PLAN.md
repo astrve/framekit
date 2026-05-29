@@ -2,7 +2,7 @@ Enough data. Writing plan now.
 
 ---
 
-# Framekit Web UI v1.0 — Revised Plan (Application-First)
+# Ouro Web UI v1.0 — Revised Plan (Application-First)
 
 ---
 
@@ -171,7 +171,7 @@ The Jobs page detail is the power user's debug surface. Normal users never need 
 ### Category A — Workflow Modules
 **Pipeline**, **Batch**
 
-Multi-step, long-running, path-required. Always async. Central to Framekit's purpose.
+Multi-step, long-running, path-required. Always async. Central to Ouro's purpose.
 
 ### Category B — Media Transformation Modules
 **Renamer**, **CleanMKV**, **Sort**, **Extract**, **Encode**, **Screenshot**, **Rename-Parent**
@@ -307,7 +307,7 @@ InlineJobPanel (appears on run)
 
 **Current gap:** `parsed_kind` populated only for `--json` flagged modules. DedicatedModuleLauncher does not pass `--json` to inspect/validate, so result is raw stdout.
 
-**Backend-needed:** `framekit inspect --json` structured output → backend parses → `parsed_payload` in job result.
+**Backend-needed:** `ouro inspect --json` structured output → backend parses → `parsed_payload` in job result.
 
 ---
 
@@ -520,7 +520,7 @@ Six icon + label buttons:
 - **Rerun** — re-submit exact same request
 - **Cancel** — cancel a pending or running job
 - **Bulk clear** — delete all completed/failed jobs
-- **CLI command copy** — copy the exact `framekit ...` command for debugging
+- **CLI command copy** — copy the exact `ouro ...` command for debugging
 
 The Jobs page is where you go when something went wrong and you want to understand why.
 
@@ -773,8 +773,8 @@ inspect, renamer, cleanmkv, torrent, nfo, prez, screenshot, encode, extract, sor
 
 **Goal:** Enable rich result summaries for key modules.
 
-1. `framekit inspect --json` → backend parses JSON stdout → `parsed_kind="inspect"`, `parsed_payload={title, kind, size, episodes, completeness, tracks}`
-2. `framekit validate --json` → same pattern → `parsed_kind="checks"` (already defined for doctor)
+1. `ouro inspect --json` → backend parses JSON stdout → `parsed_kind="inspect"`, `parsed_payload={title, kind, size, episodes, completeness, tracks}`
+2. `ouro validate --json` → same pattern → `parsed_kind="checks"` (already defined for doctor)
 3. Extend `parseSubSteps` client-side for: renamer (parse rename count), nfo (parse NFO path), prez (parse output files)
 4. Upload history schema: add typed fields to `list_upload_history` return value
 

@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from framekit.core.models.cleanmkv import RemuxPlan
-from framekit.core.tools import ToolRegistry
-from framekit.modules.cleanmkv import remuxer
+from ouro.core.models.cleanmkv import RemuxPlan
+from ouro.core.tools import ToolRegistry
+from ouro.modules.cleanmkv import remuxer
 
 
 class _Registry(ToolRegistry):

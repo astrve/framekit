@@ -7,9 +7,9 @@ Checks a release against quality rules before uploading. Reports errors and warn
 ## Usage
 
 ```bash
-fk validate /path/to/release [OPTIONS]
-fk validate /path/to/release --ruleset strict
-fk validate /path/to/release --ruleset anime --require-subs
+ouro validate /path/to/release [OPTIONS]
+ouro validate /path/to/release --ruleset strict
+ouro validate /path/to/release --ruleset anime --require-subs
 ```
 
 ---
@@ -57,7 +57,7 @@ fk validate /path/to/release --ruleset anime --require-subs
 Severity  Category  Issue                            Suggestion
 ────────────────────────────────────────────────────────────────
 ERROR     Video     No video track found             Check MKV integrity
-WARNING   NFO       NFO file missing                 Run: fk nfo /path/to/release
+WARNING   NFO       NFO file missing                 Run: ouro nfo /path/to/release
 INFO      Audio     No language tag on track 2       Edit with mkvpropedit
 ```
 
@@ -70,7 +70,7 @@ Exit codes:
 ## Integrating in CI
 
 ```bash
-fk validate /path/to/release --ruleset strict --json
+ouro validate /path/to/release --ruleset strict --json
 # Check exit code; parse JSON for structured results
 ```
 
@@ -81,5 +81,5 @@ fk validate /path/to/release --ruleset strict --json
 Validate is not a default pipeline step. Run it explicitly before or after the pipeline:
 
 ```bash
-fk validate /path/to/release && fk pipeline /path/to/release --auto
+ouro validate /path/to/release && ouro pipeline /path/to/release --auto
 ```

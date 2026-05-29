@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from framekit.commands.setup import (
+from ouro.commands.setup import (
     _ensure_default_folders_exist,
     _print_setup_summary,
     _workspace_paths,
@@ -22,7 +22,7 @@ from framekit.commands.setup import (
 class TestWorkspacePathDetection:
     """Test workspace path detection and generation."""
 
-    @patch("framekit.commands.setup.get_config_dir")
+    @patch("ouro.commands.setup.get_config_dir")
     def test_workspace_paths_appdata(self, mock_get_config: Mock, tmp_path: Path):
         """Test AppData workspace path generation."""
         config_dir = tmp_path / "config"
@@ -34,7 +34,7 @@ class TestWorkspacePathDetection:
         assert appdata == config_dir / "Workspace" / "TestModule"
         assert project == project_root / "Workspace" / "TestModule"
 
-    @patch("framekit.commands.setup.get_config_dir")
+    @patch("ouro.commands.setup.get_config_dir")
     def test_workspace_paths_project(self, mock_get_config: Mock, tmp_path: Path):
         """Test project workspace path generation."""
         config_dir = tmp_path / "config"
@@ -46,7 +46,7 @@ class TestWorkspacePathDetection:
         assert project.parent.name == "Workspace"
         assert project.name == "TestModule"
 
-    @patch("framekit.commands.setup.get_config_dir")
+    @patch("ouro.commands.setup.get_config_dir")
     def test_workspace_paths_multiple_modules(self, mock_get_config: Mock, tmp_path: Path):
         """Test workspace paths for multiple modules."""
         config_dir = tmp_path / "config"
@@ -134,8 +134,8 @@ class TestFolderCreation:
 
         assert nested_path.exists()
 
-    @patch("framekit.commands.setup.Path.mkdir")
-    @patch("framekit.commands.setup.print_warning")
+    @patch("ouro.commands.setup.Path.mkdir")
+    @patch("ouro.commands.setup.print_warning")
     def test_ensure_folders_handles_permission_error(
         self, mock_warning: Mock, mock_mkdir: Mock, tmp_path: Path
     ):
@@ -161,8 +161,8 @@ class TestFolderCreation:
 class TestFirstTimeSetupDetection:
     """Test first-time setup detection and prompting."""
 
-    @patch("framekit.commands.setup.sys.stdin")
-    @patch("framekit.commands.setup.sys.stdout")
+    @patch("ouro.commands.setup.sys.stdin")
+    @patch("ouro.commands.setup.sys.stdout")
     def test_skip_if_not_tty(self, mock_stdout: Mock, mock_stdin: Mock):
         """Test skipping setup if not in TTY."""
         mock_stdin.isatty.return_value = False
@@ -173,9 +173,9 @@ class TestFirstTimeSetupDetection:
 
         # No assertions needed - just shouldn't raise
 
-    @patch("framekit.commands.setup.sys.stdin")
-    @patch("framekit.commands.setup.sys.stdout")
-    @patch("framekit.commands.setup.SettingsStore")
+    @patch("ouro.commands.setup.sys.stdin")
+    @patch("ouro.commands.setup.sys.stdout")
+    @patch("ouro.commands.setup.SettingsStore")
     def test_skip_if_completed(self, mock_store_class: Mock, mock_stdout: Mock, mock_stdin: Mock):
         """Test skipping if setup already completed."""
         mock_stdin.isatty.return_value = True
@@ -189,10 +189,10 @@ class TestFirstTimeSetupDetection:
 
         # Should not prompt user
 
-    @patch("framekit.commands.setup.sys.stdin")
-    @patch("framekit.commands.setup.sys.stdout")
-    @patch("framekit.commands.setup.sys.argv", ["framekit", "setup"])
-    @patch("framekit.commands.setup.SettingsStore")
+    @patch("ouro.commands.setup.sys.stdin")
+    @patch("ouro.commands.setup.sys.stdout")
+    @patch("ouro.commands.setup.sys.argv", ["ouro", "setup"])
+    @patch("ouro.commands.setup.SettingsStore")
     def test_skip_if_running_setup_command(
         self, mock_store_class: Mock, mock_stdout: Mock, mock_stdin: Mock
     ):
@@ -208,10 +208,10 @@ class TestFirstTimeSetupDetection:
 
         # Should not prompt since already in setup
 
-    @patch("framekit.commands.setup.sys.stdin")
-    @patch("framekit.commands.setup.sys.stdout")
-    @patch("framekit.commands.setup.sys.argv", ["framekit", "--help"])
-    @patch("framekit.commands.setup.SettingsStore")
+    @patch("ouro.commands.setup.sys.stdin")
+    @patch("ouro.commands.setup.sys.stdout")
+    @patch("ouro.commands.setup.sys.argv", ["ouro", "--help"])
+    @patch("ouro.commands.setup.SettingsStore")
     def test_skip_if_help_command(
         self, mock_store_class: Mock, mock_stdout: Mock, mock_stdin: Mock
     ):
@@ -231,7 +231,7 @@ class TestFirstTimeSetupDetection:
 class TestSetupSummary:
     """Test setup summary display."""
 
-    @patch("framekit.commands.setup.console")
+    @patch("ouro.commands.setup.console")
     def test_print_summary_basic(self, mock_console: Mock):
         """Test printing basic setup summary."""
         settings = {
@@ -262,7 +262,7 @@ class TestSetupSummary:
         # Should print table
         mock_console.print.assert_called()
 
-    @patch("framekit.commands.setup.console")
+    @patch("ouro.commands.setup.console")
     def test_print_summary_with_token(self, mock_console: Mock):
         """Test summary shows token as configured."""
         settings = {
@@ -292,7 +292,7 @@ class TestSetupSummary:
 
         mock_console.print.assert_called()
 
-    @patch("framekit.commands.setup.console")
+    @patch("ouro.commands.setup.console")
     def test_print_summary_with_logo(self, mock_console: Mock):
         """Test summary shows active logo."""
         settings = {
@@ -326,10 +326,10 @@ class TestSetupSummary:
 class TestEnvironmentCompatibility:
     """Test environment compatibility checks."""
 
-    @patch("framekit.commands.setup.get_config_dir")
+    @patch("ouro.commands.setup.get_config_dir")
     def test_config_dir_windows_style(self, mock_get_config: Mock, tmp_path: Path):
         """Test Windows-style config directory."""
-        config_dir = tmp_path / "AppData" / "Roaming" / "Framekit"
+        config_dir = tmp_path / "AppData" / "Roaming" / "Ouro"
         mock_get_config.return_value = config_dir
         project_root = tmp_path / "project"
 
@@ -338,10 +338,10 @@ class TestEnvironmentCompatibility:
         assert "AppData" in str(appdata)
         assert "Workspace" in str(appdata)
 
-    @patch("framekit.commands.setup.get_config_dir")
+    @patch("ouro.commands.setup.get_config_dir")
     def test_config_dir_unix_style(self, mock_get_config: Mock, tmp_path: Path):
         """Test Unix-style config directory."""
-        config_dir = tmp_path / ".config" / "framekit"
+        config_dir = tmp_path / ".config" / "ouro"
         mock_get_config.return_value = config_dir
         project_root = tmp_path / "project"
 
@@ -423,8 +423,8 @@ class TestEnvironmentEdgeCases:
 
         assert special_path.exists()
 
-    @patch("framekit.commands.setup.Path.mkdir")
-    @patch("framekit.commands.setup.print_warning")
+    @patch("ouro.commands.setup.Path.mkdir")
+    @patch("ouro.commands.setup.print_warning")
     def test_ensure_folders_handles_os_error(self, mock_warning: Mock, mock_mkdir: Mock):
         """Test handling OSError during folder creation."""
         mock_mkdir.side_effect = OSError("Permission denied")

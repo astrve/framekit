@@ -6,7 +6,7 @@ pytestmark = pytest.mark.benchmark
 
 
 def test_bench_batch_queue_construction(benchmark, tmp_path) -> None:
-    from framekit.modules.batch.queue import BatchQueue
+    from ouro.modules.batch.queue import BatchQueue
 
     releases: list = []
     for i in range(20):

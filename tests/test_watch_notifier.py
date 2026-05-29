@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`framekit.modules.watch.notifier`.
+"""Unit tests for :mod:`ouro.modules.watch.notifier`.
 
 The desktop-notifier subsystem is replaced with a fake collector so tests
 exercise the config-gating logic, message formatting, and error truncation
@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
-from framekit.modules.watch import notifier as notifier_module
-from framekit.modules.watch.models import NotificationConfig
-from framekit.modules.watch.notifier import WindowsNotifier
+from ouro.modules.watch import notifier as notifier_module
+from ouro.modules.watch.models import NotificationConfig
+from ouro.modules.watch.notifier import WindowsNotifier
 
 
 @pytest.fixture

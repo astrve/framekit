@@ -239,24 +239,75 @@ export function HomePage() {
   const defaultSeedbox = seedboxQuery.data?.seedboxes.find((s) => s.is_default);
   const lastUploadEntry = uploadHistoryQuery.data?.entries[0];
   const lastUploadTs = lastUploadEntry?.timestamp ?? "";
+  const serviceState = serviceQuery.data?.status ?? "unknown";
 
   // ── render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            <img src="/logo-wordmark.svg" alt="Ouro" className="h-5 w-auto" />
+            <p className="text-sm text-muted-foreground">Self-hosted media workflow automation</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Operator console · Run, monitor, recover
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Link
+                to="/pipeline"
+                className="interactive-lift rounded-md border border-border bg-secondary/55 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/35"
+              >
+                Run Pipeline
+              </Link>
+              <Link
+                to="/jobs"
+                className="interactive-lift rounded-md border border-border bg-secondary/55 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/35"
+              >
+                Open Jobs
+              </Link>
+              <Link
+                to="/events"
+                className="interactive-lift rounded-md border border-border bg-secondary/55 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/35"
+              >
+                Service Events
+              </Link>
+            </div>
+          </div>
+          <div className="grid min-w-[230px] gap-2 rounded-xl border border-border bg-secondary/30 p-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Active jobs</span>
+              <span className="font-semibold tabular-nums">{activeJobs.length}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Service</span>
+              <Badge variant={serviceState === "running" ? "success" : "secondary"}>
+                {serviceState === "running" ? "running" : serviceState}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Today</span>
+              <span className="font-semibold tabular-nums">
+                {completedToday + failedToday}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Warnings banner ──────────────────────────────────────────────── */}
       {warnings.length > 0 && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 space-y-2">
-          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+        <div className="rounded-xl border border-accent/50 bg-accent/10 px-4 py-3 space-y-2">
+          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-accent">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             Attention required
           </p>
           {warnings.map((w, i) => (
             <div key={i} className="flex items-center justify-between gap-4">
-              <p className="text-sm text-amber-700 dark:text-amber-300">{w.msg}</p>
+              <p className="text-sm text-foreground">{w.msg}</p>
               <Link
                 to={w.to}
-                className="shrink-0 text-xs font-medium text-amber-600 underline-offset-2 hover:underline"
+                className="shrink-0 text-xs font-medium text-accent underline-offset-2 hover:underline"
               >
                 View →
               </Link>
@@ -291,7 +342,7 @@ export function HomePage() {
         <div
           className={cn(
             "rounded-xl border bg-card overflow-hidden",
-            hasRunning ? "border-blue-500/30" : "border-border",
+            hasRunning ? "border-primary/40" : "border-border",
           )}
         >
           {activeJobs.length === 0 ? (
@@ -306,7 +357,7 @@ export function HomePage() {
                     className={cn(
                       "h-3.5 w-3.5 animate-spin shrink-0",
                       job.status === "running"
-                        ? "text-blue-500"
+                        ? "text-primary"
                         : "text-muted-foreground",
                     )}
                   />
@@ -347,12 +398,12 @@ export function HomePage() {
             doctorQuery.data &&
               errCount === 0 &&
               warnCount > 0 &&
-              "border-amber-500/40",
+              "border-accent/40",
             doctorQuery.data &&
               errCount === 0 &&
               warnCount === 0 &&
               okCount > 0 &&
-              "border-emerald-500/40",
+              "border-accent/40",
           )}
         >
           <CardHeader className="px-4 pb-2 pt-4">
@@ -374,12 +425,12 @@ export function HomePage() {
                   </span>
                 )}
                 {warnCount > 0 && (
-                  <span className="text-sm font-semibold text-amber-500">
+                  <span className="text-sm font-semibold text-accent">
                     {warnCount} warning{warnCount > 1 ? "s" : ""}
                   </span>
                 )}
                 {errCount === 0 && warnCount === 0 && (
-                  <span className="text-sm font-semibold text-emerald-500">
+                  <span className="text-sm font-semibold text-accent">
                     All checks OK
                   </span>
                 )}
@@ -465,7 +516,7 @@ export function HomePage() {
         <Card
           className={cn(
             "border-border/60",
-            serviceQuery.data?.status === "running" && "border-emerald-500/40",
+            serviceQuery.data?.status === "running" && "border-accent/40",
           )}
         >
           <CardHeader className="px-4 pb-2 pt-4">
@@ -497,7 +548,7 @@ export function HomePage() {
               <div className="space-y-1.5">
                 <Badge variant="secondary">Stopped</Badge>
                 <p className="text-xs text-muted-foreground">
-                  Run <code className="font-mono">framekit serve</code>
+                  Run <code className="font-mono">ouro serve</code>
                 </p>
               </div>
             )}
@@ -522,7 +573,7 @@ export function HomePage() {
                 </span>
                 <div>
                   {completedToday > 0 && (
-                    <p className="text-xs text-emerald-500">{completedToday} completed</p>
+                    <p className="text-xs text-accent">{completedToday} completed</p>
                   )}
                   {failedToday > 0 && (
                     <p className="text-xs text-destructive">{failedToday} failed</p>
@@ -605,8 +656,8 @@ export function HomePage() {
                       <td className="px-4 py-2.5">
                         {job.status === "completed" ? (
                           <div className="flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                            <span className="text-xs text-emerald-500">done</span>
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-accent" />
+                            <span className="text-xs text-accent">done</span>
                           </div>
                         ) : job.status === "failed" ? (
                           <div>
@@ -659,13 +710,13 @@ export function HomePage() {
 
       {/* ── Quick actions ────────────────────────────────────────────────── */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold">Quick Actions</h2>
+        <h2 className="mb-3 text-sm font-semibold">Quick Launch</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
           {QUICK_ACTIONS.map(({ icon: Icon, label, to }) => (
             <Link
               key={to}
               to={to}
-              className="flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-4 text-center transition-colors hover:border-primary/30 hover:bg-secondary/40"
+              className="interactive-lift flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-4 text-center transition-colors hover:border-primary/30 hover:bg-secondary/40"
             >
               <div className="rounded-lg border border-primary/20 bg-primary/10 p-2">
                 <Icon className="h-4 w-4 text-primary" />
@@ -678,3 +729,4 @@ export function HomePage() {
     </div>
   );
 }
+

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:api": "python -m uvicorn framekit.web.app:app --reload --host 127.0.0.1 --port 8000",
+    "dev:api": "python -m uvicorn ouro.web.app:app --reload --host 127.0.0.1 --port 8000",
     "dev:full": "concurrently --names \"API,UI\" --prefix-colors \"blue,green\" \"npm run dev:api\" \"npm run dev\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Lock, Terminal } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -41,13 +41,16 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-3">
           <div className="flex justify-center">
-            <Terminal className="h-10 w-10 text-primary" />
+            <img src="/logo.svg" alt="Ouro" className="h-10 w-10" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Framekit</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Ouro</h1>
+          <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
+            Self-hosted media workflow automation
+          </p>
           <p className="text-sm text-muted-foreground">
-            {isSetup ? "Create your admin account to get started." : "Sign in to continue."}
+            {isSetup ? "Create first admin account to continue." : "Sign in to continue."}
           </p>
         </div>
 

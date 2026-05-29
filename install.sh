@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo ""
-echo "  Framekit v2.0.0 — Linux/macOS Installer"
+echo "  Ouro v2.0.0 — Linux/macOS Installer"
 echo "  ========================================="
 echo ""
 
@@ -35,7 +35,7 @@ else
 fi
 
 # Install
-echo "[..] Installing Framekit..."
+echo "[..] Installing Ouro..."
 "$VENV_DIR/bin/pip" install --upgrade pip -q
 "$VENV_DIR/bin/pip" install -e "$SCRIPT_DIR" -q
 
@@ -43,13 +43,13 @@ if [ $? -ne 0 ]; then
     echo "[ERROR] Installation failed."
     exit 1
 fi
-echo "[OK] Framekit installed."
+echo "[OK] Ouro installed."
 
 # Verify
-if "$VENV_DIR/bin/framekit" --version &>/dev/null; then
-    echo "[OK] $("$VENV_DIR/bin/framekit" --version 2>&1)"
+if "$VENV_DIR/bin/ouro" --version &>/dev/null; then
+    echo "[OK] $("$VENV_DIR/bin/ouro" --version 2>&1)"
 else
-    echo "[WARN] framekit not found. Try: $VENV_DIR/bin/framekit --version"
+    echo "[WARN] ouro not found. Try: $VENV_DIR/bin/ouro --version"
 fi
 
 echo ""
@@ -108,12 +108,12 @@ echo ""
 echo "  Installation complete!"
 echo ""
 echo "  Usage:"
-echo "    $VENV_DIR/bin/framekit --help"
-echo "    $VENV_DIR/bin/fk --help"
+echo "    $VENV_DIR/bin/ouro --help"
+echo "    $VENV_DIR/bin/ouro --help"
 echo ""
 echo "  To add to PATH:"
 echo "    echo 'export PATH=\"$VENV_DIR/bin:\$PATH\"' >> ~/.bashrc"
 echo "    source ~/.bashrc"
 echo ""
-echo "  Then use: framekit --help / fk --help"
+echo "  Then use: ouro --help / ouro --help"
 echo ""

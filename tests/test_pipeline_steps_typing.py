@@ -1,4 +1,4 @@
-"""Regression tests for ``framekit.commands.pipeline_steps`` typing setup.
+"""Regression tests for ``ouro.commands.pipeline_steps`` typing setup.
 
 A prior bug used ``if False:  # TYPE_CHECKING`` as a placeholder. Static
 analysis stopped resolving ``PipelineContext`` and the IDE / pyright
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import inspect
 
-from framekit.commands import pipeline_steps
+from ouro.commands import pipeline_steps
 
 
 def test_pipeline_steps_imports_typing_type_checking() -> None:
@@ -42,4 +42,4 @@ def test_pipeline_steps_guards_pipeline_context_import() -> None:
     lines = source.splitlines()
     guard_idx = next(i for i, line in enumerate(lines) if "if TYPE_CHECKING:" in line)
     window = "\n".join(lines[guard_idx : guard_idx + 5])
-    assert "from framekit.commands.pipeline import PipelineContext" in window
+    assert "from ouro.commands.pipeline import PipelineContext" in window

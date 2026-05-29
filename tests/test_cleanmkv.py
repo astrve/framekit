@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from framekit.core.languages import (
+from ouro.core.languages import (
     language_filter_short_label,
     match_language_filter,
     normalize_language,
 )
-from framekit.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
-from framekit.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
-from framekit.modules.cleanmkv.presets import (
+from ouro.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
+from ouro.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
+from ouro.modules.cleanmkv.presets import (
     load_named_external_preset,
     load_preset_file,
     preset_from_dict,

@@ -1,4 +1,4 @@
-# Pre-commit hooks for Framekit
+# Pre-commit hooks for Ouro
 # Install: pre-commit install
 # Run manually: pre-commit run --all-files
 # Update hooks: pre-commit autoupdate
@@ -114,14 +114,14 @@ repos:
         name: interrogate (docstring coverage >= 90)
         entry: >
           interrogate
-          src/framekit/core/models
-          src/framekit/core/security
-          src/framekit/core/path_validation.py
-          src/framekit/core/subprocess_safe.py
-          src/framekit/core/plugins.py
-          src/framekit/modules/metadata/providers
-          src/framekit/modules/upload/adapters
-          src/framekit/modules/upload/service.py
+          src/ouro/core/models
+          src/ouro/core/security
+          src/ouro/core/path_validation.py
+          src/ouro/core/subprocess_safe.py
+          src/ouro/core/plugins.py
+          src/ouro/modules/metadata/providers
+          src/ouro/modules/upload/adapters
+          src/ouro/modules/upload/service.py
           --fail-under 90
         language: system
         pass_filenames: false
@@ -150,7 +150,7 @@ exclude: |
     dist/.*|
     build/.*|
     site/.*|
-    src/framekit/templates/prez/html/generated/.*
+    src/ouro/templates/prez/html/generated/.*
   )$
 
 # Minimum pre-commit version

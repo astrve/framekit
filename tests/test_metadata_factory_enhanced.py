@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from framekit.modules.metadata.base import MetadataProvider
-from framekit.modules.metadata.chain import ProviderChain
-from framekit.modules.metadata.config import MetadataRuntimeConfig
-from framekit.modules.metadata.factory import (
+from ouro.modules.metadata.base import MetadataProvider
+from ouro.modules.metadata.chain import ProviderChain
+from ouro.modules.metadata.config import MetadataRuntimeConfig
+from ouro.modules.metadata.factory import (
     build_metadata_provider,
     build_provider_chain,
     get_available_providers,
@@ -227,8 +227,8 @@ def test_build_provider_chain_content_type_hints():
 def test_build_metadata_provider_from_env():
     """Test building provider with environment variables."""
     env = {
-        "FRAMEKIT_TMDB_READ_ACCESS_TOKEN": "env_token",
-        "FRAMEKIT_METADATA_LANGUAGE": "fr-FR",
+        "OURO_TMDB_READ_ACCESS_TOKEN": "env_token",
+        "OURO_METADATA_LANGUAGE": "fr-FR",
     }
 
     settings = {

@@ -3,58 +3,58 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "DM Sans", "Segoe UI", sans-serif;
+  --font-sans: "Manrope", "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", "Consolas", monospace;
+  --font-heading: "Sora", "Manrope", "Segoe UI", sans-serif;
 }
 
-/* Light mode (default) */
 :root {
-  --color-bg: #faf8f4;
-  --color-surface: #f3ede4;
-  --background: #faf8f4;
-  --foreground: #1a1208;
-  --card: #ffffff;
-  --card-foreground: #1a1208;
-  --popover: #ffffff;
-  --popover-foreground: #1a1208;
-  --primary: #bf945c;
-  --primary-foreground: #ffffff;
-  --secondary: #ede8df;
-  --secondary-foreground: #5c4a2a;
-  --muted: #f0e8da;
-  --muted-foreground: #8c7454;
-  --accent: #e2b97d;
-  --accent-foreground: #1a1208;
-  --destructive: #d93025;
-  --destructive-foreground: #ffffff;
-  --border: #ddd0bc;
-  --input: #ddd0bc;
-  --ring: #bf945c;
-  --radius: 0.6rem;
+  --color-bg: #f6f3ed;
+  --color-surface: #fbf9f4;
+  --background: #f6f3ed;
+  --foreground: #181d22;
+  --card: #fbf9f4;
+  --card-foreground: #181d22;
+  --popover: #fbf9f4;
+  --popover-foreground: #181d22;
+  --primary: #9f2f26;
+  --primary-foreground: #fff9f6;
+  --secondary: #ece5da;
+  --secondary-foreground: #26303a;
+  --muted: #efe8dd;
+  --muted-foreground: #556171;
+  --accent: #d2a24d;
+  --accent-foreground: #1f1b13;
+  --destructive: #b4232c;
+  --destructive-foreground: #fff5f5;
+  --border: #ded5c8;
+  --input: #ffffff;
+  --ring: #9f2f26;
+  --radius: 0.8rem;
 }
 
-/* Dark mode */
 .dark {
-  --color-bg: #16110c;
-  --color-surface: #1f1710;
-  --background: #16110c;
-  --foreground: #f2e8d8;
-  --card: #231a10;
-  --card-foreground: #f2e8d8;
-  --popover: #2a1f12;
-  --popover-foreground: #f2e8d8;
-  --primary: #d4a55e;
-  --primary-foreground: #16110c;
-  --secondary: #2e2316;
-  --secondary-foreground: #c8a870;
-  --muted: #27200f;
-  --muted-foreground: #9c8060;
-  --accent: #e2b97d;
-  --accent-foreground: #16110c;
-  --destructive: #ff5a5a;
-  --destructive-foreground: #fff0f0;
-  --border: #3d3020;
-  --input: #3d3020;
-  --ring: #d4a55e;
+  --color-bg: #0d1218;
+  --color-surface: #111822;
+  --background: #0d1218;
+  --foreground: #e4e9ef;
+  --card: #111822;
+  --card-foreground: #e4e9ef;
+  --popover: #111822;
+  --popover-foreground: #e4e9ef;
+  --primary: #9b3f34;
+  --primary-foreground: #fffdfb;
+  --secondary: #1b2632;
+  --secondary-foreground: #d6dee8;
+  --muted: #1a2330;
+  --muted-foreground: #97a6b9;
+  --accent: #c49a4f;
+  --accent-foreground: #f8ecd8;
+  --destructive: #d9555f;
+  --destructive-foreground: #fff3f3;
+  --border: #273546;
+  --input: #121b27;
+  --ring: #cf6a5f;
 }
 
 @theme inline {
@@ -92,11 +92,27 @@ body {
   min-height: 100vh;
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--color-bg);
+  background:
+    radial-gradient(1100px 500px at 3% -10%, color-mix(in srgb, var(--primary) 15%, transparent), transparent 50%),
+    radial-gradient(900px 420px at 92% -12%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 54%),
+    linear-gradient(180deg, var(--color-surface) 0%, var(--color-bg) 35%);
   color: var(--foreground);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-attachment: fixed;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+code,
+pre,
+kbd,
+samp,
+.font-mono {
+  font-family: var(--font-mono);
 }
 
 #root {
@@ -116,4 +132,41 @@ details > summary {
 }
 details > summary::-webkit-details-marker {
   display: none;
+}
+
+@keyframes fade-up-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.surface-enter {
+  animation: fade-up-in 220ms ease-out both;
+}
+
+.interactive-lift {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.interactive-lift:hover {
+  transform: translateY(-1px);
+}
+
+.interactive-lift:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface-enter,
+  .interactive-lift {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

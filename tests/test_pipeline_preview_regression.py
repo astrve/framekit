@@ -4,7 +4,7 @@ Background
 ----------
 
 The ``_handle_preview_and_confirmation`` helper in
-``framekit.commands.pipeline`` previously referenced ``dry_run`` in its body
+``ouro.commands.pipeline`` previously referenced ``dry_run`` in its body
 without declaring it as a parameter, raising ``NameError`` whenever
 ``--preview`` was used. This module locks in the fix:
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import inspect
 
-from framekit.commands import pipeline as pipeline_module
-from framekit.commands import pipeline_preview as pipeline_preview_module
+from ouro.commands import pipeline as pipeline_module
+from ouro.commands import pipeline_preview as pipeline_preview_module
 
 
 def test_handle_preview_accepts_dry_run_kwarg() -> None:
@@ -79,7 +79,7 @@ def test_run_pipeline_command_exposes_dry_run() -> None:
 
 def test_preview_renamer_uses_language_profile_default(monkeypatch, tmp_path) -> None:
     """Pipeline preview should compute default lang from active language profile."""
-    from framekit.modules.renamer.service import RenamerService
+    from ouro.modules.renamer.service import RenamerService
 
     captured: dict[str, str] = {}
 

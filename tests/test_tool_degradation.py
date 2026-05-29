@@ -1,6 +1,6 @@
 """Tests for graceful degradation when external tools are missing.
 
-This test suite verifies that Framekit handles missing external tools
+This test suite verifies that Ouro handles missing external tools
 (mkvmerge, ffmpeg, ffprobe, mediainfo) gracefully with helpful error messages
 instead of hard crashes.
 """
@@ -11,8 +11,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from framekit.core.settings import SettingsStore
-from framekit.core.tools import ToolRegistry
+from ouro.core.settings import SettingsStore
+from ouro.core.tools import ToolRegistry
 
 
 class TestToolRegistry:
@@ -21,7 +21,7 @@ class TestToolRegistry:
     def test_missing_mkvmerge_returns_unavailable_status(self, tmp_path):
         """Test that missing mkvmerge is detected and reported properly."""
         # Mock shutil.which to return None (tool not found)
-        with patch("framekit.core.tools.shutil.which", return_value=None):
+        with patch("ouro.core.tools.shutil.which", return_value=None):
             registry = ToolRegistry()
             status = registry.get_status("mkvmerge")
 
@@ -33,13 +33,13 @@ class TestToolRegistry:
 
     def test_configured_but_missing_tool_path(self, tmp_path):
         """Test tool configured in settings but path doesn't exist."""
-        settings_file = tmp_path / "framekit.yaml"
+        settings_file = tmp_path / "ouro.yaml"
         settings_file.write_text("tools:\n  mkvmerge: /nonexistent/path/mkvmerge\n")
 
         store = SettingsStore(path=settings_file)
         registry = ToolRegistry(settings=store)
 
-        with patch("framekit.core.tools.shutil.which", return_value=None):
+        with patch("ouro.core.tools.shutil.which", return_value=None):
             status = registry.get_status("mkvmerge")
 
             assert status.available is False
@@ -52,8 +52,8 @@ class TestToolRegistry:
         fake_tool.write_text("#!/bin/sh\necho 'fake'")
         # Don't make it executable
 
-        with patch("framekit.core.tools.shutil.which", return_value=str(fake_tool)):
-            with patch("framekit.core.tools._run_version_command") as mock_run:
+        with patch("ouro.core.tools.shutil.which", return_value=str(fake_tool)):
+            with patch("ouro.core.tools._run_version_command") as mock_run:
                 mock_run.return_value = (None, "Permission denied")
 
                 registry = ToolRegistry()
@@ -64,7 +64,7 @@ class TestToolRegistry:
 
     def test_all_tools_missing(self):
         """Test get_all_statuses when all tools are missing."""
-        with patch("framekit.core.tools.shutil.which", return_value=None):
+        with patch("ouro.core.tools.shutil.which", return_value=None):
             registry = ToolRegistry()
             statuses = registry.get_all_statuses()
 
@@ -79,12 +79,12 @@ class TestCleanMkvWithMissingTools:
 
     def test_scanner_raises_helpful_error_when_mkvmerge_missing(self, tmp_path):
         """Test that scanner provides helpful error when mkvmerge is missing."""
-        from framekit.modules.cleanmkv.scanner import scan_mkv_file
+        from ouro.modules.cleanmkv.scanner import scan_mkv_file
 
         test_file = tmp_path / "test.mkv"
         test_file.write_bytes(b"fake mkv content")
 
-        with patch("framekit.core.tools.ToolRegistry.resolve_tool_path", return_value=None):
+        with patch("ouro.core.tools.ToolRegistry.resolve_tool_path", return_value=None):
             with pytest.raises(RuntimeError) as exc_info:
                 scan_mkv_file(test_file, ToolRegistry())
 
@@ -95,8 +95,8 @@ class TestCleanMkvWithMissingTools:
 
     def test_remuxer_raises_helpful_error_when_mkvmerge_missing(self, tmp_path):
         """Test that remuxer provides helpful error when mkvmerge is missing."""
-        from framekit.core.models.cleanmkv import RemuxPlan
-        from framekit.modules.cleanmkv.remuxer import apply_remux_plan
+        from ouro.core.models.cleanmkv import RemuxPlan
+        from ouro.modules.cleanmkv.remuxer import apply_remux_plan
 
         source = tmp_path / "source.mkv"
         target = tmp_path / "target.mkv"
@@ -112,7 +112,7 @@ class TestCleanMkvWithMissingTools:
             default_subtitle_track_id=None,
         )
 
-        with patch("framekit.core.tools.ToolRegistry.resolve_tool_path", return_value=None):
+        with patch("ouro.core.tools.ToolRegistry.resolve_tool_path", return_value=None):
             with pytest.raises(RuntimeError) as exc_info:
                 apply_remux_plan(plan, ToolRegistry())
 
@@ -127,7 +127,7 @@ class TestEncoderWithMissingTools:
 
     def test_encoder_service_init_fails_gracefully_without_ffmpeg(self):
         """Test EncoderService initialization fails with helpful message when ffmpeg missing."""
-        from framekit.modules.encoder.models import (
+        from ouro.modules.encoder.models import (
             AdvancedConfig,
             AudioConfig,
             ChapterConfig,
@@ -136,7 +136,7 @@ class TestEncoderWithMissingTools:
             SubtitleConfig,
             VideoConfig,
         )
-        from framekit.modules.encoder.service import EncoderService
+        from ouro.modules.encoder.service import EncoderService
 
         preset = EncodePreset(
             name="test",
@@ -152,7 +152,7 @@ class TestEncoderWithMissingTools:
             advanced=AdvancedConfig(two_pass=False),
         )
 
-        with patch("framekit.modules.encoder.service.subprocess.run") as mock_run:
+        with patch("ouro.modules.encoder.service.subprocess.run") as mock_run:
             mock_run.side_effect = FileNotFoundError("ffmpeg not found")
 
             with pytest.raises(RuntimeError) as exc_info:
@@ -164,9 +164,9 @@ class TestEncoderWithMissingTools:
 
     def test_validator_detects_missing_ffmpeg(self):
         """Test EncoderValidator detects missing ffmpeg."""
-        from framekit.modules.encoder.validator import EncoderValidator
+        from ouro.modules.encoder.validator import EncoderValidator
 
-        with patch("framekit.modules.encoder.validator.subprocess.run") as mock_run:
+        with patch("ouro.modules.encoder.validator.subprocess.run") as mock_run:
             mock_run.side_effect = FileNotFoundError()
 
             validator = EncoderValidator(ffmpeg_path="ffmpeg")
@@ -178,9 +178,9 @@ class TestEncoderWithMissingTools:
 
     def test_validator_detects_missing_ffprobe(self):
         """Test EncoderValidator detects missing ffprobe."""
-        from framekit.modules.encoder.validator import EncoderValidator
+        from ouro.modules.encoder.validator import EncoderValidator
 
-        with patch("framekit.modules.encoder.validator.subprocess.run") as mock_run:
+        with patch("ouro.modules.encoder.validator.subprocess.run") as mock_run:
             mock_run.side_effect = FileNotFoundError()
 
             validator = EncoderValidator(ffprobe_path="ffprobe")
@@ -200,8 +200,8 @@ class TestPartialToolAvailability:
         def mock_which(tool):
             return "/usr/bin/mkvmerge" if tool == "mkvmerge" else None
 
-        with patch("framekit.core.tools.shutil.which", side_effect=mock_which):
-            with patch("framekit.core.tools._run_version_command") as mock_run:
+        with patch("ouro.core.tools.shutil.which", side_effect=mock_which):
+            with patch("ouro.core.tools._run_version_command") as mock_run:
                 mock_run.return_value = ("mkvmerge v70.0.0", None)
 
                 registry = ToolRegistry()
@@ -212,7 +212,7 @@ class TestPartialToolAvailability:
 
     def test_ffmpeg_available_mkvmerge_missing(self):
         """Test system with ffmpeg but no mkvmerge."""
-        with patch("framekit.core.tools.shutil.which", return_value=None):
+        with patch("ouro.core.tools.shutil.which", return_value=None):
             registry = ToolRegistry()
             status = registry.get_status("mkvmerge")
 
@@ -224,7 +224,7 @@ class TestToolErrorMessages:
 
     def test_error_message_includes_installation_hint(self):
         """Test that missing tool errors suggest how to install."""
-        with patch("framekit.core.tools.shutil.which", return_value=None):
+        with patch("ouro.core.tools.shutil.which", return_value=None):
             registry = ToolRegistry()
             status = registry.get_status("mkvmerge")
 
@@ -241,7 +241,7 @@ class TestToolErrorMessages:
         assert ".app/" in fake_app_path.replace("\\", "/")
 
         # Verify that when a tool resolves to an app bundle, it's marked unavailable
-        with patch("framekit.core.tools.shutil.which", return_value=fake_app_path):
+        with patch("ouro.core.tools.shutil.which", return_value=fake_app_path):
             registry = ToolRegistry()
             status = registry.get_status("mkvmerge")
             # Should be marked as unavailable with GUI-only error
@@ -256,7 +256,7 @@ class TestDoctorCommandToolChecks:
     def test_doctor_reports_missing_tools(self):
         """Test that doctor command reports missing tools."""
         # Test through ToolRegistry instead of private function
-        with patch("framekit.core.tools.shutil.which", return_value=None):
+        with patch("ouro.core.tools.shutil.which", return_value=None):
             registry = ToolRegistry()
             statuses = registry.get_all_statuses()
 
@@ -274,8 +274,8 @@ class TestDoctorCommandToolChecks:
         def mock_which(tool):
             return f"/usr/bin/{tool}"
 
-        with patch("framekit.core.tools.shutil.which", side_effect=mock_which):
-            with patch("framekit.core.tools._run_version_command") as mock_run:
+        with patch("ouro.core.tools.shutil.which", side_effect=mock_which):
+            with patch("ouro.core.tools._run_version_command") as mock_run:
                 mock_run.return_value = ("version 1.0.0", None)
 
                 registry = ToolRegistry()
@@ -295,8 +295,8 @@ class TestToolRegistryEdgeCases:
 
     def test_tool_version_command_timeout(self):
         """Test handling of tool version command timeout."""
-        with patch("framekit.core.tools.shutil.which", return_value="/usr/bin/mkvmerge"):
-            with patch("framekit.core.tools.subprocess.run") as mock_run:
+        with patch("ouro.core.tools.shutil.which", return_value="/usr/bin/mkvmerge"):
+            with patch("ouro.core.tools.subprocess.run") as mock_run:
                 import subprocess
 
                 mock_run.side_effect = subprocess.TimeoutExpired("mkvmerge", 5)
@@ -310,8 +310,8 @@ class TestToolRegistryEdgeCases:
 
     def test_tool_version_command_returns_nonzero(self):
         """Test handling of tool version command returning non-zero exit code."""
-        with patch("framekit.core.tools.shutil.which", return_value="/usr/bin/mkvmerge"):
-            with patch("framekit.core.tools.subprocess.run") as mock_run:
+        with patch("ouro.core.tools.shutil.which", return_value="/usr/bin/mkvmerge"):
+            with patch("ouro.core.tools.subprocess.run") as mock_run:
                 mock_result = Mock()
                 mock_result.returncode = 1
                 mock_result.stdout = ""
@@ -326,13 +326,13 @@ class TestToolRegistryEdgeCases:
 
     def test_empty_configured_path_is_ignored(self, tmp_path):
         """Test that empty string in configured path is treated as not configured."""
-        settings_file = tmp_path / "framekit.yaml"
+        settings_file = tmp_path / "ouro.yaml"
         settings_file.write_text("tools:\n  mkvmerge: ''\n")
 
         store = SettingsStore(path=settings_file)
         registry = ToolRegistry(settings=store)
 
-        with patch("framekit.core.tools.shutil.which", return_value=None):
+        with patch("ouro.core.tools.shutil.which", return_value=None):
             status = registry.get_status("mkvmerge")
 
             # Should fall back to PATH search, not use empty string

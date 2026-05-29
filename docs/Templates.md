@@ -1,12 +1,12 @@
 # Templates
 
-Framekit uses Jinja2 templates for NFO files and presentations.
+Ouro uses Jinja2 templates for NFO files and presentations.
 
 ---
 
 ## NFO templates
 
-Location: `src/framekit/templates/nfo/`
+Location: `src/ouro/templates/nfo/`
 
 ### Jinja2 environment
 
@@ -27,7 +27,7 @@ Location: `src/framekit/templates/nfo/`
 | `audio_tracks` | `list[AudioTrack]` | All audio tracks |
 | `subtitle_tracks` | `list[SubtitleTrack]` | All subtitle tracks |
 | `mediainfo_text` | `str` | Raw MediaInfo output |
-| `nfo_version` | `str` | Framekit version |
+| `nfo_version` | `str` | Ouro version |
 
 ### Macros
 
@@ -39,13 +39,13 @@ Location: `src/framekit/templates/nfo/`
 
 ### Custom templates
 
-Place a `.j2` or `.jinja2` file in `~/.config/framekit/nfo_templates/` and reference it with `--template <name>`.
+Place a `.j2` or `.jinja2` file in `~/.config/ouro/nfo_templates/` and reference it with `--template <name>`.
 
 ---
 
 ## BBCode templates (Prez)
 
-Location: `src/framekit/templates/prez/bbcode/`
+Location: `src/ouro/templates/prez/bbcode/`
 
 Naming convention: `{template}.{language}.jinja2`
 
@@ -115,7 +115,7 @@ Use this pattern in templates to support both image and text-only modes:
 
 ## HTML templates (Prez)
 
-Location: `src/framekit/templates/prez/html/`
+Location: `src/ouro/templates/prez/html/`
 
 Over 140 template variants organized by design and color.
 

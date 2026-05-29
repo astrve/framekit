@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from framekit.core.models.cleanmkv import MkvFileScan, TrackInfo
-from framekit.core.naming import sanitized_release_dir
-from framekit.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
+from ouro.core.models.cleanmkv import MkvFileScan, TrackInfo
+from ouro.core.naming import sanitized_release_dir
+from ouro.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
 
 
 def test_sanitized_release_dir_helper() -> None:

@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Copy, HardDriveDownload } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Input } from "@/components/ui/input";
+import { Toggle } from "@/components/ui/toggle";
 import { addSeedbox, createModuleJob, getSettingsProfiles, getSeedboxHistory, getSeedboxList, removeSeedbox, runModule, useSeedbox } from "@/lib/api/endpoints";
 import type { ModuleJob, RunModuleResult } from "@/lib/api/schemas";
 
@@ -30,6 +32,19 @@ function compact(value: unknown): string {
   }
   const text = String(value).trim();
   return text || "-";
+}
+
+function formatRelativeTime(ts: string | null): string {
+  if (!ts) return "n/a";
+  const parsed = new Date(ts).getTime();
+  if (Number.isNaN(parsed)) return "n/a";
+  const delta = Date.now() - parsed;
+  if (delta < 60_000) return "just now";
+  const mins = Math.floor(delta / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 export function SeedboxPage() {
@@ -125,15 +140,27 @@ export function SeedboxPage() {
     return args.join(" ").trim();
   }, [action, allowCwd, category, destinationPath, dryRun, limit, remotePath, seedboxName, sourcePath, verbose]);
 
-  const previewCommand = useMemo(() => `framekit seedbox ${argsText}`.trim(), [argsText]);
+  const previewCommand = useMemo(() => `ouro seedbox ${argsText}`.trim(), [argsText]);
   const result: RunModuleResult | null = runMutation.data ?? null;
+  const seedboxes = listQuery.data?.seedboxes ?? [];
+  const historyEntries = historyQuery.data?.entries ?? [];
+  const defaultSeedboxName = seedboxes.find((item) => item.is_default)?.name ?? "-";
+  const firstHistoryEntry = historyEntries[0] as Record<string, unknown> | undefined;
+  const firstHistoryTs = firstHistoryEntry?.["timestamp"];
+  const historyFailed = historyEntries.filter((entry) => {
+    const statusText = compact((entry as Record<string, unknown>).status).toLowerCase();
+    return statusText.includes("fail") || statusText.includes("error");
+  }).length;
+  const lastHistoryTs = typeof firstHistoryTs === "string" && firstHistoryTs.trim()
+    ? firstHistoryTs
+    : null;
 
   function validateAction(): string | null {
     if (action === "push" && !sourcePath.trim()) {
-      return "Source Path Required For Push.";
+      return "Source path required for push.";
     }
     if (action === "pull" && !sourcePath.trim()) {
-      return "Remote Source Path Required For Pull.";
+      return "Remote source path required for pull.";
     }
     return null;
   }
@@ -161,8 +188,72 @@ export function SeedboxPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Seedbox</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Send and receive files from your remote seedbox.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Seedbox</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Send and receive files from your remote seedbox.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/logs"
+              className="inline-flex items-center rounded-md border border-border bg-transparent px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:bg-secondary/55"
+            >
+              Open Logs
+            </Link>
+            <Link
+              to="/events"
+              className="inline-flex items-center rounded-md border border-border bg-transparent px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:bg-secondary/55"
+            >
+              Service Events
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Profiles</CardTitle>
+            <CardDescription>Configured seedboxes</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>Total: <span className="font-semibold">{seedboxes.length}</span></p>
+            <p>Default: <span className="font-semibold">{defaultSeedboxName}</span></p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">History Window</CardTitle>
+            <CardDescription>Entries currently loaded</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>Entries: <span className="font-semibold">{historyEntries.length}</span></p>
+            <p>Failed: <span className="font-semibold">{historyFailed}</span></p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Mode</CardTitle>
+            <CardDescription>Current run settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>Dry run: <span className="font-semibold">{dryRun ? "on" : "off"}</span></p>
+            <p>Background: <span className="font-semibold">{asyncRun ? "on" : "off"}</span></p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Last Activity</CardTitle>
+            <CardDescription>Most recent history timestamp</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>{formatRelativeTime(lastHistoryTs)}</p>
+            <p className="text-xs text-muted-foreground">{lastHistoryTs ? new Date(lastHistoryTs).toLocaleString() : "No history yet"}</p>
+          </CardContent>
+        </Card>
       </section>
 
       <Card>
@@ -229,19 +320,13 @@ export function SeedboxPage() {
                 [verbose, setVerbose, "Detailed output", "Show per-file rclone progress and transfer details in the output"],
                 [allowCwd, setAllowCwd, "Allow current directory", "Allow using the current working directory as the source path"],
               ] as Array<[boolean, (v: boolean) => void, string, string]>).map(([checked, setter, label, tooltip]) => (
-                <label key={label} className="inline-flex cursor-pointer items-center gap-2 text-sm">
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={checked}
-                    onClick={() => setter(!checked)}
-                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${checked ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:border-primary/60"}`}
-                  >
-                    {checked ? <span className="text-[10px] font-bold leading-none">✓</span> : null}
-                  </button>
-                  {label}
-                  <InfoTooltip text={tooltip} />
-                </label>
+                <Toggle
+                  key={label}
+                  checked={checked}
+                  onChange={setter}
+                  label={label}
+                  tooltip={<InfoTooltip text={tooltip} />}
+                />
               ))}
             </div>
           ) : null}
@@ -250,19 +335,13 @@ export function SeedboxPage() {
               [confirmDestructive, setConfirmDestructive, "Allow file changes", "Permit overwrite and delete operations during the transfer"],
               [asyncRun, setAsyncRun, "Run in background", "Queue as async job — result appears inline without blocking the UI"],
             ] as Array<[boolean, (v: boolean) => void, string, string]>).map(([checked, setter, label, tooltip]) => (
-              <label key={label} className="inline-flex cursor-pointer items-center gap-2 text-sm">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={checked}
-                  onClick={() => setter(!checked)}
-                  className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${checked ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:border-primary/60"}`}
-                >
-                  {checked ? <span className="text-[10px] font-bold leading-none">✓</span> : null}
-                </button>
-                {label}
-                <InfoTooltip text={tooltip} />
-              </label>
+              <Toggle
+                key={label}
+                checked={checked}
+                onChange={setter}
+                label={label}
+                tooltip={<InfoTooltip text={tooltip} />}
+              />
             ))}
           </div>
 
@@ -370,7 +449,7 @@ export function SeedboxPage() {
               variant="outline"
               onClick={() => {
                 if (!addName.trim() || !addRemote.trim()) {
-                  setLocalError("Name and Rclone Remote Required.");
+                  setLocalError("Name and rclone remote are required.");
                   return;
                 }
                 addMutation.mutate({
@@ -389,7 +468,7 @@ export function SeedboxPage() {
               variant="outline"
               onClick={() => {
                 if (!addName.trim()) {
-                  setLocalError("Name Required For Use Default.");
+                  setLocalError("Name is required to set default.");
                   return;
                 }
                 useMutationSeedbox.mutate({ name: addName.trim() });
@@ -402,7 +481,7 @@ export function SeedboxPage() {
               variant="outline"
               onClick={() => {
                 if (!addName.trim()) {
-                  setLocalError("Name Required For Remove.");
+                  setLocalError("Name is required to remove.");
                   return;
                 }
                 removeMutationSeedbox.mutate(addName.trim());
@@ -413,7 +492,7 @@ export function SeedboxPage() {
           </div>
 
           {(listQuery.data?.seedboxes ?? []).length === 0 ? (
-            <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">No Seedbox Profiles Yet.</p>
+            <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">No seedbox profiles yet.</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {(listQuery.data?.seedboxes ?? []).map((item) => (
@@ -478,7 +557,7 @@ export function SeedboxPage() {
       <Card>
         <CardHeader>
           <CardTitle>Profile Bindings</CardTitle>
-          <CardDescription>Map a Framekit settings profile to a specific seedbox. When that profile is active, this seedbox is used automatically.</CardDescription>
+          <CardDescription>Map a Ouro settings profile to a specific seedbox. When that profile is active, this seedbox is used automatically.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {Object.keys(listQuery.data?.default_by_profile ?? {}).length > 0 && (
@@ -494,7 +573,7 @@ export function SeedboxPage() {
           )}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-sm">
-              Framekit profile
+              Ouro profile
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                 value={bindProfile}

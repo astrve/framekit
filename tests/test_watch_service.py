@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`framekit.modules.watch.service`."""
+"""Unit tests for :mod:`ouro.modules.watch.service`."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from typing import Any
 
 import pytest
 
-from framekit.modules.watch import service as watch_service
-from framekit.modules.watch.models import (
+from ouro.modules.watch import service as watch_service
+from ouro.modules.watch.models import (
     ErrorHandlingConfig,
     NotificationConfig,
     ValidationConfig,
     WatchConfig,
     WatchFolder,
 )
-from framekit.modules.watch.service import WatcherService
+from ouro.modules.watch.service import WatcherService
 
 
 def _watch_config(tmp_path: Path) -> WatchConfig:
@@ -106,7 +106,7 @@ def test_process_queue_failure_calls_failed_handler(tmp_path: Path) -> None:
 def test_read_running_watcher_pid_removes_stale_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    pid_file = tmp_path / ".framekit_watch.pid"
+    pid_file = tmp_path / ".ouro_watch.pid"
     pid_file.write_text("12345", encoding="utf-8")
     monkeypatch.setattr(watch_service, "_pid_file_path", lambda: pid_file)
     monkeypatch.setattr(watch_service, "_pid_is_alive", lambda _pid: False)

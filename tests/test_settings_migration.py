@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from framekit.core.settings import (
+from ouro.core.settings import (
     DEFAULT_SETTINGS,
     SETTINGS_SCHEMA_VERSION,
     SettingsStore,
@@ -91,7 +91,7 @@ def test_normalize_pipeline_defaults_stop_on_error_false() -> None:
 
 
 def test_store_round_trip_preserves_schema(tmp_path: Path) -> None:
-    store = SettingsStore(tmp_path / "framekit.yaml")
+    store = SettingsStore(tmp_path / "ouro.yaml")
     data = store.load()
     assert data["schema_version"] == SETTINGS_SCHEMA_VERSION
     assert "tmdb_api_key" not in data["metadata"]
@@ -105,7 +105,7 @@ def test_store_round_trip_preserves_schema(tmp_path: Path) -> None:
 
 
 def test_store_creates_file_with_default_content(tmp_path: Path) -> None:
-    yaml_path = tmp_path / "framekit.yaml"
+    yaml_path = tmp_path / "ouro.yaml"
     store = SettingsStore(yaml_path)
     store.ensure_exists()
     assert yaml_path.exists()

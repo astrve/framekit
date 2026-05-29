@@ -1,8 +1,8 @@
 """Tests for renamer rules - normalization and transformation logic."""
 
-from framekit.modules.renamer.detector import hdr_display_label, hdr_release_label
-from framekit.modules.renamer.profiles import load_renamer_profile
-from framekit.modules.renamer.rules import (
+from ouro.modules.renamer.detector import hdr_display_label, hdr_release_label
+from ouro.modules.renamer.profiles import load_renamer_profile
+from ouro.modules.renamer.rules import (
     ensure_language_tag,
     extract_episode_code,
     extract_episode_title,
@@ -114,7 +114,7 @@ def test_normalize_name_uses_french_title_alias_for_french_language_tag():
 
 def test_remove_terms_from_stem_removes_tokens_and_cleans_separators():
     """Test that unwanted terms are removed from filename stem."""
-    from framekit.modules.renamer.planner import _remove_terms_from_stem
+    from ouro.modules.renamer.planner import _remove_terms_from_stem
 
     assert _remove_terms_from_stem("Movie.2024.DSNP.WEB-DL", ("DSNP",)) == "Movie.2024.WEB-DL"
     assert (
@@ -125,7 +125,7 @@ def test_remove_terms_from_stem_removes_tokens_and_cleans_separators():
 
 def test_remove_terms_from_normalized_name_removes_reintroduced_tokens():
     """Test that terms removed from stem are also removed from normalized name."""
-    from framekit.modules.renamer.planner import _remove_terms_from_normalized_name
+    from ouro.modules.renamer.planner import _remove_terms_from_normalized_name
 
     assert _remove_terms_from_normalized_name("MOVIE.2024.DSNP.WEB", ("DSNP",)) == "MOVIE.2024.WEB"
 

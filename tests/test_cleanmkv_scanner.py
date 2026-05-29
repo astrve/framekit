@@ -8,9 +8,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from framekit.core.models.media import MediaFileInfo, MediaTrack
-from framekit.core.tools import ToolRegistry
-from framekit.modules.cleanmkv import scanner
+from ouro.core.models.media import MediaFileInfo, MediaTrack
+from ouro.core.tools import ToolRegistry
+from ouro.modules.cleanmkv import scanner
 
 
 class _Registry(ToolRegistry):

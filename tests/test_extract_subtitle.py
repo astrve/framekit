@@ -24,9 +24,9 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from framekit.core.path_validation import PathValidationError  # noqa: E402
-from framekit.core.tools import ToolRegistry  # noqa: E402
-from framekit.modules.extract.models import (  # noqa: E402
+from ouro.core.path_validation import PathValidationError  # noqa: E402
+from ouro.core.tools import ToolRegistry  # noqa: E402
+from ouro.modules.extract.models import (  # noqa: E402
     ExtractionOptions,
     SubtitleFormat,
     SubtitleTrack,
@@ -111,13 +111,13 @@ class TestSubtitleExtractor:
     def extractor(self, mock_registry):
         """Create a SubtitleExtractor instance."""
         # Import here to avoid import errors before implementation
-        from framekit.modules.extract.subtitle_extractor import SubtitleExtractor
+        from ouro.modules.extract.subtitle_extractor import SubtitleExtractor
 
         return SubtitleExtractor(mock_registry)
 
     def test_initialization(self, mock_registry):
         """Test extractor initialization."""
-        from framekit.modules.extract.subtitle_extractor import SubtitleExtractor
+        from ouro.modules.extract.subtitle_extractor import SubtitleExtractor
 
         extractor = SubtitleExtractor(mock_registry)
         assert extractor.registry == mock_registry
@@ -483,7 +483,7 @@ class TestSubtitleExtractorIntegration:
 
     def test_extract_multiple_subtitles(self, mock_registry, tmp_path):
         """Test extracting multiple subtitle tracks."""
-        from framekit.modules.extract.subtitle_extractor import SubtitleExtractor
+        from ouro.modules.extract.subtitle_extractor import SubtitleExtractor
 
         extractor = SubtitleExtractor(mock_registry)
 
@@ -511,7 +511,7 @@ class TestSubtitleExtractorIntegration:
 
     def test_graceful_degradation_no_mkvextract(self, tmp_path):
         """Test graceful fallback when mkvextract is unavailable."""
-        from framekit.modules.extract.subtitle_extractor import SubtitleExtractor
+        from ouro.modules.extract.subtitle_extractor import SubtitleExtractor
 
         registry = Mock(spec=ToolRegistry)
         registry.resolve_tool_path.side_effect = lambda tool: (

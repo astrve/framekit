@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 
-from framekit.modules.prez import banner_selector
+from ouro.modules.prez import banner_selector
 
 
 def test_banner_selector_fallback_exposes_current_30_styles(monkeypatch, tmp_path) -> None:

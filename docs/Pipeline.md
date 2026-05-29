@@ -1,6 +1,6 @@
 # Pipeline
 
-The pipeline is Framekit's core orchestration layer. It chains every processing module into a single, composable command that can run unattended.
+The pipeline is Ouro's core orchestration layer. It chains every processing module into a single, composable command that can run unattended.
 
 ---
 
@@ -18,22 +18,22 @@ Each step can be skipped, paused after, or started from.
 
 ```bash
 # Interactive (prompts at each step)
-fk pipeline /path/to/release
+ouro pipeline /path/to/release
 
 # Fully automatic
-fk pipeline /path/to/release --auto
+ouro pipeline /path/to/release --auto
 
 # Dry run (preview only)
-fk pipeline /path/to/release --dry-run
+ouro pipeline /path/to/release --dry-run
 
 # Use a preset
-fk pipeline /path/to/release --pipeline-preset multi_fr
+ouro pipeline /path/to/release --pipeline-preset multi_fr
 
 # Start from a specific step
-fk pipeline /path/to/release --start-at prez
+ouro pipeline /path/to/release --start-at prez
 
 # Skip steps
-fk pipeline /path/to/release --skip-step torrent --skip-step upload
+ouro pipeline /path/to/release --skip-step torrent --skip-step upload
 ```
 
 ---
@@ -49,7 +49,7 @@ Presets bundle all step options into a named configuration.
 | `series_fr` | TV series, French tracks |
 
 ```bash
-fk pipeline /path/to/release --pipeline-preset multi_fr --auto
+ouro pipeline /path/to/release --pipeline-preset multi_fr --auto
 ```
 
 See [Presets](Presets.md) for the full format and how to create custom presets.
@@ -79,7 +79,7 @@ Fetches title, year, rating, overview, poster URL, and IMDb ID from TMDb. Caches
 
 ### nfo
 
-Generates `.nfo` files from the Jinja2 templates in `src/framekit/templates/nfo/`.
+Generates `.nfo` files from the Jinja2 templates in `src/ouro/templates/nfo/`.
 
 ### prez
 
@@ -131,7 +131,7 @@ With `--auto`, all interactive prompts are answered with their defaults:
 Every step that modifies files records a rollback entry:
 
 ```bash
-fk rollback /path/to/release
+ouro rollback /path/to/release
 ```
 
-Restores the release folder to its pre-pipeline state. Rollback data is stored in `~/.local/share/framekit/rollback/`.
+Restores the release folder to its pre-pipeline state. Rollback data is stored in `~/.local/share/ouro/rollback/`.

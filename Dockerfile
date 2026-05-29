@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV FRAMEKIT_CONFIG_DIR=/var/lib/framekit/config
-ENV FRAMEKIT_CACHE_DIR=/var/lib/framekit/cache
+ENV OURO_CONFIG_DIR=/var/lib/ouro/config
+ENV OURO_CACHE_DIR=/var/lib/ouro/cache
 
 WORKDIR /app
 
@@ -22,12 +22,12 @@ COPY src ./src
 RUN pip install --upgrade pip \
     && pip install .
 
-VOLUME ["/var/lib/framekit/config", "/var/lib/framekit/cache", "/media"]
+VOLUME ["/var/lib/ouro/config", "/var/lib/ouro/cache", "/media"]
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD curl -fsS http://127.0.0.1:8000/healthz || exit 1
 
-ENTRYPOINT ["framekit"]
+ENTRYPOINT ["ouro"]
 CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]

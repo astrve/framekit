@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from framekit.modules.nfo.logo_registry import NfoLogoRecord, NfoLogoRegistry
+from ouro.modules.nfo.logo_registry import NfoLogoRecord, NfoLogoRegistry
 
 
 def test_logo_registry_roundtrip(tmp_path: Path):

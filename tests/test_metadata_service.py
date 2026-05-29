@@ -1,14 +1,14 @@
 from pathlib import Path
 
-from framekit.core.models.metadata import (
+from ouro.core.models.metadata import (
     EpisodeMetadata,
     MetadataCandidate,
     MovieMetadata,
     SeasonMetadata,
 )
-from framekit.core.models.nfo import EpisodeNfoData, ReleaseNfoData
-from framekit.modules.metadata.base import MetadataProvider
-from framekit.modules.metadata.service import MetadataService
+from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData
+from ouro.modules.metadata.base import MetadataProvider
+from ouro.modules.metadata.service import MetadataService
 
 
 class DummyProvider(MetadataProvider):
@@ -140,7 +140,7 @@ def test_metadata_service_search_and_resolve_single_episode():
 
 def test_metadata_service_merges_stored_choice_with_candidates(tmp_path: Path):
     provider = DummyProvider()
-    from framekit.modules.metadata.choices import MetadataChoiceStore
+    from ouro.modules.metadata.choices import MetadataChoiceStore
 
     choice_store = MetadataChoiceStore(tmp_path / "metadata_choices.json")
     service = MetadataService(provider, choice_store=choice_store)

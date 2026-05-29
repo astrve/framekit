@@ -9,9 +9,9 @@ Uploads a release (`.torrent` + description) to one or more configured trackers.
 ## Usage
 
 ```bash
-fk upload run /path/to/release.torrent --tracker "BeyondHD (BHD)"
-fk upload run /path/to/release-folder --dry-run
-fk upload assistant --name "my-tracker" --base-url "https://tracker.example"
+ouro upload run /path/to/release.torrent --tracker "BeyondHD (BHD)"
+ouro upload run /path/to/release-folder --dry-run
+ouro upload assistant --name "my-tracker" --base-url "https://tracker.example"
 ```
 
 ---
@@ -67,7 +67,7 @@ upload:
 For safer local setup, generate tracker files with:
 
 ```bash
-fk upload assistant
+ouro upload assistant
 ```
 
 This creates `trackers/*.yaml` using `token_env` (no secret stored in repo config).

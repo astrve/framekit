@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 
-from framekit.commands.main import cli
-from framekit.commands.seedbox import (
+from ouro.commands.main import cli
+from ouro.commands.seedbox import (
     _get_default_seedbox,
     _destination_path_for_source,
     _list_seedboxes,
@@ -34,7 +34,7 @@ def test_seedbox_default_prefers_profile_mapping() -> None:
 
 
 def test_seedbox_push_requires_path_or_cwd(tmp_path, monkeypatch) -> None:
-    settings_file = tmp_path / "framekit.yaml"
+    settings_file = tmp_path / "ouro.yaml"
     settings_file.write_text(
         "\n".join(
             [
@@ -51,7 +51,7 @@ def test_seedbox_push_requires_path_or_cwd(tmp_path, monkeypatch) -> None:
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+    monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
     result = CliRunner().invoke(cli, ["seedbox", "push", "--dry-run"])
 
@@ -60,10 +60,10 @@ def test_seedbox_push_requires_path_or_cwd(tmp_path, monkeypatch) -> None:
 
 
 def test_seedbox_doctor_handles_missing_rclone_as_warning(tmp_path, monkeypatch) -> None:
-    settings_file = tmp_path / "framekit.yaml"
+    settings_file = tmp_path / "ouro.yaml"
     settings_file.write_text("seedbox:\n  seedboxes: []\n", encoding="utf-8")
-    monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
-    monkeypatch.setattr("framekit.commands.seedbox._find_rclone", lambda: None)
+    monkeypatch.setenv("OURO_CONFIG", str(settings_file))
+    monkeypatch.setattr("ouro.commands.seedbox._find_rclone", lambda: None)
 
     result = CliRunner().invoke(cli, ["seedbox", "doctor"])
 
@@ -132,7 +132,7 @@ def test_seedbox_directory_push_does_not_duplicate_explicit_release_folder(tmp_p
 
 
 def test_seedbox_push_uploads_each_payload_from_batch_parent(tmp_path, monkeypatch) -> None:
-    settings_file = tmp_path / "framekit.yaml"
+    settings_file = tmp_path / "ouro.yaml"
     settings_file.write_text(
         "\n".join(
             [
@@ -153,7 +153,7 @@ def test_seedbox_push_uploads_each_payload_from_batch_parent(tmp_path, monkeypat
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+    monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
     parent = tmp_path / "ready"
     movie_final = parent / "movie" / "Release" / "MOVIE.ONE.2024.1080P.WEB-GRP"
@@ -169,7 +169,7 @@ def test_seedbox_push_uploads_each_payload_from_batch_parent(tmp_path, monkeypat
         calls.append((args, dry_run, verbose))
         return 0
 
-    monkeypatch.setattr("framekit.commands.seedbox._run_rclone", fake_rclone)
+    monkeypatch.setattr("ouro.commands.seedbox._run_rclone", fake_rclone)
 
     result = CliRunner().invoke(cli, ["seedbox", "push", str(parent), "--dry-run"])
 
@@ -184,7 +184,7 @@ def test_seedbox_push_uploads_each_payload_from_batch_parent(tmp_path, monkeypat
 
 
 def test_seedbox_use_profile_binding_updates_settings(tmp_path, monkeypatch) -> None:
-    settings_file = tmp_path / "framekit.yaml"
+    settings_file = tmp_path / "ouro.yaml"
     settings_file.write_text(
         "\n".join(
             [
@@ -198,7 +198,7 @@ def test_seedbox_use_profile_binding_updates_settings(tmp_path, monkeypatch) -> 
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("FRAMEKIT_CONFIG", str(settings_file))
+    monkeypatch.setenv("OURO_CONFIG", str(settings_file))
 
     result = CliRunner().invoke(cli, ["seedbox", "use", "box", "--profile", "anime"])
 

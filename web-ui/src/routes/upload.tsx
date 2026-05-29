@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { CloudUpload, Copy } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Input } from "@/components/ui/input";
+import { Toggle } from "@/components/ui/toggle";
 import { createModuleJob, getUploadHistory, getUploadState, getUploadTrackerInfo, getUploadTrackers, runModule, setUploadState } from "@/lib/api/endpoints";
 import type { ModuleJob, RunModuleResult, UploadState } from "@/lib/api/schemas";
 
@@ -20,6 +22,19 @@ const ACTION_BUTTONS: Array<{ value: UploadAction; label: string }> = [
   { value: "history", label: "History" },
   { value: "setup", label: "Setup" },
 ];
+
+function formatRelativeTime(ts: string | undefined): string {
+  if (!ts) return "n/a";
+  const time = new Date(ts).getTime();
+  if (Number.isNaN(time)) return "n/a";
+  const delta = Date.now() - time;
+  if (delta < 60_000) return "just now";
+  const mins = Math.floor(delta / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 export function UploadPage() {
   const [action, setAction] = useState<UploadAction>("list-trackers");
@@ -54,6 +69,17 @@ export function UploadPage() {
   });
 
   const result: RunModuleResult | null = runMutation.data ?? null;
+  const enabledTrackers = (trackersQuery.data?.trackers ?? []).filter((item) => item.enabled).length;
+  const historyEntries = historyQuery.data?.entries ?? [];
+  const recentStats = useMemo(() => {
+    const stats = { success: 0, failed: 0 };
+    for (const entry of historyEntries.slice(0, 20)) {
+      if (entry.success) stats.success += 1;
+      else stats.failed += 1;
+    }
+    return stats;
+  }, [historyEntries]);
+  const lastUploadTs = historyEntries[0]?.timestamp;
 
   const buildArgs = (): string => {
     const args: string[] = [action];
@@ -83,11 +109,72 @@ export function UploadPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Upload{" "}
-          <span className="ml-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">BETA</span>
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Push releases to configured trackers and manage upload history.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Upload</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Push releases to configured trackers and manage upload history.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/logs"
+              className="inline-flex items-center rounded-md border border-border bg-transparent px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:bg-secondary/55"
+            >
+              Open Logs
+            </Link>
+            <Link
+              to="/events"
+              className="inline-flex items-center rounded-md border border-border bg-transparent px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:bg-secondary/55"
+            >
+              Service Events
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Upload State</CardTitle>
+            <CardDescription>Current service toggle</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>Enabled: <span className="font-semibold">{stateQuery.data?.enabled ? "yes" : "no"}</span></p>
+            <p>Auto upload: <span className="font-semibold">{stateQuery.data?.auto_upload ? "on" : "off"}</span></p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Trackers</CardTitle>
+            <CardDescription>Configured destinations</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>Total: <span className="font-semibold">{(trackersQuery.data?.trackers ?? []).length}</span></p>
+            <p>Enabled: <span className="font-semibold">{enabledTrackers}</span></p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Recent Uploads</CardTitle>
+            <CardDescription>Last 20 entries</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>Success: <span className="font-semibold">{recentStats.success}</span></p>
+            <p>Failed: <span className="font-semibold">{recentStats.failed}</span></p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Last Activity</CardTitle>
+            <CardDescription>Most recent upload timestamp</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>{formatRelativeTime(lastUploadTs)}</p>
+            <p className="text-xs text-muted-foreground">{lastUploadTs ? new Date(lastUploadTs).toLocaleString() : "No history yet"}</p>
+          </CardContent>
+        </Card>
       </section>
 
       <Card>
@@ -165,26 +252,19 @@ export function UploadPage() {
           </div>
 
           {action === "run" ? (
-            <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={dryRun}
-                onClick={() => setDryRun(!dryRun)}
-                className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${dryRun ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:border-primary/60"}`}
-              >
-                {dryRun ? <span className="text-[10px] font-bold leading-none">✓</span> : null}
-              </button>
-              Simulation (no upload)
-              <InfoTooltip text="Dry-run — validate the upload payload and show what would be submitted without actually sending to the tracker" />
-            </label>
+            <Toggle
+              checked={dryRun}
+              onChange={setDryRun}
+              label="Simulation (no upload)"
+              tooltip={<InfoTooltip text="Dry-run — validate the upload payload and show what would be submitted without actually sending to the tracker" />}
+            />
           ) : null}
 
           <details className="rounded-md border border-border">
             <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
               Advanced — show generated command
             </summary>
-            <pre className="max-h-40 overflow-auto border-t border-border bg-muted p-3 text-xs">framekit upload {buildArgs()}</pre>
+            <pre className="max-h-40 overflow-auto border-t border-border bg-muted p-3 text-xs">ouro upload {buildArgs()}</pre>
           </details>
 
           {localError ? (
@@ -219,7 +299,7 @@ export function UploadPage() {
               type="button"
               variant="outline"
               onClick={async () => {
-                await navigator.clipboard.writeText(`framekit upload ${buildArgs()}`.trim());
+                await navigator.clipboard.writeText(`ouro upload ${buildArgs()}`.trim());
                 setCopied(true);
                 window.setTimeout(() => setCopied(false), 1400);
               }}

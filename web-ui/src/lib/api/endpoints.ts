@@ -799,7 +799,7 @@ export async function streamServiceEvents(params: {
   onEvent: (event: ServiceEvent) => void;
   lastEventId?: string | null;
 }): Promise<void> {
-  const token = localStorage.getItem("framekit_token");
+  const token = localStorage.getItem("ouro_token");
   const headers: Record<string, string> = {
     Accept: "text/event-stream",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -815,8 +815,8 @@ export async function streamServiceEvents(params: {
   if (!response.ok) {
     const body = await response.text();
     if (response.status === 401) {
-      localStorage.removeItem("framekit_token");
-      window.dispatchEvent(new CustomEvent("framekit:unauthorized"));
+      localStorage.removeItem("ouro_token");
+      window.dispatchEvent(new CustomEvent("ouro:unauthorized"));
     }
     throw new ApiError("API request failed for /api/v1/events/stream", response.status, body);
   }

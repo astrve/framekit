@@ -1,6 +1,6 @@
 """Tests for NFO template selector - interactive template selection."""
 
-from framekit.modules.nfo.template_selector import (
+from ouro.modules.nfo.template_selector import (
     TemplateOption,
     TemplateSelector,
     build_template_options,
@@ -79,7 +79,7 @@ def test_template_selector_run_returns_selected(monkeypatch):
         assert entries[1].selected is True
         return options[1]
 
-    monkeypatch.setattr("framekit.modules.nfo.template_selector.select_one", fake_select_one)
+    monkeypatch.setattr("ouro.modules.nfo.template_selector.select_one", fake_select_one)
 
     result = TemplateSelector(options, preferred_name="detailed").run()
 
@@ -97,7 +97,7 @@ def test_template_selector_returns_none_on_keyboard_interrupt(monkeypatch):
     def fake_select_one(**kwargs):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr("framekit.modules.nfo.template_selector.select_one", fake_select_one)
+    monkeypatch.setattr("ouro.modules.nfo.template_selector.select_one", fake_select_one)
 
     result = TemplateSelector(options).run()
 
@@ -110,7 +110,7 @@ def test_choose_template_scope(monkeypatch):
     def fake_run(self):
         return TemplateOption("Movie", "movie", "scope", "movie")
 
-    monkeypatch.setattr("framekit.modules.nfo.template_selector.TemplateSelector.run", fake_run)
+    monkeypatch.setattr("ouro.modules.nfo.template_selector.TemplateSelector.run", fake_run)
 
     assert choose_template_scope() == "movie"
 
@@ -121,7 +121,7 @@ def test_choose_import_location(monkeypatch):
     def fake_run(self):
         return TemplateOption("Project Folder", "project", "location", "project")
 
-    monkeypatch.setattr("framekit.modules.nfo.template_selector.TemplateSelector.run", fake_run)
+    monkeypatch.setattr("ouro.modules.nfo.template_selector.TemplateSelector.run", fake_run)
 
     assert choose_import_location() == "project"
 
@@ -140,7 +140,7 @@ def test_choose_template(monkeypatch):
     def fake_run(self):
         return options[0]
 
-    monkeypatch.setattr("framekit.modules.nfo.template_selector.TemplateSelector.run", fake_run)
+    monkeypatch.setattr("ouro.modules.nfo.template_selector.TemplateSelector.run", fake_run)
 
     result = choose_template(options, preferred_name="default")
 

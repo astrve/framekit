@@ -1,6 +1,6 @@
 # CLI Reference
 
-All commands follow the pattern `fk <command> [OPTIONS] [ARGS]`.
+All commands follow the pattern `ouro <command> [OPTIONS] [ARGS]`.
 
 Global options available on every command:
 
@@ -16,7 +16,7 @@ Global options available on every command:
 ## Pipeline
 
 ```
-fk pipeline PATH [OPTIONS]
+ouro pipeline PATH [OPTIONS]
 ```
 
 Run the full release pipeline.
@@ -37,7 +37,7 @@ Steps: `inspect`, `renamer`, `cleanmkv`, `metadata`, `nfo`, `prez`, `torrent`, `
 ## Inspect
 
 ```
-fk inspect PATH
+ouro inspect PATH
 ```
 
 Show release structure, detected tracks, and pipeline readiness. Read-only.
@@ -47,7 +47,7 @@ Show release structure, detected tracks, and pipeline readiness. Read-only.
 ## Renamer
 
 ```
-fk renamer PATH [OPTIONS]
+ouro renamer PATH [OPTIONS]
 ```
 
 Rename files to a structured format.
@@ -62,7 +62,7 @@ Rename files to a structured format.
 ## CleanMKV
 
 ```
-fk cleanmkv PATH [OPTIONS]
+ouro cleanmkv PATH [OPTIONS]
 ```
 
 Remove unwanted audio/subtitle tracks from MKV files.
@@ -79,7 +79,7 @@ Remove unwanted audio/subtitle tracks from MKV files.
 ## Metadata
 
 ```
-fk metadata [PATH] [OPTIONS]
+ouro metadata [PATH] [OPTIONS]
 ```
 
 Fetch and cache release metadata from TMDb.
@@ -97,7 +97,7 @@ Fetch and cache release metadata from TMDb.
 ## NFO
 
 ```
-fk nfo PATH [OPTIONS]
+ouro nfo PATH [OPTIONS]
 ```
 
 Generate NFO files for the release.
@@ -113,7 +113,7 @@ Generate NFO files for the release.
 ## Prez
 
 ```
-fk prez PATH [OPTIONS]
+ouro prez PATH [OPTIONS]
 ```
 
 Build BBCode and HTML presentations.
@@ -132,7 +132,7 @@ Build BBCode and HTML presentations.
 ## Torrent
 
 ```
-fk torrent PATH [OPTIONS]
+ouro torrent PATH [OPTIONS]
 ```
 
 Create a `.torrent` file.
@@ -150,7 +150,7 @@ Create a `.torrent` file.
 ## Upload
 
 ```
-fk upload PATH [OPTIONS]
+ouro upload PATH [OPTIONS]
 ```
 
 Upload a release to configured trackers. **Beta.**
@@ -165,7 +165,7 @@ Upload a release to configured trackers. **Beta.**
 ## Validate
 
 ```
-fk validate PATH [OPTIONS]
+ouro validate PATH [OPTIONS]
 ```
 
 Check a release against quality rules.
@@ -182,7 +182,7 @@ Check a release against quality rules.
 ## Encode
 
 ```
-fk encode PATH [OPTIONS]
+ouro encode PATH [OPTIONS]
 ```
 
 Re-encode video files using a preset.
@@ -201,7 +201,7 @@ Re-encode video files using a preset.
 ## Screenshot
 
 ```
-fk screenshot PATH [OPTIONS]
+ouro screenshot PATH [OPTIONS]
 ```
 
 Extract screenshots from video files.
@@ -217,7 +217,7 @@ Extract screenshots from video files.
 ## Batch
 
 ```
-fk batch PATH [OPTIONS]
+ouro batch PATH [OPTIONS]
 ```
 
 Run the pipeline on multiple release folders.
@@ -235,7 +235,7 @@ Run the pipeline on multiple release folders.
 ## Watch
 
 ```
-fk watch PATH [OPTIONS]
+ouro watch PATH [OPTIONS]
 ```
 
 Monitor a folder and auto-process new releases. **Beta.**
@@ -250,7 +250,7 @@ Monitor a folder and auto-process new releases. **Beta.**
 ## Seedbox
 
 ```
-fk seedbox COMMAND [OPTIONS]
+ouro seedbox COMMAND [OPTIONS]
 ```
 
 Manage seedbox transfers via rclone.
@@ -267,7 +267,7 @@ Manage seedbox transfers via rclone.
 ## Extract
 
 ```
-fk extract PATH [OPTIONS]
+ouro extract PATH [OPTIONS]
 ```
 
 Extract audio/subtitle streams from MKV files. **Beta.**
@@ -277,7 +277,7 @@ Extract audio/subtitle streams from MKV files. **Beta.**
 ## Settings
 
 ```
-fk settings COMMAND
+ouro settings COMMAND
 ```
 
 | Sub-command | Description |
@@ -293,16 +293,16 @@ fk settings COMMAND
 
 | Command | Description |
 |---------|-------------|
-| `fk init` | First-time setup wizard |
-| `fk doctor` | Check external tools and config |
-| `fk inspect PATH` | Inspect release structure |
-| `fk audit-log` | View audit log |
-| `fk logs` | View run logs |
-| `fk rollback PATH` | Rollback last operation on a path |
-| `fk language` | Switch UI language |
-| `fk alias` | Manage command aliases |
-| `fk browse` | Open release in file browser |
-| `fk sort` | Sort release files |
-| `fk profile` | Show performance profiles |
-| `fk benchmark` | Run performance benchmark |
-| `fk examples` | Show usage examples |
+| `ouro init` | First-time setup wizard |
+| `ouro doctor` | Check external tools and config |
+| `ouro inspect PATH` | Inspect release structure |
+| `ouro audit-log` | View audit log |
+| `ouro logs` | View run logs |
+| `ouro rollback PATH` | Rollback last operation on a path |
+| `ouro language` | Switch UI language |
+| `ouro alias` | Manage command aliases |
+| `ouro browse` | Open release in file browser |
+| `ouro sort` | Sort release files |
+| `ouro profile` | Show performance profiles |
+| `ouro benchmark` | Run performance benchmark |
+| `ouro examples` | Show usage examples |

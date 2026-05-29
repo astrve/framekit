@@ -11,31 +11,31 @@
 
 ### Pre-built binary (recommended)
 
-Download the standalone binary for your platform from the [Releases page](https://github.com/astrve/framekit/releases). No Python installation required.
+Download the standalone binary for your platform from the [Releases page](https://github.com/astrve/ouro/releases). No Python installation required.
 
 | Platform | File |
 |----------|------|
-| Linux x86-64 | `framekit-linux-x86_64` |
-| macOS arm64 | `framekit-macos-arm64` |
-| Windows x86-64 | `framekit-windows-x86_64.exe` |
+| Linux x86-64 | `ouro-linux-x86_64` |
+| macOS arm64 | `ouro-macos-arm64` |
+| Windows x86-64 | `ouro-windows-x86_64.exe` |
 
-Rename to `fk` (or `fk.exe`) and place on your `PATH`.
+Rename to `ouro` (or `ouro.exe`) and place on your `PATH`.
 
 ### pip / pipx
 
 ```bash
 # Isolated install (recommended)
-pipx install framekit
+pipx install ouro
 
 # Or standard pip
-pip install framekit
+pip install ouro-auto
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/astrve/framekit.git
-cd framekit
+git clone https://github.com/astrve/ouro.git
+cd ouro
 pip install -e ".[dev]"
 ```
 
@@ -43,7 +43,7 @@ pip install -e ".[dev]"
 
 ## External tools
 
-Framekit shells out to these — install them and ensure they are on `PATH`:
+Ouro shells out to these — install them and ensure they are on `PATH`:
 
 | Tool | Package | Required by |
 |------|---------|-------------|
@@ -56,7 +56,7 @@ Framekit shells out to these — install them and ensure they are on `PATH`:
 Verify your setup:
 
 ```bash
-fk doctor
+ouro doctor
 ```
 
 ---
@@ -64,15 +64,15 @@ fk doctor
 ## First-time setup
 
 ```bash
-fk init
+ouro init
 ```
 
-This creates `~/.config/framekit/framekit.yaml` with defaults and prompts for your TMDb token.
+This creates `~/.config/ouro/ouro.yaml` with defaults and prompts for your TMDb token.
 
 Set your TMDb token at any time:
 
 ```bash
-fk metadata --set-token
+ouro metadata --set-token
 ```
 
 Get a free TMDb Read Access Token at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api).
@@ -83,17 +83,17 @@ Get a free TMDb Read Access Token at [themoviedb.org/settings/api](https://www.t
 
 | Env var | Default | Purpose |
 |---------|---------|---------|
-| `FRAMEKIT_CONFIG_DIR` | `~/.config/framekit` | Config and settings |
-| `FRAMEKIT_CACHE_DIR` | `~/.cache/framekit` | API response cache, banner index |
-| `FRAMEKIT_LOG_DIR` | `~/.local/share/framekit/logs` | Audit and run logs |
+| `OURO_CONFIG_DIR` | `~/.config/ouro` | Config and settings |
+| `OURO_CACHE_DIR` | `~/.cache/ouro` | API response cache, banner index |
+| `OURO_LOG_DIR` | `~/.local/share/ouro/logs` | Audit and run logs |
 
 ---
 
 ## Dev install
 
 ```bash
-git clone https://github.com/astrve/framekit.git
-cd framekit
+git clone https://github.com/astrve/ouro.git
+cd ouro
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"

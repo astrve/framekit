@@ -333,7 +333,7 @@ export const WatchServiceStopSchema = z.object({
 export type WatchServiceStatus = z.infer<typeof WatchServiceStatusSchema>;
 export type WatchServiceStop = z.infer<typeof WatchServiceStopSchema>;
 
-// ── Service status (framekit serve) ──────────────────────────────────────────
+// ── Service status (ouro serve) ──────────────────────────────────────────
 
 export const ServiceWatcherStateSchema = z.object({
   status: z.enum(["running", "stopped", "error"]),

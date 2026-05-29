@@ -1,12 +1,12 @@
 # Presets
 
-Framekit has three independent preset systems: Pipeline presets, CleanMKV presets, and Encoder presets.
+Ouro has three independent preset systems: Pipeline presets, CleanMKV presets, and Encoder presets.
 
 ---
 
 ## Pipeline presets
 
-Bundle all per-step options into a named configuration. Stored in `~/.config/framekit/pipeline_presets/` or `./pipeline_presets/`.
+Bundle all per-step options into a named configuration. Stored in `~/.config/ouro/pipeline_presets/` or `./pipeline_presets/`.
 
 ### Format
 
@@ -42,15 +42,15 @@ steps:
 ### Usage
 
 ```bash
-fk pipeline /path/to/release --pipeline-preset my_preset
-fk pipeline /path/to/release --pipeline-preset my_preset --auto
+ouro pipeline /path/to/release --pipeline-preset my_preset
+ouro pipeline /path/to/release --pipeline-preset my_preset --auto
 ```
 
 ---
 
 ## CleanMKV presets
 
-Control which audio and subtitle tracks to keep or remove. Stored in `~/.config/framekit/cleanmkv_presets/` or `./cleanmkv_presets/`.
+Control which audio and subtitle tracks to keep or remove. Stored in `~/.config/ouro/cleanmkv_presets/` or `./cleanmkv_presets/`.
 
 ### Format
 
@@ -83,7 +83,7 @@ subtitles:
 ### Usage
 
 ```bash
-fk cleanmkv /path/to/release --preset my_clean
+ouro cleanmkv /path/to/release --preset my_clean
 ```
 
 Or set the default in config:
@@ -97,7 +97,7 @@ cleanmkv:
 
 ## Encoder presets
 
-Define FFmpeg encoding parameters. Stored in `~/.config/framekit/encoder_presets/` or `./encoder_presets/`.
+Define FFmpeg encoding parameters. Stored in `~/.config/ouro/encoder_presets/` or `./encoder_presets/`.
 
 ### Format
 
@@ -125,8 +125,8 @@ extra_args: ["-map", "0:v:0", "-map", "0:a:0"]
 ### Usage
 
 ```bash
-fk encode /path/to/file.mkv --preset hevc_crf20
-fk encode /path/to/folder/ --preset hevc_crf20
+ouro encode /path/to/file.mkv --preset hevc_crf20
+ouro encode /path/to/folder/ --preset hevc_crf20
 ```
 
 Or set the default:

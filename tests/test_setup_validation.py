@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from framekit.commands.setup import (
+from ouro.commands.setup import (
     _is_valid_locale,
     _prompt_custom_language,
     _prompt_custom_path,
@@ -107,8 +107,8 @@ class TestPathValidation:
         result = _strip_wrapping_quotes('"C:\\Path\\"With\\"Quotes"')
         assert result == 'C:\\Path\\"With\\"Quotes'
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.print_error")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.print_error")
     def test_prompt_custom_path_empty_rejected(self, mock_error: Mock, mock_console: Mock):
         """Test empty path is rejected."""
         mock_console.input.side_effect = ["", "valid_path"]
@@ -118,8 +118,8 @@ class TestPathValidation:
         assert result == "valid_path"
         mock_error.assert_called_once()
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.print_error")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.print_error")
     def test_prompt_custom_path_whitespace_rejected(self, mock_error: Mock, mock_console: Mock):
         """Test whitespace-only path is rejected."""
         mock_console.input.side_effect = ["   ", "valid_path"]
@@ -133,8 +133,8 @@ class TestPathValidation:
 class TestTMDbTokenValidation:
     """Test TMDb token validation."""
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.print_error")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.print_error")
     def test_prompt_token_empty_rejected(self, mock_error: Mock, mock_console: Mock):
         """Test empty token is rejected."""
         mock_console.input.side_effect = ["", "skip"]
@@ -144,10 +144,10 @@ class TestTMDbTokenValidation:
         assert result == ""
         mock_error.assert_called_once()
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.normalize_secret_input")
-    @patch("framekit.commands.setup.looks_like_tmdb_read_access_token")
-    @patch("framekit.commands.setup.print_error")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.normalize_secret_input")
+    @patch("ouro.commands.setup.looks_like_tmdb_read_access_token")
+    @patch("ouro.commands.setup.print_error")
     def test_prompt_token_invalid_format_rejected(
         self,
         mock_error: Mock,
@@ -166,9 +166,9 @@ class TestTMDbTokenValidation:
         assert result == ""
         mock_error.assert_called()
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.normalize_secret_input")
-    @patch("framekit.commands.setup.looks_like_tmdb_read_access_token")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.normalize_secret_input")
+    @patch("ouro.commands.setup.looks_like_tmdb_read_access_token")
     def test_prompt_token_valid_accepted(
         self,
         mock_looks_token: Mock,
@@ -189,8 +189,8 @@ class TestTMDbTokenValidation:
 class TestLanguageInputValidation:
     """Test language input validation."""
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.print_error")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.print_error")
     def test_prompt_language_empty_rejected(self, mock_error: Mock, mock_console: Mock):
         """Test empty language input is rejected."""
         mock_console.input.side_effect = ["", "en-US"]
@@ -200,8 +200,8 @@ class TestLanguageInputValidation:
         assert result == "en-US"
         mock_error.assert_called_once()
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.print_error")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.print_error")
     def test_prompt_language_invalid_format_rejected(self, mock_error: Mock, mock_console: Mock):
         """Test invalid language format is rejected."""
         mock_console.input.side_effect = ["invalid!", "en-US"]
@@ -211,8 +211,8 @@ class TestLanguageInputValidation:
         assert result == "en-US"
         mock_error.assert_called_once()
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.print_error")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.print_error")
     def test_prompt_language_multiple_invalid_attempts(self, mock_error: Mock, mock_console: Mock):
         """Test multiple invalid attempts before valid input."""
         mock_console.input.side_effect = ["", "123", "en_US", "en-US"]
@@ -222,7 +222,7 @@ class TestLanguageInputValidation:
         assert result == "en-US"
         assert mock_error.call_count == 3
 
-    @patch("framekit.commands.setup.console")
+    @patch("ouro.commands.setup.console")
     def test_prompt_language_valid_formats(self, mock_console: Mock):
         """Test various valid language formats."""
         valid_locales = ["en", "en-US", "fr-FR", "es-419", "zh-CN"]
@@ -276,9 +276,9 @@ class TestValidationEdgeCases:
 
     def test_path_with_forward_slashes(self):
         """Test Unix-style paths."""
-        path = '"/home/user/framekit/NFO"'
+        path = '"/home/user/ouro/NFO"'
         result = _strip_wrapping_quotes(path)
-        assert result == "/home/user/framekit/NFO"
+        assert result == "/home/user/ouro/NFO"
 
     def test_path_with_mixed_slashes(self):
         """Test paths with mixed slashes."""
@@ -286,7 +286,7 @@ class TestValidationEdgeCases:
         result = _strip_wrapping_quotes(path)
         assert result == "C:/Path\\To/Folder"
 
-    @patch("framekit.commands.setup.console")
+    @patch("ouro.commands.setup.console")
     def test_prompt_handles_ctrl_c(self, mock_console: Mock):
         """Test handling of KeyboardInterrupt."""
         mock_console.input.side_effect = KeyboardInterrupt()
@@ -294,7 +294,7 @@ class TestValidationEdgeCases:
         with pytest.raises(KeyboardInterrupt):
             _prompt_custom_path("Test", "")
 
-    @patch("framekit.commands.setup.console")
+    @patch("ouro.commands.setup.console")
     def test_prompt_handles_eof(self, mock_console: Mock):
         """Test handling of EOFError."""
         mock_console.input.side_effect = EOFError()
@@ -307,8 +307,8 @@ class TestValidationEdgeCases:
 class TestValidationIntegration:
     """Integration tests for validation workflows."""
 
-    @patch("framekit.commands.setup.console")
-    @patch("framekit.commands.setup.print_error")
+    @patch("ouro.commands.setup.console")
+    @patch("ouro.commands.setup.print_error")
     def test_validation_retry_workflow(self, mock_error: Mock, mock_console: Mock):
         """Test complete validation retry workflow."""
         # Simulate user making mistakes then correcting
@@ -323,7 +323,7 @@ class TestValidationIntegration:
         assert result == "valid_path"
         assert mock_error.call_count == 2
 
-    @patch("framekit.commands.setup.console")
+    @patch("ouro.commands.setup.console")
     def test_validation_with_default_value(self, mock_console: Mock):
         """Test validation when default value exists."""
         mock_console.input.return_value = "new_path"

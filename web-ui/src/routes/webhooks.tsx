@@ -187,7 +187,7 @@ export function WebhooksPage() {
           Webhooks
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Fire HTTP callbacks on Framekit events. Discord embeds supported.
+          Fire HTTP callbacks on Ouro events. Discord embeds supported.
         </p>
       </section>
 
@@ -242,7 +242,7 @@ export function WebhooksPage() {
                       <Input
                         value={addForm.title_template}
                         onChange={(e) => setAddForm((f) => ({ ...f, title_template: e.target.value }))}
-                        placeholder="Framekit — Job Completed"
+                        placeholder="Ouro — Job Completed"
                       />
                     </div>
                     <div className="space-y-1">
@@ -250,7 +250,7 @@ export function WebhooksPage() {
                       <textarea
                         value={addForm.body_template}
                         onChange={(e) => setAddForm((f) => ({ ...f, body_template: e.target.value }))}
-                        placeholder="`framekit {module} {args}`"
+                        placeholder="`ouro {module} {args}`"
                         rows={3}
                         className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
                       />
@@ -351,7 +351,7 @@ export function WebhooksPage() {
                               <Input
                                 value={editForm.title_template}
                                 onChange={(e) => setEditForm((f) => ({ ...f, title_template: e.target.value }))}
-                                placeholder="Framekit — Job Completed"
+                                placeholder="Ouro — Job Completed"
                               />
                             </div>
                             <div className="space-y-1">
@@ -359,7 +359,7 @@ export function WebhooksPage() {
                               <textarea
                                 value={editForm.body_template}
                                 onChange={(e) => setEditForm((f) => ({ ...f, body_template: e.target.value }))}
-                                placeholder="`framekit {module} {args}`"
+                                placeholder="`ouro {module} {args}`"
                                 rows={3}
                                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
                               />

@@ -6,7 +6,7 @@ Tests encryption, decryption, key rotation, backup/restore, and security feature
 
 import pytest
 
-from framekit.core.security import (
+from ouro.core.security import (
     DecryptionError,
     EncryptionError,
     EncryptionManager,
@@ -432,7 +432,7 @@ class TestVaultSecurity:
         The vault layer wraps that as :class:`VaultKeyMismatchError` so the
         CLI can offer the dedicated reset-vault recovery path.
         """
-        from framekit.core.security.vault import VaultKeyMismatchError
+        from ouro.core.security.vault import VaultKeyMismatchError
 
         vault_path = tmp_path / "vault.enc"
         key_file = tmp_path / "key.json"

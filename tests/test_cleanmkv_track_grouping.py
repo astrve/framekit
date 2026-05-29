@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from framekit.core.models.cleanmkv import MkvFileScan, TrackInfo
-from framekit.modules.cleanmkv.tracks import (
+from ouro.core.models.cleanmkv import MkvFileScan, TrackInfo
+from ouro.modules.cleanmkv.tracks import (
     track_display_grouping_key,
     track_grouped_label,
     track_reference_key,
 )
-from framekit.modules.cleanmkv.wizard import _expand_grouped_refs, _track_display_groups
+from ouro.modules.cleanmkv.wizard import _expand_grouped_refs, _track_display_groups
 
 
 def _audio(

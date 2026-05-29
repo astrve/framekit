@@ -1,4 +1,4 @@
-# Framekit — Available Agents & Skills
+# Ouro — Available Agents & Skills
 
 Use these agents and skills only when they are available in the current Claude Code environment.
 

@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from framekit.modules.metadata.cover_selector import choose_cover
-from framekit.modules.metadata.tmdb_provider import TMDbProvider
-from framekit.modules.metadata.ui import prompt_manual_tmdb_id
+from ouro.modules.metadata.cover_selector import choose_cover
+from ouro.modules.metadata.tmdb_provider import TMDbProvider
+from ouro.modules.metadata.ui import prompt_manual_tmdb_id
 
 
 class TestIntelligentPosterNaming:
@@ -76,7 +76,7 @@ class TestIntelligentPosterNaming:
 class TestManualTMDBIDInput:
     """Test manual TMDB ID input functionality."""
 
-    @patch("framekit.modules.metadata.ui.console.input")
+    @patch("ouro.modules.metadata.ui.console.input")
     def test_numeric_id_input(self, mock_input):
         """Test that numeric ID is accepted."""
         mock_input.return_value = "12345"
@@ -84,7 +84,7 @@ class TestManualTMDBIDInput:
         result = prompt_manual_tmdb_id()
         assert result == "12345"
 
-    @patch("framekit.modules.metadata.ui.console.input")
+    @patch("ouro.modules.metadata.ui.console.input")
     def test_movie_url_extraction(self, mock_input):
         """Test that movie URL is parsed correctly."""
         mock_input.return_value = "https://www.themoviedb.org/movie/550"
@@ -92,7 +92,7 @@ class TestManualTMDBIDInput:
         result = prompt_manual_tmdb_id()
         assert result == "550"
 
-    @patch("framekit.modules.metadata.ui.console.input")
+    @patch("ouro.modules.metadata.ui.console.input")
     def test_tv_url_extraction(self, mock_input):
         """Test that TV show URL is parsed correctly."""
         mock_input.return_value = "https://www.themoviedb.org/tv/1399"
@@ -100,7 +100,7 @@ class TestManualTMDBIDInput:
         result = prompt_manual_tmdb_id()
         assert result == "1399"
 
-    @patch("framekit.modules.metadata.ui.console.input")
+    @patch("ouro.modules.metadata.ui.console.input")
     def test_cancel_input(self, mock_input):
         """Test that 'q' cancels input."""
         mock_input.return_value = "q"
@@ -108,8 +108,8 @@ class TestManualTMDBIDInput:
         result = prompt_manual_tmdb_id()
         assert result is None
 
-    @patch("framekit.modules.metadata.ui.console.input")
-    @patch("framekit.modules.metadata.ui.print_warning")
+    @patch("ouro.modules.metadata.ui.console.input")
+    @patch("ouro.modules.metadata.ui.print_warning")
     def test_invalid_input_retry(self, mock_warning, mock_input):
         """Test that invalid input shows warning and retries."""
         mock_input.side_effect = ["invalid", "12345"]
@@ -195,7 +195,7 @@ class TestCoverSelection:
         ]
 
         # Mock the selector to return the second poster
-        with patch("framekit.modules.metadata.cover_selector.select_one") as mock_select:
+        with patch("ouro.modules.metadata.cover_selector.select_one") as mock_select:
             mock_select.return_value = posters[1]
 
             result = choose_cover(posters)
@@ -212,10 +212,10 @@ class TestCoverSelection:
         assert result is None
 
     @patch("webbrowser.open")
-    @patch("framekit.modules.metadata.cover_selector.print_success")
+    @patch("ouro.modules.metadata.cover_selector.print_success")
     def test_open_poster_url(self, mock_print, mock_browser):
         """Test that opening poster URL works."""
-        from framekit.modules.metadata.cover_selector import _open_poster_url
+        from ouro.modules.metadata.cover_selector import _open_poster_url
 
         poster = {
             "url": "http://example.com/poster.jpg",
@@ -233,8 +233,8 @@ class TestCoverURLPropagation:
 
     def test_metadata_context_includes_cover_url(self):
         """Test that build_metadata_context includes cover URLs."""
-        from framekit.core.models.metadata import MovieMetadata
-        from framekit.modules.metadata.render import build_metadata_context
+        from ouro.core.models.metadata import MovieMetadata
+        from ouro.modules.metadata.render import build_metadata_context
 
         metadata = MovieMetadata(
             provider_name="tmdb",
@@ -258,8 +258,8 @@ class TestCoverURLPropagation:
 
     def test_prez_uses_selected_cover_url(self):
         """Test that prez service prioritizes selected cover URL."""
-        from framekit.core.models.nfo import ReleaseNfoData
-        from framekit.modules.prez.service import _build_prez_data
+        from ouro.core.models.nfo import ReleaseNfoData
+        from ouro.modules.prez.service import _build_prez_data
 
         # Create minimal release data
         release = MagicMock(spec=ReleaseNfoData)

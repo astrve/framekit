@@ -8,7 +8,7 @@ pytestmark = pytest.mark.benchmark
 def test_bench_cli_help_render(benchmark) -> None:
     from click.testing import CliRunner
 
-    from framekit.commands.main import cli
+    from ouro.commands.main import cli
 
     runner = CliRunner()
 

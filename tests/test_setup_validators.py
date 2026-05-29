@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from framekit.modules.setup.validators import validate_path
+from ouro.modules.setup.validators import validate_path
 
 
 def test_validate_path_requires_value() -> None:

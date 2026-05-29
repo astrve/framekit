@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -91,6 +92,8 @@ export function IntakePage() {
     if (!sourcesQuery.isError) return null;
     return extractApiMessage(sourcesQuery.error);
   }, [sourcesQuery.error, sourcesQuery.isError]);
+  const enabledSources = sources.filter((source) => source.enabled).length;
+  const latestCreatedAt = sources[0]?.created_at ?? null;
 
   async function copyToken(): Promise<void> {
     if (!createdToken) return;
@@ -116,13 +119,58 @@ export function IntakePage() {
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <KeyRound className="h-6 w-6 text-primary" />
-          Intake Sources
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage external intake tokens and source identities used by downloader/webhook integrations.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+              <KeyRound className="h-6 w-6 text-primary" />
+              Intake Sources
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Manage external intake tokens and source identities used by downloader/webhook integrations.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/events"
+              className="inline-flex items-center rounded-md border border-border bg-transparent px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:bg-secondary/55"
+            >
+              Service Events
+            </Link>
+            <Link
+              to="/logs"
+              className="inline-flex items-center rounded-md border border-border bg-transparent px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:bg-secondary/55"
+            >
+              Open Logs
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Registered Sources</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{sources.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Enabled Sources</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{enabledSources}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Latest Source</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm font-medium">{latestCreatedAt ? new Date(latestCreatedAt).toLocaleString() : "n/a"}</p>
+          </CardContent>
+        </Card>
       </section>
 
       <Card>
@@ -294,4 +342,3 @@ export function IntakePage() {
     </div>
   );
 }
-

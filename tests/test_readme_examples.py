@@ -5,11 +5,11 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from framekit.commands.main import cli
+from ouro.commands.main import cli
 
 
 def _extract_fk_commands(readme_text: str) -> list[str]:
-    pattern = re.compile(r"^\s*fk\s+([a-zA-Z0-9_-]+)", re.MULTILINE)
+    pattern = re.compile(r"^\s*ouro\s+([a-zA-Z0-9_-]+)", re.MULTILINE)
     commands: list[str] = []
     seen: set[str] = set()
     for match in pattern.finditer(readme_text):
@@ -32,4 +32,4 @@ def test_readme_fk_commands_have_help() -> None:
         if command not in available:
             continue
         result = runner.invoke(cli, [command, "--help"])
-        assert result.exit_code == 0, f"README command failed: fk {command} --help"
+        assert result.exit_code == 0, f"README command failed: ouro {command} --help"

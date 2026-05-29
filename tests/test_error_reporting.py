@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from framekit.core.error_reporting import (
+from ouro.core.error_reporting import (
     ErrorReport,
     ErrorReporter,
     ErrorSeverity,
@@ -265,7 +265,7 @@ class TestErrorSuggestions:
 
     def test_suggest_for_file_not_found(self):
         """Test suggestions for file not found errors."""
-        from framekit.core.error_reporting import suggest_for_error
+        from ouro.core.error_reporting import suggest_for_error
 
         suggestions = suggest_for_error(
             code="E_FILE_NOT_FOUND",
@@ -276,7 +276,7 @@ class TestErrorSuggestions:
 
     def test_suggest_for_tool_not_found(self):
         """Test suggestions for tool not found errors."""
-        from framekit.core.error_reporting import suggest_for_error
+        from ouro.core.error_reporting import suggest_for_error
 
         suggestions = suggest_for_error(
             code="E_TOOL_NOT_FOUND",
@@ -287,7 +287,7 @@ class TestErrorSuggestions:
 
     def test_suggest_for_permission_denied(self):
         """Test suggestions for permission errors."""
-        from framekit.core.error_reporting import suggest_for_error
+        from ouro.core.error_reporting import suggest_for_error
 
         suggestions = suggest_for_error(
             code="E_PERMISSION_DENIED",
@@ -298,7 +298,7 @@ class TestErrorSuggestions:
 
     def test_suggest_for_invalid_config(self):
         """Test suggestions for config errors."""
-        from framekit.core.error_reporting import suggest_for_error
+        from ouro.core.error_reporting import suggest_for_error
 
         suggestions = suggest_for_error(
             code="E_INVALID_CONFIG",
@@ -309,7 +309,7 @@ class TestErrorSuggestions:
 
     def test_suggest_generic(self):
         """Test generic suggestions for unknown errors."""
-        from framekit.core.error_reporting import suggest_for_error
+        from ouro.core.error_reporting import suggest_for_error
 
         suggestions = suggest_for_error(
             code="E_UNKNOWN",

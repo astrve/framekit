@@ -9,8 +9,8 @@ from uuid import uuid4
 
 import pytest
 
-import framekit.web.modules as web_modules
-from framekit.web.modules import (
+import ouro.web.modules as web_modules
+from ouro.web.modules import (
     ModuleJob,
     RunModuleRequest,
     RunModuleResponse,
@@ -24,9 +24,9 @@ from framekit.web.modules import (
 
 def test_run_module_command_parses_json_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.modules.run_safe",
+        "ouro.web.modules.run_safe",
         lambda *args, **kwargs: subprocess.CompletedProcess(
-            args=["python", "-m", "framekit", "doctor", "--json"],
+            args=["python", "-m", "ouro", "doctor", "--json"],
             returncode=0,
             stdout='{"checks":[{"status":"ok"}]}',
             stderr="",
@@ -64,10 +64,10 @@ def test_run_module_command_blocks_destructive_without_confirmation() -> None:
 
 def test_enqueue_module_job_completes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.modules._run_module_command_cancellable",
+        "ouro.web.modules._run_module_command_cancellable",
         lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=True,
-            argv=["python", "-m", "framekit", "doctor", "--json"],
+            argv=["python", "-m", "ouro", "doctor", "--json"],
             returncode=0,
             stdout='{"checks":[]}',
             stderr="",
@@ -109,7 +109,7 @@ def test_cancel_module_job_marks_cancelled(monkeypatch: pytest.MonkeyPatch) -> N
             if cancel_event.is_set():
                 return RunModuleResponse(
                     ok=False,
-                    argv=["python", "-m", "framekit", "inspect"],
+                    argv=["python", "-m", "ouro", "inspect"],
                     returncode=130,
                     stdout="",
                     stderr="Cancelled by user.",
@@ -117,13 +117,13 @@ def test_cancel_module_job_marks_cancelled(monkeypatch: pytest.MonkeyPatch) -> N
             time.sleep(0.01)
         return RunModuleResponse(
             ok=True,
-            argv=["python", "-m", "framekit", "inspect"],
+            argv=["python", "-m", "ouro", "inspect"],
             returncode=0,
             stdout="done",
             stderr="",
         )
 
-    monkeypatch.setattr("framekit.web.modules._run_module_command_cancellable", fake_runner)
+    monkeypatch.setattr("ouro.web.modules._run_module_command_cancellable", fake_runner)
 
     job = enqueue_module_job(
         RunModuleRequest(
@@ -151,10 +151,10 @@ def test_cancel_module_job_marks_cancelled(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_rerun_module_job_creates_new_job(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.modules._run_module_command_cancellable",
+        "ouro.web.modules._run_module_command_cancellable",
         lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=True,
-            argv=["python", "-m", "framekit", "inspect"],
+            argv=["python", "-m", "ouro", "inspect"],
             returncode=0,
             stdout="ok",
             stderr="",
@@ -332,7 +332,7 @@ def test_execute_job_timeout_requeues_same_job_id(
         "_run_module_command_cancellable",
         lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=False,
-            argv=["python", "-m", "framekit", "inspect"],
+            argv=["python", "-m", "ouro", "inspect"],
             returncode=124,
             stdout="",
             stderr="Timed out after 5s.",
@@ -372,7 +372,7 @@ def test_execute_job_timeout_on_unsafe_apply_mode_fails(
         "_run_module_command_cancellable",
         lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=False,
-            argv=["python", "-m", "framekit", "renamer"],
+            argv=["python", "-m", "ouro", "renamer"],
             returncode=124,
             stdout="",
             stderr="Timed out after 5s.",

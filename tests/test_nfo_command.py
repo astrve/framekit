@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from framekit.commands import nfo as nfo_command_module
-from framekit.core.reporting import OperationReport
-from framekit.core.settings import SettingsStore
+from ouro.commands import nfo as nfo_command_module
+from ouro.core.reporting import OperationReport
+from ouro.core.settings import SettingsStore
 
 
 class _StoreFactory:

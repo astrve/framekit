@@ -6,7 +6,7 @@ import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from fastapi.testclient import TestClient
 
-from framekit.web.app import create_app
+from ouro.web.app import create_app
 
 
 @pytest.fixture(autouse=True)
@@ -16,7 +16,7 @@ def _open_access_mode(monkeypatch: MonkeyPatch) -> None:
     Patches _is_auth_active to False so middleware never blocks requests with 401.
     Auth-specific tests that need auth active must override this with their own patch.
     """
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
 
 
 def test_healthz_returns_ok() -> None:
@@ -35,14 +35,14 @@ def test_system_info_shape() -> None:
     payload = response.json()
 
     assert response.status_code == 200
-    assert payload["name"] == "framekit"
+    assert payload["name"] == "ouro"
     assert isinstance(payload["version"], str)
     assert isinstance(payload["python_version"], str)
 
 
 def test_doctor_endpoint_returns_tools_and_checks(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.collect_doctor_payload",
+        "ouro.web.app.collect_doctor_payload",
         lambda: {
             "tools": [{"name": "ffmpeg", "found": True}],
             "checks": [{"section": "Runtime", "name": "python", "status": "ok", "detail": "3.12"}],
@@ -93,7 +93,7 @@ def test_modules_spec_returns_cli_shapes() -> None:
 
 def test_modules_resources_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.list_pipeline_batch_resources",
+        "ouro.web.app.list_pipeline_batch_resources",
         lambda: {
             "pipeline_presets": [{"name": "multi_fr", "path": "x", "source": "bundled"}],
             "prez_presets": [{"name": "default", "path": "y", "source": "bundled"}],
@@ -115,9 +115,9 @@ def test_modules_resources_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_settings_summary_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.get_settings_summary",
+        "ouro.web.app.get_settings_summary",
         lambda: {
-            "settings_path": "C:/cfg/framekit.yaml",
+            "settings_path": "C:/cfg/ouro.yaml",
             "config_dir": "C:/cfg",
             "cache_dir": "C:/cache",
             "settings": {"general": {"locale": "fr"}},
@@ -128,15 +128,15 @@ def test_settings_summary_endpoint(monkeypatch: MonkeyPatch) -> None:
     payload = response.json()
 
     assert response.status_code == 200
-    assert payload["settings_path"].endswith("framekit.yaml")
+    assert payload["settings_path"].endswith("ouro.yaml")
     assert payload["settings"]["general"]["locale"] == "fr"
 
 
 def test_settings_patch_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.patch_settings_values",
+        "ouro.web.app.patch_settings_values",
         lambda changes: {
-            "settings_path": "C:/cfg/framekit.yaml",
+            "settings_path": "C:/cfg/ouro.yaml",
             "config_dir": "C:/cfg",
             "cache_dir": "C:/cache",
             "settings": {"general": {"locale": changes.get("general.locale", "fr")}},
@@ -157,7 +157,7 @@ def test_settings_patch_endpoint_returns_400_on_unsupported_key(monkeypatch: Mon
     def _raise(_changes: dict[str, object]) -> dict[str, object]:
         raise ValueError("Unsupported settings key: foo.bar")
 
-    monkeypatch.setattr("framekit.web.app.patch_settings_values", _raise)
+    monkeypatch.setattr("ouro.web.app.patch_settings_values", _raise)
     client = TestClient(create_app())
     response = client.post("/api/v1/settings/patch", json={"changes": {"foo.bar": "x"}})
     payload = response.json()
@@ -168,7 +168,7 @@ def test_settings_patch_endpoint_returns_400_on_unsupported_key(monkeypatch: Mon
 
 def test_seedbox_list_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.list_seedboxes_summary",
+        "ouro.web.app.list_seedboxes_summary",
         lambda: [
             {
                 "name": "main-seedbox",
@@ -191,7 +191,7 @@ def test_seedbox_list_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_seedbox_add_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.create_seedbox_profile",
+        "ouro.web.app.create_seedbox_profile",
         lambda **kwargs: [
             {
                 "name": kwargs["name"],
@@ -225,7 +225,7 @@ def test_seedbox_add_endpoint_returns_400_on_validation_error(monkeypatch: Monke
     def _raise(**_kwargs: object) -> list[dict[str, object]]:
         raise ValueError("invalid seedbox")
 
-    monkeypatch.setattr("framekit.web.app.create_seedbox_profile", _raise)
+    monkeypatch.setattr("ouro.web.app.create_seedbox_profile", _raise)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/seedbox/add",
@@ -243,7 +243,7 @@ def test_seedbox_add_endpoint_returns_400_on_validation_error(monkeypatch: Monke
 
 def test_seedbox_use_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.set_default_seedbox",
+        "ouro.web.app.set_default_seedbox",
         lambda name, profile_name=None: [
             {
                 "name": name,
@@ -255,7 +255,7 @@ def test_seedbox_use_endpoint(monkeypatch: MonkeyPatch) -> None:
             }
         ],
     )
-    monkeypatch.setattr("framekit.web.app.get_seedbox_default_by_profile", lambda: {})
+    monkeypatch.setattr("ouro.web.app.get_seedbox_default_by_profile", lambda: {})
     client = TestClient(create_app())
     response = client.post("/api/v1/seedbox/use", json={"name": "main"})
     payload = response.json()
@@ -266,7 +266,7 @@ def test_seedbox_use_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 
 def test_seedbox_remove_endpoint(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("framekit.web.app.remove_seedbox_profile", lambda name: [])
+    monkeypatch.setattr("ouro.web.app.remove_seedbox_profile", lambda name: [])
     client = TestClient(create_app())
     response = client.post("/api/v1/seedbox/remove", json={"name": "legacy"})
     payload = response.json()
@@ -277,7 +277,7 @@ def test_seedbox_remove_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_upload_trackers_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.list_upload_trackers_summary",
+        "ouro.web.app.list_upload_trackers_summary",
         lambda: [
             {
                 "name": "bhd",
@@ -297,7 +297,7 @@ def test_upload_trackers_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_upload_tracker_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.get_upload_tracker_info",
+        "ouro.web.app.get_upload_tracker_info",
         lambda tracker_name: {"name": tracker_name, "type": "unit3d", "url": "https://example.test"},
     )
     client = TestClient(create_app())
@@ -310,7 +310,7 @@ def test_upload_tracker_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_upload_state_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.get_upload_state",
+        "ouro.web.app.get_upload_state",
         lambda: {"enabled": True, "auto_upload": False},
     )
     client = TestClient(create_app())
@@ -324,7 +324,7 @@ def test_upload_state_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_upload_state_update_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.set_upload_state",
+        "ouro.web.app.set_upload_state",
         lambda enabled, auto_upload=None: {"enabled": enabled, "auto_upload": bool(auto_upload)},
     )
     client = TestClient(create_app())
@@ -338,7 +338,7 @@ def test_upload_state_update_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_upload_history_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.list_upload_history",
+        "ouro.web.app.list_upload_history",
         lambda limit=20: [{"tracker": "bhd", "success": True, "limit": limit}],
     )
     client = TestClient(create_app())
@@ -352,7 +352,7 @@ def test_upload_history_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_seedbox_history_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.list_seedbox_history",
+        "ouro.web.app.list_seedbox_history",
         lambda limit=50, seedbox_name=None: [{"seedbox": seedbox_name or "default", "limit": limit}],
     )
     client = TestClient(create_app())
@@ -369,7 +369,7 @@ def test_modules_run_endpoint_returns_payload(monkeypatch: MonkeyPatch) -> None:
         def model_dump(self) -> dict[str, object]:
             return {
                 "ok": True,
-                "argv": ["python", "-m", "framekit", "inspect"],
+                "argv": ["python", "-m", "ouro", "inspect"],
                 "returncode": 0,
                 "stdout": "ok",
                 "stderr": "",
@@ -378,7 +378,7 @@ def test_modules_run_endpoint_returns_payload(monkeypatch: MonkeyPatch) -> None:
             }
 
     monkeypatch.setattr(
-        "framekit.web.app.run_module_command",
+        "ouro.web.app.run_module_command",
         lambda _request: ResponseStub(),
     )
 
@@ -415,8 +415,8 @@ def test_modules_jobs_create_and_get(monkeypatch: MonkeyPatch) -> None:
                 "error": None,
             }
 
-    monkeypatch.setattr("framekit.web.app.enqueue_module_job", lambda _request: JobStub())
-    monkeypatch.setattr("framekit.web.app.get_module_job", lambda _job_id: JobStub())
+    monkeypatch.setattr("ouro.web.app.enqueue_module_job", lambda _request: JobStub())
+    monkeypatch.setattr("ouro.web.app.get_module_job", lambda _job_id: JobStub())
 
     client = TestClient(create_app())
     create_response = client.post(
@@ -451,7 +451,7 @@ def test_modules_jobs_cancel_endpoint(monkeypatch: MonkeyPatch) -> None:
                 "error": "Cancelled by user.",
             }
 
-    monkeypatch.setattr("framekit.web.app.cancel_module_job", lambda _job_id: JobStub())
+    monkeypatch.setattr("ouro.web.app.cancel_module_job", lambda _job_id: JobStub())
 
     client = TestClient(create_app())
     response = client.delete("/api/v1/modules/jobs/job-1")
@@ -475,7 +475,7 @@ def test_modules_jobs_rerun_endpoint(monkeypatch: MonkeyPatch) -> None:
                 "error": None,
             }
 
-    monkeypatch.setattr("framekit.web.app.rerun_module_job", lambda _job_id: JobStub())
+    monkeypatch.setattr("ouro.web.app.rerun_module_job", lambda _job_id: JobStub())
 
     client = TestClient(create_app())
     response = client.post("/api/v1/modules/jobs/job-1/rerun")
@@ -488,7 +488,7 @@ def test_modules_jobs_rerun_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_jobs_queue_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.list_queue_snapshot",
+        "ouro.web.app.list_queue_snapshot",
         lambda: {"draining": False, "pending": 2, "paused": 1, "running": 1, "by_category": {"transform": {"pending": 2, "paused": 1, "running": 1}}},
     )
     client = TestClient(create_app())
@@ -520,9 +520,9 @@ def test_jobs_priority_pause_resume_endpoints(monkeypatch: MonkeyPatch) -> None:
                 "paused": self.paused,
             }
 
-    monkeypatch.setattr("framekit.web.app.set_module_job_priority", lambda job_id, priority: JobStub(job_id, priority, False))
-    monkeypatch.setattr("framekit.web.app.pause_module_job", lambda job_id: JobStub(job_id, 5, True))
-    monkeypatch.setattr("framekit.web.app.resume_module_job", lambda job_id: JobStub(job_id, 5, False))
+    monkeypatch.setattr("ouro.web.app.set_module_job_priority", lambda job_id, priority: JobStub(job_id, priority, False))
+    monkeypatch.setattr("ouro.web.app.pause_module_job", lambda job_id: JobStub(job_id, 5, True))
+    monkeypatch.setattr("ouro.web.app.resume_module_job", lambda job_id: JobStub(job_id, 5, False))
     client = TestClient(create_app())
 
     priority_response = client.post("/api/v1/jobs/job-1/priority", json={"priority": 5})
@@ -540,7 +540,7 @@ def test_jobs_priority_pause_resume_endpoints(monkeypatch: MonkeyPatch) -> None:
 
 def test_provider_token_get_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.get_provider_token_value",
+        "ouro.web.app.get_provider_token_value",
         lambda provider: {"provider": provider, "token": "", "is_set": False, "encrypted": False},
     )
     client = TestClient(create_app())
@@ -557,7 +557,7 @@ def test_provider_token_get_invalid_provider(monkeypatch: MonkeyPatch) -> None:
     def _raise(provider: str) -> None:
         raise ValueError(f"unsupported provider: {provider}")
 
-    monkeypatch.setattr("framekit.web.app.get_provider_token_value", _raise)
+    monkeypatch.setattr("ouro.web.app.get_provider_token_value", _raise)
     client = TestClient(create_app())
 
     response = client.get("/api/v1/settings/provider-token/unknown")
@@ -567,7 +567,7 @@ def test_provider_token_get_invalid_provider(monkeypatch: MonkeyPatch) -> None:
 
 def test_provider_token_set_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.set_provider_token_value",
+        "ouro.web.app.set_provider_token_value",
         lambda provider, token: {"provider": provider, "token": "", "is_set": True, "encrypted": True},
     )
     client = TestClient(create_app())
@@ -582,7 +582,7 @@ def test_provider_token_set_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_announce_rename_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.rename_torrent_announce_label",
+        "ouro.web.app.rename_torrent_announce_label",
         lambda index, label: {
             "announces": [{"value": "https://tracker.example.com/announce", "label": label, "is_selected": True}],
             "selected_announce": "https://tracker.example.com/announce",
@@ -599,7 +599,7 @@ def test_announce_rename_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_profiles_create_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.create_settings_profile",
+        "ouro.web.app.create_settings_profile",
         lambda name, description, overrides: {
             "profiles": [{"name": name, "description": description, "active": False, "overrides": overrides}],
             "active": None,
@@ -618,7 +618,7 @@ def test_profiles_create_missing_name(monkeypatch: MonkeyPatch) -> None:
     def _raise(name: str, description: str, overrides: dict) -> None:
         raise ValueError("profile name is required")
 
-    monkeypatch.setattr("framekit.web.app.create_settings_profile", _raise)
+    monkeypatch.setattr("ouro.web.app.create_settings_profile", _raise)
     client = TestClient(create_app())
 
     response = client.post("/api/v1/profiles", json={"name": "", "description": "", "overrides": {}})
@@ -628,7 +628,7 @@ def test_profiles_create_missing_name(monkeypatch: MonkeyPatch) -> None:
 
 def test_profiles_delete_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.delete_settings_profile",
+        "ouro.web.app.delete_settings_profile",
         lambda name: {"profiles": [], "active": None},
     )
     client = TestClient(create_app())
@@ -644,7 +644,7 @@ def test_profiles_delete_not_found(monkeypatch: MonkeyPatch) -> None:
     def _raise(name: str) -> None:
         raise ValueError(f"profile not found: {name}")
 
-    monkeypatch.setattr("framekit.web.app.delete_settings_profile", _raise)
+    monkeypatch.setattr("ouro.web.app.delete_settings_profile", _raise)
     client = TestClient(create_app())
 
     response = client.delete("/api/v1/profiles/missing")
@@ -654,7 +654,7 @@ def test_profiles_delete_not_found(monkeypatch: MonkeyPatch) -> None:
 
 def test_delete_all_presets_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.delete_all_yaml_presets",
+        "ouro.web.app.delete_all_yaml_presets",
         lambda kind: {"kind": kind, "deleted": ["preset-a", "preset-b"], "count": 2},
     )
     client = TestClient(create_app())
@@ -684,7 +684,7 @@ def test_auth_middleware_open_mode_allows_data_route() -> None:
 
 def test_auth_middleware_active_blocks_unauthenticated_data_route(monkeypatch: MonkeyPatch) -> None:
     """Auth active + no token → 401 with 'Authentication required'."""
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: True)
     client = TestClient(create_app())
     response = client.get("/api/v1/settings/summary")
     assert response.status_code == 401
@@ -693,7 +693,7 @@ def test_auth_middleware_active_blocks_unauthenticated_data_route(monkeypatch: M
 
 def test_auth_middleware_always_open_paths_bypass_auth(monkeypatch: MonkeyPatch) -> None:
     """healthz, system/info, auth/status stay open even when auth is active."""
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: True)
     client = TestClient(create_app())
     assert client.get("/healthz").status_code == 200
     assert client.get("/api/v1/system/info").status_code == 200
@@ -715,13 +715,13 @@ def _write_test_spa(dist_dir: Path, marker: str) -> None:
 
 
 def test_static_serving_prefers_packaged_assets(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
-    """When both dirs exist, packaged framekit.web/static is used before source web-ui/dist."""
+    """When both dirs exist, packaged ouro.web/static is used before source web-ui/dist."""
     packaged_dir = tmp_path / "packaged-static"
     source_dir = tmp_path / "source-dist"
     _write_test_spa(packaged_dir, marker="packaged-ui")
     _write_test_spa(source_dir, marker="source-ui")
-    monkeypatch.setattr("framekit.web.app._PACKAGE_STATIC_DIR", packaged_dir)
-    monkeypatch.setattr("framekit.web.app._SOURCE_DIST_DIR", source_dir)
+    monkeypatch.setattr("ouro.web.app._PACKAGE_STATIC_DIR", packaged_dir)
+    monkeypatch.setattr("ouro.web.app._SOURCE_DIST_DIR", source_dir)
 
     client = TestClient(create_app())
     response = client.get("/")
@@ -737,8 +737,8 @@ def test_static_serving_falls_back_to_source_dist(monkeypatch: MonkeyPatch, tmp_
     packaged_dir = tmp_path / "missing-packaged"
     source_dir = tmp_path / "source-dist"
     _write_test_spa(source_dir, marker="source-fallback")
-    monkeypatch.setattr("framekit.web.app._PACKAGE_STATIC_DIR", packaged_dir)
-    monkeypatch.setattr("framekit.web.app._SOURCE_DIST_DIR", source_dir)
+    monkeypatch.setattr("ouro.web.app._PACKAGE_STATIC_DIR", packaged_dir)
+    monkeypatch.setattr("ouro.web.app._SOURCE_DIST_DIR", source_dir)
 
     client = TestClient(create_app())
     response = client.get("/")
@@ -749,15 +749,15 @@ def test_static_serving_falls_back_to_source_dist(monkeypatch: MonkeyPatch, tmp_
 
 def test_static_serving_returns_json_hint_when_no_assets(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     """If no static assets exist, root returns JSON fallback hint."""
-    monkeypatch.setattr("framekit.web.app._PACKAGE_STATIC_DIR", tmp_path / "missing-packaged")
-    monkeypatch.setattr("framekit.web.app._SOURCE_DIST_DIR", tmp_path / "missing-source")
+    monkeypatch.setattr("ouro.web.app._PACKAGE_STATIC_DIR", tmp_path / "missing-packaged")
+    monkeypatch.setattr("ouro.web.app._SOURCE_DIST_DIR", tmp_path / "missing-source")
 
     client = TestClient(create_app())
     response = client.get("/")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["message"] == "Framekit API is running. Web UI has not been built."
+    assert payload["message"] == "Ouro API is running. Web UI has not been built."
     assert "npm run build" in payload["hint"]
 
 
@@ -765,8 +765,8 @@ def test_spa_catch_all_never_swallows_api_paths(monkeypatch: MonkeyPatch, tmp_pa
     """Unknown /api/* path stays 404 JSON even when SPA catch-all is active."""
     packaged_dir = tmp_path / "packaged-static"
     _write_test_spa(packaged_dir, marker="packaged-ui")
-    monkeypatch.setattr("framekit.web.app._PACKAGE_STATIC_DIR", packaged_dir)
-    monkeypatch.setattr("framekit.web.app._SOURCE_DIST_DIR", tmp_path / "missing-source")
+    monkeypatch.setattr("ouro.web.app._PACKAGE_STATIC_DIR", packaged_dir)
+    monkeypatch.setattr("ouro.web.app._SOURCE_DIST_DIR", tmp_path / "missing-source")
 
     client = TestClient(create_app())
     response = client.get("/api/not-a-real-route")
@@ -780,7 +780,7 @@ def test_spa_catch_all_never_swallows_api_paths(monkeypatch: MonkeyPatch, tmp_pa
 def test_announces_selected_announce_is_nullable(monkeypatch: MonkeyPatch) -> None:
     """selected_announce field is null (not absent) when nothing is selected."""
     monkeypatch.setattr(
-        "framekit.web.app.list_torrent_announces_info",
+        "ouro.web.app.list_torrent_announces_info",
         lambda: {"announces": [], "selected_announce": None},
     )
     client = TestClient(create_app())
@@ -794,7 +794,7 @@ def test_announces_selected_announce_is_nullable(monkeypatch: MonkeyPatch) -> No
 def test_seedbox_add_accepts_rclone_remote_with_trailing_colon(monkeypatch: MonkeyPatch) -> None:
     """rclone_remote in 'name:' format (standard rclone syntax) is accepted unchanged."""
     monkeypatch.setattr(
-        "framekit.web.app.create_seedbox_profile",
+        "ouro.web.app.create_seedbox_profile",
         lambda **kwargs: [
             {
                 "name": kwargs["name"],
@@ -832,7 +832,7 @@ def test_settings_patch_rejects_torrent_client_password() -> None:
 def test_torrent_client_password_get_returns_status_only(monkeypatch: MonkeyPatch) -> None:
     """GET torrent-client-password returns is_set+encrypted, never the password value."""
     monkeypatch.setattr(
-        "framekit.web.app.get_torrent_client_password",
+        "ouro.web.app.get_torrent_client_password",
         lambda: {"is_set": True, "encrypted": True},
     )
     client = TestClient(create_app())
@@ -849,7 +849,7 @@ def test_torrent_client_password_get_returns_status_only(monkeypatch: MonkeyPatc
 
 def test_webhook_add_stores_title_and_body_template(monkeypatch: MonkeyPatch) -> None:
     """POST /webhooks with title_template/body_template → stored in response."""
-    from framekit.core.webhooks import WebhookConfig
+    from ouro.core.webhooks import WebhookConfig
 
     def _add(**kwargs):  # type: ignore[return]
         return [
@@ -863,7 +863,7 @@ def test_webhook_add_stores_title_and_body_template(monkeypatch: MonkeyPatch) ->
             )
         ]
 
-    monkeypatch.setattr("framekit.web.app.add_webhook", _add)
+    monkeypatch.setattr("ouro.web.app.add_webhook", _add)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/webhooks",
@@ -882,7 +882,7 @@ def test_webhook_add_stores_title_and_body_template(monkeypatch: MonkeyPatch) ->
 
 def test_webhook_update_stores_templates(monkeypatch: MonkeyPatch) -> None:
     """PATCH /webhooks/{id} with templates → stored in response."""
-    from framekit.core.webhooks import WebhookConfig
+    from ouro.core.webhooks import WebhookConfig
 
     def _update(webhook_id, **kwargs):  # type: ignore[return]
         return [
@@ -895,7 +895,7 @@ def test_webhook_update_stores_templates(monkeypatch: MonkeyPatch) -> None:
             )
         ]
 
-    monkeypatch.setattr("framekit.web.app.update_webhook", _update)
+    monkeypatch.setattr("ouro.web.app.update_webhook", _update)
     client = TestClient(create_app())
     response = client.patch(
         "/api/v1/webhooks/wh-1",
@@ -911,8 +911,8 @@ def test_webhook_update_stores_templates(monkeypatch: MonkeyPatch) -> None:
 def test_webhook_add_unknown_placeholder_returns_400(monkeypatch: MonkeyPatch) -> None:
     """Unknown placeholder {movie} raises ValueError → 400 with placeholder name in detail."""
     # Monkeypatch only load/save to avoid disk I/O; validation runs for real.
-    monkeypatch.setattr("framekit.core.webhooks.load_webhooks", lambda: [])
-    monkeypatch.setattr("framekit.core.webhooks.save_webhooks", lambda _: None)
+    monkeypatch.setattr("ouro.core.webhooks.load_webhooks", lambda: [])
+    monkeypatch.setattr("ouro.core.webhooks.save_webhooks", lambda _: None)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/webhooks",
@@ -958,12 +958,12 @@ def test_webhook_test_payload_returns_ok_with_mocked_http(monkeypatch: MonkeyPat
 
 def test_clean_web_job_output_strips_ansi() -> None:
     """_clean_web_job_output removes ANSI escape sequences and leaves plain text intact."""
-    from framekit.web.modules import _clean_web_job_output
+    from ouro.web.modules import _clean_web_job_output
 
     # SGR color reset and bold — produced by Rich when NO_COLOR is not effective
     assert _clean_web_job_output("\x1b[1m[\x1b[0m\x1b[1mERR\x1b[0m\x1b[1m]\x1b[0m message") == "[ERR] message"
     # 256-colour foreground code
-    assert _clean_web_job_output("\x1b[1;38;5;180mFramekit\x1b[0m") == "Framekit"
+    assert _clean_web_job_output("\x1b[1;38;5;180mOuro\x1b[0m") == "Ouro"
     # Plain text is untouched
     assert _clean_web_job_output("[INFO] Processing 3 files...") == "[INFO] Processing 3 files..."
     # Empty string is safe
@@ -979,7 +979,7 @@ def test_clean_web_job_output_strips_ansi() -> None:
 # ── GET /api/v1/runs ─────────────────────────────────────────────────────────
 
 def test_runs_endpoint_returns_empty_list_when_no_ledger(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("framekit.web.app.list_runs_from_ledger", lambda limit=50: [])
+    monkeypatch.setattr("ouro.web.app.list_runs_from_ledger", lambda limit=50: [])
     client = TestClient(create_app())
     response = client.get("/api/v1/runs")
     payload = response.json()
@@ -1002,7 +1002,7 @@ def test_runs_endpoint_passes_limit_to_helper(monkeypatch: MonkeyPatch) -> None:
         captured.append(limit)
         return []
 
-    monkeypatch.setattr("framekit.web.app.list_runs_from_ledger", _stub)
+    monkeypatch.setattr("ouro.web.app.list_runs_from_ledger", _stub)
     client = TestClient(create_app())
     client.get("/api/v1/runs?limit=7")
     assert captured == [7]
@@ -1014,10 +1014,10 @@ def test_list_runs_from_ledger_missing_file_returns_empty(
     tmp_path, monkeypatch: MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "framekit.core.runs.ledger.get_runs_ledger_path",
+        "ouro.core.runs.ledger.get_runs_ledger_path",
         lambda: tmp_path / "nonexistent.ndjson",
     )
-    from framekit.web.modules import list_runs_from_ledger
+    from ouro.web.modules import list_runs_from_ledger
     assert list_runs_from_ledger() == []
 
 
@@ -1033,8 +1033,8 @@ def test_list_runs_from_ledger_groups_by_run_id(
         + _json.dumps({"run_id": "run-B", "module": "cleanmkv", "src": "c.mkv", "timestamp": "2024-01-03T00:00:00"}) + "\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr("framekit.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
-    from framekit.web.modules import list_runs_from_ledger
+    monkeypatch.setattr("ouro.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
+    from ouro.web.modules import list_runs_from_ledger
     runs = list_runs_from_ledger()
     assert len(runs) == 2
     run_a = next(r for r in runs if r["run_id"] == "run-A")
@@ -1054,8 +1054,8 @@ def test_list_runs_from_ledger_newest_first(
         + _json.dumps({"run_id": "new", "module": "renamer", "timestamp": "2024-01-05T00:00:00"}) + "\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr("framekit.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
-    from framekit.web.modules import list_runs_from_ledger
+    monkeypatch.setattr("ouro.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
+    from ouro.web.modules import list_runs_from_ledger
     runs = list_runs_from_ledger()
     assert runs[0]["run_id"] == "new"
     assert runs[1]["run_id"] == "old"
@@ -1072,8 +1072,8 @@ def test_list_runs_from_ledger_respects_limit(
     ]
     ledger = tmp_path / "ledger.ndjson"
     ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    monkeypatch.setattr("framekit.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
-    from framekit.web.modules import list_runs_from_ledger
+    monkeypatch.setattr("ouro.core.runs.ledger.get_runs_ledger_path", lambda: ledger)
+    from ouro.web.modules import list_runs_from_ledger
     assert len(list_runs_from_ledger(limit=2)) == 2
 
 
@@ -1082,7 +1082,7 @@ def test_list_runs_from_ledger_respects_limit(
 def test_service_status_stopped_when_no_state_file(monkeypatch: MonkeyPatch) -> None:
     """GET /api/v1/service/status returns stopped when no state file exists."""
     monkeypatch.setattr(
-        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        "ouro.core.service.supervisor.ServiceSupervisor.read_state",
         lambda self: None,
     )
     client = TestClient(create_app())
@@ -1100,7 +1100,7 @@ def test_service_status_running_with_fresh_heartbeat(monkeypatch: MonkeyPatch) -
 
     now = time.time()
     monkeypatch.setattr(
-        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        "ouro.core.service.supervisor.ServiceSupervisor.read_state",
         lambda self: {
             "status": "running",
             "pid": os.getpid(),   # current test process — guaranteed alive
@@ -1123,7 +1123,7 @@ def test_service_status_stopped_when_heartbeat_stale(monkeypatch: MonkeyPatch) -
 
     stale_ts = time.time() - 120.0  # 120 s ago — well past 30 s threshold
     monkeypatch.setattr(
-        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        "ouro.core.service.supervisor.ServiceSupervisor.read_state",
         lambda self: {
             "status": "running",
             "pid": 99999,
@@ -1145,7 +1145,7 @@ def test_service_status_running_includes_watcher_state(monkeypatch: MonkeyPatch)
 
     now = time.time()
     monkeypatch.setattr(
-        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        "ouro.core.service.supervisor.ServiceSupervisor.read_state",
         lambda self: {
             "status": "running",
             "pid": os.getpid(),
@@ -1154,7 +1154,7 @@ def test_service_status_running_includes_watcher_state(monkeypatch: MonkeyPatch)
         },
     )
     monkeypatch.setattr(
-        "framekit.web.app.get_embedded_watcher_state",
+        "ouro.web.app.get_embedded_watcher_state",
         lambda: {"status": "stopped", "folders_active": 0, "last_error": None},
     )
     client = TestClient(create_app())
@@ -1175,7 +1175,7 @@ def test_service_status_includes_metrics_and_queue(monkeypatch: MonkeyPatch) -> 
 
     now = time.time()
     monkeypatch.setattr(
-        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        "ouro.core.service.supervisor.ServiceSupervisor.read_state",
         lambda self: {
             "status": "running",
             "pid": os.getpid(),
@@ -1183,8 +1183,8 @@ def test_service_status_includes_metrics_and_queue(monkeypatch: MonkeyPatch) -> 
             "heartbeat_at": now - 1.0,
         },
     )
-    monkeypatch.setattr("framekit.web.app.get_service_event_metrics", lambda: {"queued": 1, "running": 2, "completed": 3, "failed": 4, "retried": 5})
-    monkeypatch.setattr("framekit.web.app.list_queue_snapshot", lambda: {"draining": False, "pending": 1, "paused": 0, "running": 2, "by_category": {}})
+    monkeypatch.setattr("ouro.web.app.get_service_event_metrics", lambda: {"queued": 1, "running": 2, "completed": 3, "failed": 4, "retried": 5})
+    monkeypatch.setattr("ouro.web.app.list_queue_snapshot", lambda: {"draining": False, "pending": 1, "paused": 0, "running": 2, "by_category": {}})
     client = TestClient(create_app())
     response = client.get("/api/v1/service/status")
     payload = response.json()
@@ -1194,7 +1194,7 @@ def test_service_status_includes_metrics_and_queue(monkeypatch: MonkeyPatch) -> 
 
 
 def test_service_drain_endpoint(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("framekit.web.app.set_service_drain", lambda enabled: {"draining": enabled, "pending": 0, "paused": 0, "running": 0, "by_category": {}})
+    monkeypatch.setattr("ouro.web.app.set_service_drain", lambda enabled: {"draining": enabled, "pending": 0, "paused": 0, "running": 0, "by_category": {}})
     client = TestClient(create_app())
     response = client.post("/api/v1/service/drain", json={"enabled": True})
     payload = response.json()
@@ -1203,7 +1203,7 @@ def test_service_drain_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 
 def test_service_shutdown_endpoint(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("framekit.web.app.request_service_shutdown", lambda: {"scheduled": True, "already_requested": False})
+    monkeypatch.setattr("ouro.web.app.request_service_shutdown", lambda: {"scheduled": True, "already_requested": False})
     client = TestClient(create_app())
     response = client.post("/api/v1/service/shutdown")
     payload = response.json()
@@ -1213,7 +1213,7 @@ def test_service_shutdown_endpoint(monkeypatch: MonkeyPatch) -> None:
 
 def test_get_embedded_watcher_state_no_watcher() -> None:
     """get_embedded_watcher_state returns stopped state when no watcher is active."""
-    import framekit.web.modules as mod
+    import ouro.web.modules as mod
 
     # Ensure clean state (no embedded watcher from other tests)
     original = mod._EMBEDDED_WATCHER
@@ -1232,7 +1232,7 @@ def test_get_embedded_watcher_state_no_watcher() -> None:
 
 def test_get_embedded_watcher_state_with_error() -> None:
     """get_embedded_watcher_state returns error status when startup failed."""
-    import framekit.web.modules as mod
+    import ouro.web.modules as mod
 
     original = mod._EMBEDDED_WATCHER
     original_err = mod._EMBEDDED_WATCHER_ERROR
@@ -1251,7 +1251,7 @@ def test_get_embedded_watcher_state_with_error() -> None:
 
 def test_watch_service_status_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "framekit.web.app.get_watch_service_status",
+        "ouro.web.app.get_watch_service_status",
         lambda: {"status": "stopped", "pid": None},
     )
     client = TestClient(create_app())
@@ -1267,7 +1267,7 @@ def test_watch_rules_crud_endpoints(monkeypatch: MonkeyPatch) -> None:
         {"id": "rule-1", "path": "C:/watch/a", "preset": "default", "enabled": True, "pattern": ""},
     ]
 
-    monkeypatch.setattr("framekit.web.app.list_watch_rules", lambda: list(rules_store))
+    monkeypatch.setattr("ouro.web.app.list_watch_rules", lambda: list(rules_store))
 
     def _add(path: str, preset: str = "default", enabled: bool = True, pattern: str = "") -> list[dict[str, object]]:
         rules_store.append(
@@ -1305,9 +1305,9 @@ def test_watch_rules_crud_endpoints(monkeypatch: MonkeyPatch) -> None:
         rules_store[:] = [item for item in rules_store if item["id"] != rule_id]
         return list(rules_store)
 
-    monkeypatch.setattr("framekit.web.app.add_watch_rule", _add)
-    monkeypatch.setattr("framekit.web.app.patch_watch_rule", _patch)
-    monkeypatch.setattr("framekit.web.app.delete_watch_rule", _delete)
+    monkeypatch.setattr("ouro.web.app.add_watch_rule", _add)
+    monkeypatch.setattr("ouro.web.app.patch_watch_rule", _patch)
+    monkeypatch.setattr("ouro.web.app.delete_watch_rule", _delete)
 
     client = TestClient(create_app())
     list_response = client.get("/api/v1/watch/rules")
@@ -1348,7 +1348,7 @@ def test_watch_service_start_enqueues_watch_module_job(monkeypatch: MonkeyPatch)
         captured.append(request)
         return _JobStub()
 
-    monkeypatch.setattr("framekit.web.app.enqueue_module_job", _enqueue)
+    monkeypatch.setattr("ouro.web.app.enqueue_module_job", _enqueue)
     client = TestClient(create_app())
     response = client.post("/api/v1/watch/service/start")
     assert response.status_code == 200
@@ -1362,7 +1362,7 @@ def test_watch_service_start_enqueues_watch_module_job(monkeypatch: MonkeyPatch)
 
 
 def test_watch_service_stop_endpoint(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("framekit.web.app.stop_watch_service", lambda: {"stopped": True})
+    monkeypatch.setattr("ouro.web.app.stop_watch_service", lambda: {"stopped": True})
     client = TestClient(create_app())
     response = client.post("/api/v1/watch/service/stop")
     payload = response.json()
@@ -1375,7 +1375,7 @@ def test_watch_service_start_returns_409_when_embedded_watcher_running(
 ) -> None:
     """POST /watch/service/start must return 409 when the embedded watcher is active."""
     monkeypatch.setattr(
-        "framekit.web.app.get_embedded_watcher_state",
+        "ouro.web.app.get_embedded_watcher_state",
         lambda: {"status": "running", "folders_active": 2, "last_error": None},
     )
     client = TestClient(create_app())
@@ -1389,7 +1389,7 @@ def test_watch_service_start_enqueues_when_no_embedded_watcher(
 ) -> None:
     """POST /watch/service/start enqueues a watch job when no embedded watcher is running."""
     monkeypatch.setattr(
-        "framekit.web.app.get_embedded_watcher_state",
+        "ouro.web.app.get_embedded_watcher_state",
         lambda: {"status": "stopped", "folders_active": 0, "last_error": None},
     )
     captured: list = []
@@ -1411,7 +1411,7 @@ def test_watch_service_start_enqueues_when_no_embedded_watcher(
         captured.append(request)
         return _JobStub()
 
-    monkeypatch.setattr("framekit.web.app.enqueue_module_job", _enqueue)
+    monkeypatch.setattr("ouro.web.app.enqueue_module_job", _enqueue)
     client = TestClient(create_app())
     response = client.post("/api/v1/watch/service/start")
     assert response.status_code == 200
@@ -1423,10 +1423,10 @@ def test_service_reload_restarts_embedded_watcher(monkeypatch: MonkeyPatch) -> N
     """POST /api/v1/service/reload calls stop then start on embedded watcher."""
     calls: list[str] = []
 
-    monkeypatch.setattr("framekit.web.app.stop_embedded_watcher", lambda: calls.append("stop"))
-    monkeypatch.setattr("framekit.web.app.start_embedded_watcher", lambda: calls.append("start"))
+    monkeypatch.setattr("ouro.web.app.stop_embedded_watcher", lambda: calls.append("stop"))
+    monkeypatch.setattr("ouro.web.app.start_embedded_watcher", lambda: calls.append("start"))
     monkeypatch.setattr(
-        "framekit.web.app.get_embedded_watcher_state",
+        "ouro.web.app.get_embedded_watcher_state",
         lambda: {"status": "stopped", "folders_active": 0, "last_error": None},
     )
     client = TestClient(create_app())
@@ -1460,7 +1460,7 @@ def test_events_recent_endpoint(monkeypatch: MonkeyPatch) -> None:
             "data": {"job_id": "job-1"},
         },
     ]
-    monkeypatch.setattr("framekit.web.app.list_service_events_recent", lambda limit=100: events[:limit])
+    monkeypatch.setattr("ouro.web.app.list_service_events_recent", lambda limit=100: events[:limit])
     client = TestClient(create_app())
     response = client.get("/api/v1/events/recent?limit=2")
     assert response.status_code == 200
@@ -1496,7 +1496,7 @@ def test_events_stream_endpoint_sse_frame(monkeypatch: MonkeyPatch) -> None:
             return [sample]
         raise RuntimeError("stop-test-stream")
 
-    monkeypatch.setattr("framekit.web.app.wait_for_service_events", _wait)
+    monkeypatch.setattr("ouro.web.app.wait_for_service_events", _wait)
     client = TestClient(create_app())
 
     with client.stream("GET", "/api/v1/events/stream") as response:
@@ -1513,13 +1513,13 @@ def test_events_stream_endpoint_sse_frame(monkeypatch: MonkeyPatch) -> None:
 
     joined = "\n".join(lines)
     assert ": connected" in joined
-    assert "event: framekit.event" in joined
+    assert "event: ouro.event" in joined
     assert '"type": "job.completed"' in joined or '"type":"job.completed"' in joined
     assert '"job_id": "job-42"' in joined or '"job_id":"job-42"' in joined
 
 
 def test_events_recent_requires_auth_when_enabled(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: True)
     client = TestClient(create_app())
     response = client.get("/api/v1/events/recent")
     assert response.status_code == 401
@@ -1527,7 +1527,7 @@ def test_events_recent_requires_auth_when_enabled(monkeypatch: MonkeyPatch) -> N
 
 
 def test_events_stream_requires_auth_when_enabled(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: True)
     client = TestClient(create_app())
     response = client.get("/api/v1/events/stream")
     assert response.status_code == 401
@@ -1539,7 +1539,7 @@ def test_events_stream_requires_auth_when_enabled(monkeypatch: MonkeyPatch) -> N
 
 def test_intake_list_sources_empty(monkeypatch: MonkeyPatch) -> None:
     """GET /api/v1/intake/sources returns empty list when no sources configured."""
-    monkeypatch.setattr("framekit.web.app.list_intake_sources", lambda: [])
+    monkeypatch.setattr("ouro.web.app.list_intake_sources", lambda: [])
     client = TestClient(create_app())
     response = client.get("/api/v1/intake/sources")
     assert response.status_code == 200
@@ -1557,8 +1557,8 @@ def test_intake_create_source_returns_token(monkeypatch: MonkeyPatch) -> None:
         "created_at": "2026-01-01T00:00:00Z",
         "token": "tok_abc",
     }
-    monkeypatch.setattr("framekit.web.app.create_intake_source", lambda name, source_id, default_preset=None: created)
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app.create_intake_source", lambda name, source_id, default_preset=None: created)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/intake/sources",
@@ -1572,8 +1572,8 @@ def test_intake_create_source_returns_token(monkeypatch: MonkeyPatch) -> None:
 
 def test_intake_create_source_requires_admin_when_auth_active(monkeypatch: MonkeyPatch) -> None:
     """POST /api/v1/intake/sources returns 401 when auth active and no credentials."""
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
-    monkeypatch.setattr("framekit.web.app._require_admin", lambda req: (_ for _ in ()).throw(
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("ouro.web.app._require_admin", lambda req: (_ for _ in ()).throw(
         __import__("fastapi").HTTPException(status_code=401, detail="Authentication required")
     ))
     client = TestClient(create_app(), raise_server_exceptions=False)
@@ -1587,10 +1587,10 @@ def test_intake_create_source_requires_admin_when_auth_active(monkeypatch: Monke
 def test_intake_delete_source(monkeypatch: MonkeyPatch) -> None:
     """DELETE /api/v1/intake/sources/{id} returns deleted=True."""
     monkeypatch.setattr(
-        "framekit.web.app.delete_intake_source",
+        "ouro.web.app.delete_intake_source",
         lambda source_id: {"deleted": True, "source_id": source_id},
     )
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
     client = TestClient(create_app())
     response = client.delete("/api/v1/intake/sources/qbittorrent")
     assert response.status_code == 200
@@ -1600,10 +1600,10 @@ def test_intake_delete_source(monkeypatch: MonkeyPatch) -> None:
 def test_intake_delete_source_unknown_returns_404(monkeypatch: MonkeyPatch) -> None:
     """DELETE /api/v1/intake/sources/{id} returns 404 for unknown source."""
     monkeypatch.setattr(
-        "framekit.web.app.delete_intake_source",
+        "ouro.web.app.delete_intake_source",
         lambda source_id: (_ for _ in ()).throw(ValueError(f"source_id '{source_id}' not found")),
     )
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
     client = TestClient(create_app())
     response = client.delete("/api/v1/intake/sources/unknown")
     assert response.status_code == 404
@@ -1613,10 +1613,10 @@ def test_intake_submit_release_accepted(monkeypatch: MonkeyPatch, tmp_path) -> N
     """POST /api/v1/intake/release returns accepted=True and job_id when auth disabled."""
     result = {"job_id": "job-intake-1", "accepted": True, "dedup_hit": False}
     monkeypatch.setattr(
-        "framekit.web.app.submit_intake_release",
+        "ouro.web.app.submit_intake_release",
         lambda source_id, path, preset=None, dedup_key=None: result,
     )
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/intake/release",
@@ -1633,10 +1633,10 @@ def test_intake_submit_release_dedup(monkeypatch: MonkeyPatch, tmp_path) -> None
     """POST /api/v1/intake/release returns dedup_hit=True when duplicate detected."""
     result = {"job_id": "job-existing", "accepted": False, "dedup_hit": True}
     monkeypatch.setattr(
-        "framekit.web.app.submit_intake_release",
+        "ouro.web.app.submit_intake_release",
         lambda source_id, path, preset=None, dedup_key=None: result,
     )
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/intake/release",
@@ -1649,12 +1649,12 @@ def test_intake_submit_release_dedup(monkeypatch: MonkeyPatch, tmp_path) -> None
 def test_intake_submit_release_bad_path(monkeypatch: MonkeyPatch) -> None:
     """POST /api/v1/intake/release returns 400 when path validation fails."""
     monkeypatch.setattr(
-        "framekit.web.app.submit_intake_release",
+        "ouro.web.app.submit_intake_release",
         lambda source_id, path, preset=None, dedup_key=None: (_ for _ in ()).throw(
             ValueError("Path does not exist: /nonexistent")
         ),
     )
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/intake/release",
@@ -1666,9 +1666,9 @@ def test_intake_submit_release_bad_path(monkeypatch: MonkeyPatch) -> None:
 
 def test_intake_submit_release_requires_token_when_auth_active(monkeypatch: MonkeyPatch, tmp_path) -> None:
     """POST /api/v1/intake/release returns 401 when auth active and no credentials."""
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
-    monkeypatch.setattr("framekit.web.app._get_current_user", lambda req: None)
-    monkeypatch.setattr("framekit.web.app.verify_intake_token", lambda source_id, token: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("ouro.web.app._get_current_user", lambda req: None)
+    monkeypatch.setattr("ouro.web.app.verify_intake_token", lambda source_id, token: False)
     client = TestClient(create_app(), raise_server_exceptions=False)
     response = client.post(
         "/api/v1/intake/release",
@@ -1680,11 +1680,11 @@ def test_intake_submit_release_requires_token_when_auth_active(monkeypatch: Monk
 def test_intake_submit_release_accepts_valid_intake_token(monkeypatch: MonkeyPatch, tmp_path) -> None:
     """POST /api/v1/intake/release accepts valid intake token when auth is active."""
     result = {"job_id": "job-tok-1", "accepted": True, "dedup_hit": False}
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: True)
-    monkeypatch.setattr("framekit.web.app._get_current_user", lambda req: None)
-    monkeypatch.setattr("framekit.web.app.verify_intake_token", lambda source_id, token: True)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: True)
+    monkeypatch.setattr("ouro.web.app._get_current_user", lambda req: None)
+    monkeypatch.setattr("ouro.web.app.verify_intake_token", lambda source_id, token: True)
     monkeypatch.setattr(
-        "framekit.web.app.submit_intake_release",
+        "ouro.web.app.submit_intake_release",
         lambda source_id, path, preset=None, dedup_key=None: result,
     )
     client = TestClient(create_app())
@@ -1701,10 +1701,10 @@ def test_intake_webhook_alias_route(monkeypatch: MonkeyPatch, tmp_path) -> None:
     """POST /api/v1/intake/webhook/{source} routes to submit_intake_release with path source."""
     result = {"job_id": "job-wh-1", "accepted": True, "dedup_hit": False}
     monkeypatch.setattr(
-        "framekit.web.app.submit_intake_release",
+        "ouro.web.app.submit_intake_release",
         lambda source_id, path, preset=None, dedup_key=None: result,
     )
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/intake/webhook/mydownloader",
@@ -1717,12 +1717,12 @@ def test_intake_webhook_alias_route(monkeypatch: MonkeyPatch, tmp_path) -> None:
 def test_intake_rate_limit_exceeded(monkeypatch: MonkeyPatch, tmp_path) -> None:
     """POST /api/v1/intake/release returns 400 when rate limit exceeded."""
     monkeypatch.setattr(
-        "framekit.web.app.submit_intake_release",
+        "ouro.web.app.submit_intake_release",
         lambda source_id, path, preset=None, dedup_key=None: (_ for _ in ()).throw(
             ValueError("Rate limit exceeded (30 requests/min per source)")
         ),
     )
-    monkeypatch.setattr("framekit.web.app._is_auth_active", lambda: False)
+    monkeypatch.setattr("ouro.web.app._is_auth_active", lambda: False)
     client = TestClient(create_app())
     response = client.post(
         "/api/v1/intake/release",
@@ -1736,7 +1736,7 @@ def test_intake_rate_limit_exceeded(monkeypatch: MonkeyPatch, tmp_path) -> None:
 
 
 def test_intake_request_hash_deterministic() -> None:
-    from framekit.web.modules import _intake_request_hash
+    from ouro.web.modules import _intake_request_hash
     h1 = _intake_request_hash("src", "/tmp/release", "key1")
     h2 = _intake_request_hash("src", "/tmp/release", "key1")
     assert h1 == h2
@@ -1744,14 +1744,14 @@ def test_intake_request_hash_deterministic() -> None:
 
 
 def test_intake_request_hash_differs_on_key() -> None:
-    from framekit.web.modules import _intake_request_hash
+    from ouro.web.modules import _intake_request_hash
     h1 = _intake_request_hash("src", "/tmp/release", "key1")
     h2 = _intake_request_hash("src", "/tmp/release", "key2")
     assert h1 != h2
 
 
 def test_intake_rate_limit_allows_up_to_limit() -> None:
-    from framekit.web.modules import _check_intake_rate_limit, _INTAKE_RATE_WINDOWS, _INTAKE_RATE_LOCK
+    from ouro.web.modules import _check_intake_rate_limit, _INTAKE_RATE_WINDOWS, _INTAKE_RATE_LOCK
     source = "rate_test_source_unique_xyz"
     with _INTAKE_RATE_LOCK:
         _INTAKE_RATE_WINDOWS.pop(source, None)
@@ -1762,15 +1762,15 @@ def test_intake_rate_limit_allows_up_to_limit() -> None:
 
 def test_intake_path_allowed_no_roots(monkeypatch: MonkeyPatch) -> None:
     from pathlib import Path
-    from framekit.web.modules import _intake_path_allowed
-    monkeypatch.setattr("framekit.web.modules._intake_allowed_roots", lambda: [])
+    from ouro.web.modules import _intake_path_allowed
+    monkeypatch.setattr("ouro.web.modules._intake_allowed_roots", lambda: [])
     assert _intake_path_allowed(Path("/any/path")) is True
 
 
 def test_intake_path_allowed_with_root(monkeypatch: MonkeyPatch, tmp_path) -> None:
-    from framekit.web.modules import _intake_path_allowed
+    from ouro.web.modules import _intake_path_allowed
     monkeypatch.setattr(
-        "framekit.web.modules._intake_allowed_roots",
+        "ouro.web.modules._intake_allowed_roots",
         lambda: [tmp_path.resolve()],
     )
     assert _intake_path_allowed((tmp_path / "release").resolve()) is True
@@ -1778,7 +1778,7 @@ def test_intake_path_allowed_with_root(monkeypatch: MonkeyPatch, tmp_path) -> No
 
 
 def test_verify_intake_token_constant_time(monkeypatch: MonkeyPatch) -> None:
-    from framekit.web.modules import verify_intake_token
+    from ouro.web.modules import verify_intake_token
 
     class _FakeVault:
         def retrieve(self, key, default=None):
@@ -1790,26 +1790,26 @@ def test_verify_intake_token_constant_time(monkeypatch: MonkeyPatch) -> None:
         def get_vault(self):
             return _FakeVault()
 
-    monkeypatch.setattr("framekit.web.modules.Settings", _FakeSettings)
+    monkeypatch.setattr("ouro.web.modules.Settings", _FakeSettings)
     assert verify_intake_token("src1", "correct-token") is True
     assert verify_intake_token("src1", "wrong-token") is False
     assert verify_intake_token("unknown", "anything") is False
 
 
 def test_submit_intake_release_unknown_source(monkeypatch: MonkeyPatch) -> None:
-    from framekit.web.modules import submit_intake_release
-    monkeypatch.setattr("framekit.web.modules._load_intake_sources", lambda: [])
+    from ouro.web.modules import submit_intake_release
+    monkeypatch.setattr("ouro.web.modules._load_intake_sources", lambda: [])
     with pytest.raises(ValueError, match="Unknown intake source"):
         submit_intake_release("nonexistent", "/tmp/path")
 
 
 def test_submit_intake_release_disabled_source(monkeypatch: MonkeyPatch) -> None:
-    from framekit.web.modules import submit_intake_release, IntakeSource
+    from ouro.web.modules import submit_intake_release, IntakeSource
     source = IntakeSource(
         id="1", name="Disabled", source_id="dis", enabled=False,
         default_preset=None, created_at="2026-01-01T00:00:00Z",
     )
-    monkeypatch.setattr("framekit.web.modules._load_intake_sources", lambda: [source])
+    monkeypatch.setattr("ouro.web.modules._load_intake_sources", lambda: [source])
     with pytest.raises(ValueError, match="disabled"):
         submit_intake_release("dis", "/tmp/path")
 
@@ -1820,7 +1820,7 @@ def test_inspect_json_outputs_valid_json_on_missing_path() -> None:
     """inspect --json with nonexistent path prints {"error": "..."} — valid JSON, exit 1."""
     import json as _json
     from click.testing import CliRunner
-    from framekit.commands.inspect import inspect_command
+    from ouro.commands.inspect import inspect_command
 
     runner = CliRunner()
     result = runner.invoke(inspect_command, ["--json", "/nonexistent/path/that/does/not/exist"])
@@ -1833,7 +1833,7 @@ def test_validate_json_outputs_valid_json(tmp_path, monkeypatch: MonkeyPatch) ->
     """validate --json prints a valid JSON object regardless of validation outcome."""
     import json as _json
     from click.testing import CliRunner
-    from framekit.commands.validate import validate_command
+    from ouro.commands.validate import validate_command
 
     class _Severity:
         value = "error"
@@ -1859,7 +1859,7 @@ def test_validate_json_outputs_valid_json(tmp_path, monkeypatch: MonkeyPatch) ->
         def validate(self, path):  # noqa: ARG002
             return _Result()
 
-    monkeypatch.setattr("framekit.commands.validate.ValidationService", _ServiceStub)
+    monkeypatch.setattr("ouro.commands.validate.ValidationService", _ServiceStub)
 
     runner = CliRunner()
     result = runner.invoke(validate_command, ["--json", str(tmp_path)])

@@ -10,12 +10,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from framekit.commands.setup import (
+from ouro.commands.setup import (
     _deep_merge_defaults,
     _ensure_setup_shape,
     _load_settings_with_defaults,
 )
-from framekit.core.settings import DEFAULT_SETTINGS
+from ouro.core.settings import DEFAULT_SETTINGS
 
 
 class TestLegacyConfigMigration:
@@ -72,7 +72,7 @@ class TestLegacyConfigMigration:
         Schema v12 dropped ``tmdb_api_key`` entirely. ``_ensure_setup_shape``
         only fills missing defaults — it must not add the removed key back.
         Stripping of legacy values from a v11 payload is the job of
-        ``framekit.core.settings._migrate_legacy_settings`` and is exercised
+        ``ouro.core.settings._migrate_legacy_settings`` and is exercised
         in ``tests/test_settings_migration.py``.
         """
         result = _ensure_setup_shape({"metadata": {"provider": "tmdb"}})
@@ -284,7 +284,7 @@ class TestModuleDefaults:
 class TestSettingsStoreIntegration:
     """Test integration with SettingsStore."""
 
-    @patch("framekit.commands.setup.SettingsStore")
+    @patch("ouro.commands.setup.SettingsStore")
     def test_load_with_defaults_empty_store(self, mock_store_class: Mock):
         """Test loading from empty settings store."""
         mock_store = Mock()
@@ -298,7 +298,7 @@ class TestSettingsStoreIntegration:
         assert "setup" in result
         assert "modules" in result
 
-    @patch("framekit.commands.setup.SettingsStore")
+    @patch("ouro.commands.setup.SettingsStore")
     def test_load_with_defaults_partial_store(self, mock_store_class: Mock):
         """Test loading from partially populated store."""
         mock_store = Mock()
@@ -316,7 +316,7 @@ class TestSettingsStoreIntegration:
         assert "setup" in result
         assert "modules" in result
 
-    @patch("framekit.commands.setup.SettingsStore")
+    @patch("ouro.commands.setup.SettingsStore")
     def test_load_with_defaults_complete_store(self, mock_store_class: Mock):
         """Test loading from complete settings store."""
         complete_config = {

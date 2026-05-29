@@ -5,8 +5,8 @@
 ## Dev setup
 
 ```bash
-git clone https://github.com/astrve/framekit.git
-cd framekit
+git clone https://github.com/astrve/ouro.git
+cd ouro
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
@@ -70,10 +70,10 @@ pytest
 
 ## Adding a new module
 
-1. Create `src/framekit/modules/<name>/` with `__init__.py`, `config.py`, `service.py`
-2. Create `src/framekit/commands/<name>.py` with a Click command
-3. Register the command in `src/framekit/commands/main.py`
-4. Add a pipeline step in `src/framekit/commands/pipeline_steps.py`
+1. Create `src/ouro/modules/<name>/` with `__init__.py`, `config.py`, `service.py`
+2. Create `src/ouro/commands/<name>.py` with a Click command
+3. Register the command in `src/ouro/commands/main.py`
+4. Add a pipeline step in `src/ouro/commands/pipeline_steps.py`
 5. Add documentation in `docs/modules/<Name>.md`
 6. Update `docs/Home.md` module table
 7. Update `mkdocs.yml` nav
@@ -82,7 +82,7 @@ pytest
 
 ## Adding a new BBCode template
 
-1. Create `src/framekit/templates/prez/bbcode/<name>.en.jinja2`
+1. Create `src/ouro/templates/prez/bbcode/<name>.en.jinja2`
 2. Optionally add `<name>.fr.jinja2` and `<name>.es.jinja2`
 3. Use the banner pattern for each section header:
    ```jinja2
@@ -104,10 +104,10 @@ pytest
 
 ## Reporting issues
 
-[GitHub Issues](https://github.com/astrve/framekit/issues)
+[GitHub Issues](https://github.com/astrve/ouro/issues)
 
 Include:
-- Framekit version (`fk --version`)
+- Ouro version (`ouro --version`)
 - OS and Python version
 - Full command run
-- Complete error output (or `fk logs --last`)
+- Complete error output (or `ouro logs --last`)

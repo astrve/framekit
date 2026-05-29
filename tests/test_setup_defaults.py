@@ -11,14 +11,14 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from framekit.commands.setup import (
+from ouro.commands.setup import (
     _deep_merge_defaults,
     _ensure_setup_shape,
     _load_settings_with_defaults,
     _strip_wrapping_quotes,
     _workspace_paths,
 )
-from framekit.core.settings import DEFAULT_SETTINGS
+from ouro.core.settings import DEFAULT_SETTINGS
 
 
 class TestDefaultMerging:
@@ -217,7 +217,7 @@ class TestSetupShapeEnsuring:
 class TestSettingsLoading:
     """Test settings loading with defaults."""
 
-    @patch("framekit.commands.setup.SettingsStore")
+    @patch("ouro.commands.setup.SettingsStore")
     def test_load_settings_with_defaults_empty(self, mock_store_class: Mock):
         """Test loading when no settings exist."""
         mock_store = Mock()
@@ -231,7 +231,7 @@ class TestSettingsLoading:
         assert "setup" in result
         assert "modules" in result
 
-    @patch("framekit.commands.setup.SettingsStore")
+    @patch("ouro.commands.setup.SettingsStore")
     def test_load_settings_with_defaults_existing(self, mock_store_class: Mock):
         """Test loading with existing settings."""
         mock_store = Mock()
@@ -289,7 +289,7 @@ class TestStringUtilities:
 class TestWorkspacePaths:
     """Test workspace path generation."""
 
-    @patch("framekit.commands.setup.get_config_dir")
+    @patch("ouro.commands.setup.get_config_dir")
     def test_workspace_paths_generation(self, mock_get_config: Mock, tmp_path: Path):
         """Test generating workspace paths."""
         mock_get_config.return_value = tmp_path / "config"
@@ -300,7 +300,7 @@ class TestWorkspacePaths:
         assert appdata == tmp_path / "config" / "Workspace" / "TestFolder"
         assert project == project_root / "Workspace" / "TestFolder"
 
-    @patch("framekit.commands.setup.get_config_dir")
+    @patch("ouro.commands.setup.get_config_dir")
     def test_workspace_paths_different_folders(self, mock_get_config: Mock, tmp_path: Path):
         """Test generating paths for different folder names."""
         mock_get_config.return_value = tmp_path / "config"

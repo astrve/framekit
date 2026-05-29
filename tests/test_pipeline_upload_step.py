@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from framekit.commands import pipeline_steps
+from ouro.commands import pipeline_steps
 
 
 def _make_release_parse_result():
@@ -32,8 +32,8 @@ def test_upload_step_returns_failure_when_all_uploads_fail(monkeypatch, tmp_path
     torrent_path = tmp_path / "release.torrent"
     torrent_path.write_bytes(b"torrent-bytes")
 
-    import framekit.modules.upload.metadata_extractor as metadata_extractor
-    import framekit.modules.upload.service as upload_service
+    import ouro.modules.upload.metadata_extractor as metadata_extractor
+    import ouro.modules.upload.service as upload_service
 
     monkeypatch.setattr(
         metadata_extractor.ReleaseParser,
@@ -67,8 +67,8 @@ def test_upload_step_returns_success_when_at_least_one_upload_succeeds(monkeypat
     torrent_path = tmp_path / "release.torrent"
     torrent_path.write_bytes(b"torrent-bytes")
 
-    import framekit.modules.upload.metadata_extractor as metadata_extractor
-    import framekit.modules.upload.service as upload_service
+    import ouro.modules.upload.metadata_extractor as metadata_extractor
+    import ouro.modules.upload.service as upload_service
 
     monkeypatch.setattr(
         metadata_extractor.ReleaseParser,

@@ -13,16 +13,16 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from framekit.core.models.screenshot import (  # noqa: E402
+from ouro.core.models.screenshot import (  # noqa: E402
     ScreenshotConfig,
     ScreenshotMetadata,
     ScreenshotReport,
     ScreenshotResult,
 )
-from framekit.core.tools import ToolRegistry  # noqa: E402
-from framekit.modules.screenshot.analyzer import FrameAnalyzer  # noqa: E402
-from framekit.modules.screenshot.extractor import ScreenshotExtractor  # noqa: E402
-from framekit.modules.screenshot.service import ScreenshotService  # noqa: E402
+from ouro.core.tools import ToolRegistry  # noqa: E402
+from ouro.modules.screenshot.analyzer import FrameAnalyzer  # noqa: E402
+from ouro.modules.screenshot.extractor import ScreenshotExtractor  # noqa: E402
+from ouro.modules.screenshot.service import ScreenshotService  # noqa: E402
 
 
 class TestScreenshotService:
@@ -87,8 +87,8 @@ class TestScreenshotService:
     def test_initialization_without_dependencies(self, mock_registry):
         """Test service initialization creates default dependencies."""
         with (
-            patch("framekit.modules.screenshot.service.FrameAnalyzer") as mock_analyzer_cls,
-            patch("framekit.modules.screenshot.service.ScreenshotExtractor") as mock_extractor_cls,
+            patch("ouro.modules.screenshot.service.FrameAnalyzer") as mock_analyzer_cls,
+            patch("ouro.modules.screenshot.service.ScreenshotExtractor") as mock_extractor_cls,
         ):
             service = ScreenshotService()
 

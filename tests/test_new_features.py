@@ -10,7 +10,7 @@ class TestValidateModule:
 
     def test_validation_service_import(self):
         """Test ValidationService imports cleanly."""
-        from framekit.modules.validate.service import (
+        from ouro.modules.validate.service import (
             ValidationRules,
             ValidationService,
         )
@@ -20,7 +20,7 @@ class TestValidateModule:
 
     def test_builtin_rulesets_exist(self):
         """Test builtin rulesets are registered."""
-        from framekit.modules.validate.rules import BUILTIN_RULESETS
+        from ouro.modules.validate.rules import BUILTIN_RULESETS
 
         assert "default" in BUILTIN_RULESETS
         assert "strict" in BUILTIN_RULESETS
@@ -28,15 +28,15 @@ class TestValidateModule:
 
     def test_validate_command_registered(self):
         """Test validate command is registered in CLI."""
-        from framekit.commands.main import cli
+        from ouro.commands.main import cli
 
         cmd = cli.get_command(None, "validate")
         assert cmd is not None
 
     def test_validation_empty_folder(self, tmp_path):
         """Test validation on empty folder produces error."""
-        from framekit.modules.validate.rules import BUILTIN_RULESETS
-        from framekit.modules.validate.service import ValidationService
+        from ouro.modules.validate.rules import BUILTIN_RULESETS
+        from ouro.modules.validate.service import ValidationService
 
         rules = BUILTIN_RULESETS["default"]
         service = ValidationService(rules=rules)
@@ -50,20 +50,20 @@ class TestProfileModule:
 
     def test_profile_group_import(self):
         """Test profile_group imports cleanly."""
-        from framekit.commands.profile import profile_group
+        from ouro.commands.profile import profile_group
 
         assert profile_group is not None
 
     def test_profile_group_registered(self):
         """Test profile group is in CLI."""
-        from framekit.commands.main import cli
+        from ouro.commands.main import cli
 
         cmd = cli.get_command(None, "profile")
         assert cmd is not None
 
     def test_profiles_service_import(self):
         """Test profiles service imports."""
-        from framekit.core.settings.profiles import (
+        from ouro.core.settings.profiles import (
             list_profiles,
             save_profile,
         )
@@ -77,7 +77,7 @@ class TestPipelineDryRun:
 
     def test_pipeline_context_has_dry_run(self):
         """Test PipelineContext supports dry_run flag."""
-        from framekit.commands.pipeline import PipelineContext
+        from ouro.commands.pipeline import PipelineContext
 
         ctx = PipelineContext(dry_run=True)
         assert ctx.dry_run is True
@@ -87,14 +87,14 @@ class TestPipelineDryRun:
 
     def test_dry_run_option_exists(self):
         """Test --dry-run is a registered pipeline option."""
-        from framekit.commands.pipeline import pipeline_command
+        from ouro.commands.pipeline import pipeline_command
 
         param_names = [p.name for p in pipeline_command.params]
         assert "dry_run" in param_names
 
     def test_encoder_step_dry_run_import(self):
         """Test encoder dry-run step exists."""
-        from framekit.commands.pipeline_steps import _encoder_step_dry_run
+        from ouro.commands.pipeline_steps import _encoder_step_dry_run
 
         assert callable(_encoder_step_dry_run)
 
@@ -104,7 +104,7 @@ class TestCrossSeedTorrent:
 
     def test_bdecode_basic(self):
         """Test bdecoder handles basic types."""
-        from framekit.commands.torrent import _bdecode
+        from ouro.commands.torrent import _bdecode
 
         # Integer
         decoded = _bdecode(b"i42e")
@@ -124,8 +124,8 @@ class TestCrossSeedTorrent:
 
     def test_read_piece_length_from_torrent(self, tmp_path):
         """Test reading piece_length from a .torrent file."""
-        from framekit.commands.torrent import _read_piece_length_from_torrent
-        from framekit.modules.torrent.service import _bencode
+        from ouro.commands.torrent import _read_piece_length_from_torrent
+        from ouro.modules.torrent.service import _bencode
 
         # Create a minimal .torrent file
         meta = {
@@ -145,14 +145,14 @@ class TestCrossSeedTorrent:
 
     def test_read_piece_length_nonexistent(self, tmp_path):
         """Test reading from nonexistent file returns None."""
-        from framekit.commands.torrent import _read_piece_length_from_torrent
+        from ouro.commands.torrent import _read_piece_length_from_torrent
 
         result = _read_piece_length_from_torrent(tmp_path / "nope.torrent")
         assert result is None
 
     def test_cross_seed_option_exists(self):
         """Test --cross-seed is a registered torrent option."""
-        from framekit.commands.torrent import torrent_command
+        from ouro.commands.torrent import torrent_command
 
         param_names = [p.name for p in torrent_command.params]
         assert "cross_seed_torrent" in param_names
@@ -163,14 +163,14 @@ class TestMediainfoDiff:
 
     def test_diff_module_import(self):
         """Test diff module imports cleanly."""
-        from framekit.modules.cleanmkv.diff import build_diff_table, print_diff_for_plans
+        from ouro.modules.cleanmkv.diff import build_diff_table, print_diff_for_plans
 
         assert callable(build_diff_table)
         assert callable(print_diff_for_plans)
 
     def test_diff_option_exists(self):
         """Test --diff is a registered cleanmkv option."""
-        from framekit.commands.cleanmkv import cleanmkv_command
+        from ouro.commands.cleanmkv import cleanmkv_command
 
         param_names = [p.name for p in cleanmkv_command.params]
         assert "show_diff" in param_names
@@ -181,8 +181,8 @@ class TestProviderChain:
 
     def test_provider_chain_search_candidates(self):
         """Test ProviderChain.search_candidates returns full list."""
-        from framekit.core.models.metadata import MetadataCandidate, MetadataLookupRequest
-        from framekit.modules.metadata.chain import ProviderChain
+        from ouro.core.models.metadata import MetadataCandidate, MetadataLookupRequest
+        from ouro.modules.metadata.chain import ProviderChain
 
         mock_provider = MagicMock()
         mock_provider.name = "test"
@@ -207,8 +207,8 @@ class TestProviderChain:
 
     def test_provider_chain_fallback(self):
         """Test chain falls back to second provider on empty results."""
-        from framekit.core.models.metadata import MetadataCandidate, MetadataLookupRequest
-        from framekit.modules.metadata.chain import ProviderChain
+        from ouro.core.models.metadata import MetadataCandidate, MetadataLookupRequest
+        from ouro.modules.metadata.chain import ProviderChain
 
         failing_provider = MagicMock()
         failing_provider.name = "first"
@@ -237,7 +237,7 @@ class TestProviderChain:
 
     def test_build_provider_chain_for_content(self):
         """Test content-type-aware chain building."""
-        from framekit.modules.metadata.factory import build_provider_chain_for_content
+        from ouro.modules.metadata.factory import build_provider_chain_for_content
 
         settings = {
             "metadata": {
@@ -258,7 +258,7 @@ class TestProviderChain:
 
     def test_detect_content_type(self):
         """Test content type detection from release."""
-        from framekit.modules.metadata.workflow import _detect_content_type
+        from ouro.modules.metadata.workflow import _detect_content_type
 
         mock_release = MagicMock()
         mock_release.title = "Some Movie"

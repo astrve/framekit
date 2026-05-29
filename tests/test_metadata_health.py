@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from framekit.modules.metadata.health import HealthMetrics, HealthMonitor, HealthStatus
+from ouro.modules.metadata.health import HealthMetrics, HealthMonitor, HealthStatus
 
 
 def test_health_status_enum():

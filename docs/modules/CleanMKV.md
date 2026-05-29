@@ -7,9 +7,9 @@ Removes unwanted audio and subtitle tracks from MKV files. Operates in-place or 
 ## Usage
 
 ```bash
-fk cleanmkv /path/to/release [OPTIONS]
-fk cleanmkv /path/to/release --preset multi_fr
-fk cleanmkv /path/to/release --output-dir /tmp/cleaned --dry-run
+ouro cleanmkv /path/to/release [OPTIONS]
+ouro cleanmkv /path/to/release --preset multi_fr
+ouro cleanmkv /path/to/release --output-dir /tmp/cleaned --dry-run
 ```
 
 ---
@@ -86,7 +86,7 @@ subtitles:
   remove_all: false
 ```
 
-Store presets in `~/.config/framekit/cleanmkv_presets/` or `./cleanmkv_presets/`.
+Store presets in `~/.config/ouro/cleanmkv_presets/` or `./cleanmkv_presets/`.
 
 ---
 
