@@ -281,7 +281,7 @@ export function HomePage() {
             )}
           </h2>
           <Link
-            to="/modules"
+            to="/jobs"
             className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
             All jobs →
@@ -324,7 +324,7 @@ export function HomePage() {
                   </Badge>
                   {/* TODO H3/H4: link to originating page for pipeline/batch/upload/seedbox */}
                   <Link
-                    to="/modules/$jobId"
+                    to="/jobs/$jobId"
                     params={{ jobId: job.id }}
                     className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                   >
@@ -534,7 +534,7 @@ export function HomePage() {
               </div>
             )}
             <Link
-              to="/modules"
+              to="/jobs"
               className="mt-2 block text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
               View all jobs →
@@ -548,7 +548,7 @@ export function HomePage() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Recent Results</h2>
           <Link
-            to="/modules"
+            to="/jobs"
             className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
             Full history →
@@ -641,7 +641,7 @@ export function HomePage() {
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <Link
-                          to="/modules/$jobId"
+                          to="/jobs/$jobId"
                           params={{ jobId: job.id }}
                           className="text-xs text-muted-foreground opacity-0 underline-offset-2 transition-opacity hover:text-foreground hover:underline group-hover:opacity-100"
                         >

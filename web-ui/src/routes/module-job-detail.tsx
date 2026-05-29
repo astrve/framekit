@@ -43,7 +43,7 @@ function formatDuration(startedAt: string | null | undefined, finishedAt: string
 }
 
 export function ModuleJobDetailPage() {
-  const { jobId } = useParams({ from: "/modules/$jobId" });
+  const { jobId } = useParams({ from: "/jobs/$jobId" });
   const [copied, setCopied] = useState(false);
   const [followLogs, setFollowLogs] = useState(true);
   const [logFilter, setLogFilter] = useState("");
@@ -100,7 +100,7 @@ export function ModuleJobDetailPage() {
         <p className="mt-1 text-sm text-muted-foreground">{jobId}</p>
         <div className="mt-3">
           <Button asChild variant="outline">
-            <Link to="/modules">Back To Modules</Link>
+            <Link to="/jobs">Back To Modules</Link>
           </Button>
         </div>
       </section>
@@ -147,6 +147,10 @@ export function ModuleJobDetailPage() {
                 <p>Finished: {formatTime(job.finished_at)}</p>
                 <p>Duration: {formatDuration(job.started_at, job.finished_at)}</p>
                 <p>Module: {String(job.request["module"] ?? "-")}</p>
+                <p>Attempts: {job.attempts}/{job.max_attempts}</p>
+                <p>Retryable: {job.retryable ? "yes" : "no"}</p>
+                <p>Last failure: {job.last_failure_kind ?? "-"}</p>
+                <p>Next retry: {formatTime(job.next_retry_at)}</p>
               </div>
               {subSteps.length > 0 ? (
                 <div className="space-y-2">

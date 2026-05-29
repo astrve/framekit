@@ -223,6 +223,26 @@ export const ModuleJobSchema = z.object({
   origin: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   priority: z.number().optional().default(0),
+  attempts: z.number().optional().default(0),
+  max_attempts: z.number().optional().default(1),
+  next_retry_at: z.string().nullable().optional(),
+  last_failure_kind: z.string().nullable().optional(),
+  retryable: z.boolean().optional().default(false),
+  paused: z.boolean().optional(),
+});
+
+export const QueueCategorySnapshotSchema = z.object({
+  pending: z.number(),
+  paused: z.number(),
+  running: z.number(),
+});
+
+export const QueueSnapshotSchema = z.object({
+  draining: z.boolean(),
+  pending: z.number(),
+  paused: z.number(),
+  running: z.number(),
+  by_category: z.record(z.string(), QueueCategorySnapshotSchema),
 });
 
 export const ModuleJobsListSchema = z.object({
@@ -328,6 +348,15 @@ export const ServiceStatusSchema = z.object({
   heartbeat_at: z.number().nullable(),
   uptime_seconds: z.number().nullable(),
   watcher: ServiceWatcherStateSchema.optional(),
+  draining: z.boolean().optional(),
+  queue: QueueSnapshotSchema.optional(),
+  metrics: z.object({
+    queued: z.number(),
+    running: z.number(),
+    completed: z.number(),
+    failed: z.number(),
+    retried: z.number(),
+  }).optional(),
 });
 
 export type ServiceWatcherState = z.infer<typeof ServiceWatcherStateSchema>;
@@ -363,6 +392,7 @@ export type UploadHistory = z.infer<typeof UploadHistorySchema>;
 export type SeedboxHistory = z.infer<typeof SeedboxHistorySchema>;
 export type RunModuleResult = z.infer<typeof RunModuleResultSchema>;
 export type ModuleJob = z.infer<typeof ModuleJobSchema>;
+export type QueueSnapshot = z.infer<typeof QueueSnapshotSchema>;
 export type LogEntry = z.infer<typeof LogEntrySchema>;
 
 export const LedgerEntrySchema = z.object({

@@ -18,6 +18,7 @@ from framekit.core.auth.models import UserRole, UserStore
 from framekit.core.auth.tokens import TokenError, create_access_token, decode_access_token
 from framekit.core.service.events import (
     emit_service_event,
+    get_service_event_metrics,
     list_service_events_recent,
     wait_for_service_events,
 )
@@ -31,6 +32,7 @@ from framekit.web.modules import (
     RunModuleRequest,
     activate_settings_profile,
     add_alias_entry,
+    add_watch_rule,
     add_torrent_announce_url,
     add_watch_folder,
     create_settings_profile,
@@ -71,6 +73,7 @@ from framekit.web.modules import (
     submit_intake_release,
     list_aliases_summary,
     list_module_jobs,
+    list_queue_snapshot,
     list_modules,
     list_modules_spec,
     list_presets,
@@ -83,16 +86,24 @@ from framekit.web.modules import (
     list_upload_history,
     list_upload_trackers_summary,
     list_watch_folders,
+    list_watch_rules,
     patch_settings_values,
+    patch_watch_rule,
     read_log_lines,
     remove_alias_entry,
     remove_seedbox_profile,
     remove_torrent_announce_url,
     remove_watch_folder,
+    delete_watch_rule,
     rename_torrent_announce_label,
     rerun_module_job,
     run_module_command,
+    request_service_shutdown,
+    resume_module_job,
+    set_module_job_priority,
+    set_service_drain,
     select_torrent_announce_url,
+    pause_module_job,
     set_default_seedbox,
     set_tmdb_token_value,
     set_upload_state,
@@ -190,6 +201,36 @@ class WatchFolderAddRequest(BaseModel):
 
     path: str
     preset: str = "default"
+
+
+class WatchRuleCreateRequest(BaseModel):
+    """Request payload for creating a watch rule."""
+
+    path: str
+    preset: str = "default"
+    enabled: bool = True
+    pattern: str = ""
+
+
+class WatchRulePatchRequest(BaseModel):
+    """Request payload for patching a watch rule."""
+
+    path: str | None = None
+    preset: str | None = None
+    enabled: bool | None = None
+    pattern: str | None = None
+
+
+class JobPriorityRequest(BaseModel):
+    """Request payload for queue priority update."""
+
+    priority: int
+
+
+class ServiceDrainRequest(BaseModel):
+    """Request payload for service drain state."""
+
+    enabled: bool = True
 
 
 class ProfileActivateRequest(BaseModel):
@@ -476,6 +517,9 @@ def create_app() -> FastAPI:
             "started_at": None,
             "heartbeat_at": None,
             "uptime_seconds": None,
+            "draining": list_queue_snapshot().get("draining", False),
+            "queue": list_queue_snapshot(),
+            "metrics": get_service_event_metrics(),
         }
 
         state = ServiceSupervisor(get_service_dir()).read_state()
@@ -509,6 +553,9 @@ def create_app() -> FastAPI:
             "heartbeat_at": heartbeat_at,
             "uptime_seconds": uptime,
             "watcher": get_embedded_watcher_state(),
+            "draining": list_queue_snapshot().get("draining", False),
+            "queue": list_queue_snapshot(),
+            "metrics": get_service_event_metrics(),
         }
 
     @app.post("/api/v1/service/reload")
@@ -527,6 +574,14 @@ def create_app() -> FastAPI:
             data={"watcher": get_embedded_watcher_state()},
         )
         return {"ok": True, "watcher": get_embedded_watcher_state()}
+
+    @app.post("/api/v1/service/drain")
+    def service_drain(request: ServiceDrainRequest) -> dict[str, Any]:
+        return set_service_drain(enabled=request.enabled)
+
+    @app.post("/api/v1/service/shutdown")
+    def service_shutdown() -> dict[str, Any]:
+        return request_service_shutdown()
 
     @app.get("/api/v1/events/recent")
     def events_recent(limit: int = 100) -> dict[str, Any]:
@@ -803,6 +858,10 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
         return {"jobs": [item.model_dump() for item in list_module_jobs(limit=limit)]}
 
+    @app.get("/api/v1/jobs/queue")
+    def queue_state() -> dict[str, Any]:
+        return list_queue_snapshot()
+
     @app.get("/api/v1/modules/jobs/{job_id}")
     def get_job(job_id: str) -> dict[str, Any]:
         job = get_module_job(job_id)
@@ -824,6 +883,36 @@ def create_app() -> FastAPI:
     @app.post("/api/v1/modules/jobs/{job_id}/rerun")
     def rerun_job(job_id: str) -> dict[str, Any]:
         job = rerun_module_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job.model_dump()
+
+    @app.post("/api/v1/jobs/{job_id}/priority")
+    def set_job_priority(job_id: str, request: JobPriorityRequest) -> dict[str, Any]:
+        try:
+            job = set_module_job_priority(job_id, request.priority)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job.model_dump()
+
+    @app.post("/api/v1/jobs/{job_id}/pause")
+    def pause_job(job_id: str) -> dict[str, Any]:
+        try:
+            job = pause_module_job(job_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job.model_dump()
+
+    @app.post("/api/v1/jobs/{job_id}/resume")
+    def resume_job(job_id: str) -> dict[str, Any]:
+        try:
+            job = resume_module_job(job_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
         return job.model_dump()
@@ -947,6 +1036,46 @@ def create_app() -> FastAPI:
     def watch_folders_remove(index: int) -> dict[str, Any]:
         try:
             return {"folders": remove_watch_folder(index)}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/v1/watch/rules")
+    def watch_rules_list() -> dict[str, Any]:
+        return {"rules": list_watch_rules()}
+
+    @app.post("/api/v1/watch/rules")
+    def watch_rules_add(request: WatchRuleCreateRequest) -> dict[str, Any]:
+        try:
+            return {
+                "rules": add_watch_rule(
+                    request.path,
+                    preset=request.preset,
+                    enabled=request.enabled,
+                    pattern=request.pattern,
+                )
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.patch("/api/v1/watch/rules/{rule_id}")
+    def watch_rules_patch(rule_id: str, request: WatchRulePatchRequest) -> dict[str, Any]:
+        try:
+            return {
+                "rules": patch_watch_rule(
+                    rule_id,
+                    path=request.path,
+                    preset=request.preset,
+                    enabled=request.enabled,
+                    pattern=request.pattern,
+                )
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/v1/watch/rules/{rule_id}")
+    def watch_rules_delete(rule_id: str) -> dict[str, Any]:
+        try:
+            return {"rules": delete_watch_rule(rule_id)}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

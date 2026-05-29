@@ -486,6 +486,58 @@ def test_modules_jobs_rerun_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert payload["status"] == "pending"
 
 
+def test_jobs_queue_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "framekit.web.app.list_queue_snapshot",
+        lambda: {"draining": False, "pending": 2, "paused": 1, "running": 1, "by_category": {"transform": {"pending": 2, "paused": 1, "running": 1}}},
+    )
+    client = TestClient(create_app())
+    response = client.get("/api/v1/jobs/queue")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["pending"] == 2
+    assert payload["paused"] == 1
+
+
+def test_jobs_priority_pause_resume_endpoints(monkeypatch: MonkeyPatch) -> None:
+    class JobStub:
+        def __init__(self, job_id: str, priority: int, paused: bool) -> None:
+            self.id = job_id
+            self.priority = priority
+            self.paused = paused
+
+        def model_dump(self) -> dict[str, object]:
+            return {
+                "id": self.id,
+                "status": "pending",
+                "created_at": "2026-05-24T16:00:00+00:00",
+                "started_at": None,
+                "finished_at": None,
+                "request": {"module": "inspect"},
+                "result": None,
+                "error": None,
+                "priority": self.priority,
+                "paused": self.paused,
+            }
+
+    monkeypatch.setattr("framekit.web.app.set_module_job_priority", lambda job_id, priority: JobStub(job_id, priority, False))
+    monkeypatch.setattr("framekit.web.app.pause_module_job", lambda job_id: JobStub(job_id, 5, True))
+    monkeypatch.setattr("framekit.web.app.resume_module_job", lambda job_id: JobStub(job_id, 5, False))
+    client = TestClient(create_app())
+
+    priority_response = client.post("/api/v1/jobs/job-1/priority", json={"priority": 5})
+    assert priority_response.status_code == 200
+    assert priority_response.json()["priority"] == 5
+
+    pause_response = client.post("/api/v1/jobs/job-1/pause")
+    assert pause_response.status_code == 200
+    assert pause_response.json()["paused"] is True
+
+    resume_response = client.post("/api/v1/jobs/job-1/resume")
+    assert resume_response.status_code == 200
+    assert resume_response.json()["paused"] is False
+
+
 def test_provider_token_get_endpoint(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         "framekit.web.app.get_provider_token_value",
@@ -1117,6 +1169,48 @@ def test_service_status_running_includes_watcher_state(monkeypatch: MonkeyPatch)
     assert watcher["last_error"] is None
 
 
+def test_service_status_includes_metrics_and_queue(monkeypatch: MonkeyPatch) -> None:
+    import os
+    import time
+
+    now = time.time()
+    monkeypatch.setattr(
+        "framekit.core.service.supervisor.ServiceSupervisor.read_state",
+        lambda self: {
+            "status": "running",
+            "pid": os.getpid(),
+            "started_at": now - 5.0,
+            "heartbeat_at": now - 1.0,
+        },
+    )
+    monkeypatch.setattr("framekit.web.app.get_service_event_metrics", lambda: {"queued": 1, "running": 2, "completed": 3, "failed": 4, "retried": 5})
+    monkeypatch.setattr("framekit.web.app.list_queue_snapshot", lambda: {"draining": False, "pending": 1, "paused": 0, "running": 2, "by_category": {}})
+    client = TestClient(create_app())
+    response = client.get("/api/v1/service/status")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["metrics"]["queued"] == 1
+    assert payload["queue"]["running"] == 2
+
+
+def test_service_drain_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr("framekit.web.app.set_service_drain", lambda enabled: {"draining": enabled, "pending": 0, "paused": 0, "running": 0, "by_category": {}})
+    client = TestClient(create_app())
+    response = client.post("/api/v1/service/drain", json={"enabled": True})
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["draining"] is True
+
+
+def test_service_shutdown_endpoint(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr("framekit.web.app.request_service_shutdown", lambda: {"scheduled": True, "already_requested": False})
+    client = TestClient(create_app())
+    response = client.post("/api/v1/service/shutdown")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["scheduled"] is True
+
+
 def test_get_embedded_watcher_state_no_watcher() -> None:
     """get_embedded_watcher_state returns stopped state when no watcher is active."""
     import framekit.web.modules as mod
@@ -1166,6 +1260,71 @@ def test_watch_service_status_endpoint(monkeypatch: MonkeyPatch) -> None:
     assert response.status_code == 200
     assert payload["status"] == "stopped"
     assert payload["pid"] is None
+
+
+def test_watch_rules_crud_endpoints(monkeypatch: MonkeyPatch) -> None:
+    rules_store = [
+        {"id": "rule-1", "path": "C:/watch/a", "preset": "default", "enabled": True, "pattern": ""},
+    ]
+
+    monkeypatch.setattr("framekit.web.app.list_watch_rules", lambda: list(rules_store))
+
+    def _add(path: str, preset: str = "default", enabled: bool = True, pattern: str = "") -> list[dict[str, object]]:
+        rules_store.append(
+            {
+                "id": "rule-2",
+                "path": path,
+                "preset": preset,
+                "enabled": enabled,
+                "pattern": pattern,
+            }
+        )
+        return list(rules_store)
+
+    def _patch(
+        rule_id: str,
+        *,
+        path: str | None = None,
+        preset: str | None = None,
+        enabled: bool | None = None,
+        pattern: str | None = None,
+    ) -> list[dict[str, object]]:
+        for item in rules_store:
+            if item["id"] == rule_id:
+                if path is not None:
+                    item["path"] = path
+                if preset is not None:
+                    item["preset"] = preset
+                if enabled is not None:
+                    item["enabled"] = enabled
+                if pattern is not None:
+                    item["pattern"] = pattern
+        return list(rules_store)
+
+    def _delete(rule_id: str) -> list[dict[str, object]]:
+        rules_store[:] = [item for item in rules_store if item["id"] != rule_id]
+        return list(rules_store)
+
+    monkeypatch.setattr("framekit.web.app.add_watch_rule", _add)
+    monkeypatch.setattr("framekit.web.app.patch_watch_rule", _patch)
+    monkeypatch.setattr("framekit.web.app.delete_watch_rule", _delete)
+
+    client = TestClient(create_app())
+    list_response = client.get("/api/v1/watch/rules")
+    assert list_response.status_code == 200
+    assert len(list_response.json()["rules"]) == 1
+
+    add_response = client.post("/api/v1/watch/rules", json={"path": "C:/watch/b", "preset": "multi_fr", "enabled": True, "pattern": ".*mkv$"})
+    assert add_response.status_code == 200
+    assert len(add_response.json()["rules"]) == 2
+
+    patch_response = client.patch("/api/v1/watch/rules/rule-2", json={"enabled": False})
+    assert patch_response.status_code == 200
+    assert patch_response.json()["rules"][1]["enabled"] is False
+
+    delete_response = client.delete("/api/v1/watch/rules/rule-2")
+    assert delete_response.status_code == 200
+    assert len(delete_response.json()["rules"]) == 1
 
 
 def test_watch_service_start_enqueues_watch_module_job(monkeypatch: MonkeyPatch) -> None:

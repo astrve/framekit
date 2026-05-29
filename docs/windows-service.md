@@ -3,6 +3,9 @@
 Run Framekit as a persistent background process on Windows so the Web UI
 is available after login without keeping a terminal open.
 
+For full cross-platform operations (backup/restore, intake token lifecycle,
+drain/shutdown queue controls), see `docs/service-ops-runbook.md`.
+
 ---
 
 ## 1. Prerequisites

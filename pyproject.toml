@@ -153,6 +153,9 @@ include-package-data = true
 where = ["src"]
 include = ["framekit*"]
 
+[tool.setuptools.cmdclass]
+build_py = "framekit._build.FramekitBuildPy"
+
 [tool.setuptools.package-data]
 "framekit" = [
   "py.typed",

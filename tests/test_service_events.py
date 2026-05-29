@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from threading import Thread
 from time import sleep
 
@@ -47,3 +48,28 @@ def test_wait_for_service_events_returns_new_events() -> None:
     assert emitted.get("id")
     assert any(item["id"] == emitted["id"] for item in batch)
 
+
+def test_service_events_persisted_history_and_fallback(monkeypatch, tmp_path) -> None:
+    import framekit.core.service.events as service_events
+
+    history_path = tmp_path / "events.ndjson"
+    monkeypatch.setattr(service_events, "_service_events_path", lambda: history_path)
+    monkeypatch.setattr(service_events, "_service_events_rotated_path", lambda index: tmp_path / f"events.ndjson.{index}")
+
+    emitted = emit_service_event(
+        "test.event.persist",
+        message="Persisted event test",
+        data={"marker": "persist-1"},
+    )
+    assert history_path.exists()
+    lines = history_path.read_text(encoding="utf-8").strip().splitlines()
+    assert lines
+    parsed = json.loads(lines[-1])
+    assert parsed["id"] == emitted["id"]
+
+    # Clear in-memory ring to force disk fallback.
+    with service_events._EVENT_BUS._condition:  # noqa: SLF001 - test-only access
+        service_events._EVENT_BUS._events.clear()  # noqa: SLF001 - test-only access
+    recent = list_service_events_recent(1)
+    assert recent
+    assert recent[-1]["id"] == emitted["id"]

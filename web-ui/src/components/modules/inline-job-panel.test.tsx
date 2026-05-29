@@ -65,6 +65,11 @@ function makeJob(overrides: Partial<ModuleJob> = {}): ModuleJob {
     result: null,
     error: null,
     priority: 0,
+    attempts: 0,
+    max_attempts: 1,
+    next_retry_at: null,
+    last_failure_kind: null,
+    retryable: false,
     ...overrides,
   };
 }
@@ -232,7 +237,7 @@ describe("InlineJobPanel", () => {
     });
     render(<InlineJobPanel jobId="job-001" moduleName="renamer" />);
     const link = screen.getByRole("link", { name: /Debug/ });
-    expect(link).toHaveAttribute("href", "/modules/job-001");
+    expect(link).toHaveAttribute("href", "/jobs/job-001");
   });
 
   // ── structured result cards ─────────────────────────────────────────────────

@@ -103,7 +103,7 @@ export function ModuleStudioPage() {
     return (
       <div className="space-y-4">
         <p>Unknown module studio: {module}</p>
-        <Link to="/modules">Retour modules</Link>
+        <Link to="/jobs">Retour modules</Link>
       </div>
     );
   }
@@ -179,7 +179,7 @@ export function ModuleStudioPage() {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  void navigate({ to: "/modules/$jobId", params: { jobId: lastJob.id } });
+                  void navigate({ to: "/jobs/$jobId", params: { jobId: lastJob.id } });
                 }}
               >
                 Ouvrir dernier job

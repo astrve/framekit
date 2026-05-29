@@ -1,5 +1,23 @@
 import { createRoute, createRouter, lazyRouteComponent } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { rootRoute } from "@/routes/root";
+
+function LegacyModulesRedirect() {
+  useEffect(() => {
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (current.startsWith("/modules")) {
+      const next = `/jobs${current.slice("/modules".length)}`;
+      window.location.replace(next || "/jobs");
+      return;
+    }
+    if (current === "/configuration") {
+      window.location.replace("/jobs");
+      return;
+    }
+    window.location.replace("/jobs");
+  }, []);
+  return null;
+}
 
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -15,20 +33,32 @@ const doctorRoute = createRoute({
 
 const modulesRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/modules",
+  path: "/jobs",
   component: lazyRouteComponent(() => import("@/routes/modules"), "ModulesPage"),
 });
 
 const configurationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/configuration",
-  component: lazyRouteComponent(() => import("@/routes/modules"), "ModulesPage"),
+  component: LegacyModulesRedirect,
 });
 
 const moduleJobDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/modules/$jobId",
+  path: "/jobs/$jobId",
   component: lazyRouteComponent(() => import("@/routes/module-job-detail"), "ModuleJobDetailPage"),
+});
+
+const legacyModulesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/modules",
+  component: LegacyModulesRedirect,
+});
+
+const legacyModuleJobDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/modules/$jobId",
+  component: LegacyModulesRedirect,
 });
 
 const settingsSetupRoute = createRoute({
@@ -149,8 +179,10 @@ const routeTree = rootRoute.addChildren([
   homeRoute,
   doctorRoute,
   modulesRoute,
+  legacyModulesRoute,
   configurationRoute,
   moduleJobDetailRoute,
+  legacyModuleJobDetailRoute,
   settingsSetupRoute,
   seedboxRoute,
   uploadRoute,

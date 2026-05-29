@@ -83,11 +83,13 @@ import {
   IntakeReleaseResponseSchema,
   ServiceEventSchema,
   ServiceEventsListSchema,
+  QueueSnapshotSchema,
   type IntakeSource,
   type IntakeSourceList,
   type IntakeReleaseResponse,
   type ServiceEvent,
   type ServiceEventsList,
+  type QueueSnapshot,
 } from "@/lib/api/schemas";
 
 export async function getHealth(): Promise<HealthPayload> {
@@ -267,6 +269,30 @@ export async function listModuleJobs(limit = 20): Promise<{ jobs: ModuleJob[] }>
 
 export async function clearModuleJobs(): Promise<{ deleted: number }> {
   return fetchValidated("/api/v1/modules/jobs", z.object({ deleted: z.number() }), { method: "DELETE" });
+}
+
+export async function getQueueSnapshot(): Promise<QueueSnapshot> {
+  return fetchValidated("/api/v1/jobs/queue", QueueSnapshotSchema);
+}
+
+export async function setQueuePriority(jobId: string, priority: number): Promise<ModuleJob> {
+  return fetchValidated(
+    `/api/v1/jobs/${jobId}/priority`,
+    ModuleJobSchema,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority }),
+    },
+  );
+}
+
+export async function pauseQueueJob(jobId: string): Promise<ModuleJob> {
+  return fetchValidated(`/api/v1/jobs/${jobId}/pause`, ModuleJobSchema, { method: "POST" });
+}
+
+export async function resumeQueueJob(jobId: string): Promise<ModuleJob> {
+  return fetchValidated(`/api/v1/jobs/${jobId}/resume`, ModuleJobSchema, { method: "POST" });
 }
 
 export async function getLogsRead(lines = 200, level?: string): Promise<LogsRead> {
@@ -657,6 +683,26 @@ export async function reloadService(): Promise<{ ok: boolean }> {
   return fetchValidated(
     "/api/v1/service/reload",
     ServiceStatusSchema.pick({ status: true }).extend({ ok: z.boolean(), watcher: ServiceStatusSchema.shape.watcher }),
+    { method: "POST" },
+  );
+}
+
+export async function setServiceDrain(enabled: boolean): Promise<QueueSnapshot> {
+  return fetchValidated(
+    "/api/v1/service/drain",
+    QueueSnapshotSchema.extend({ draining: z.boolean() }),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    },
+  );
+}
+
+export async function shutdownService(): Promise<{ scheduled: boolean; already_requested: boolean }> {
+  return fetchValidated(
+    "/api/v1/service/shutdown",
+    z.object({ scheduled: z.boolean(), already_requested: z.boolean() }),
     { method: "POST" },
   );
 }

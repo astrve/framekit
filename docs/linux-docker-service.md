@@ -3,6 +3,9 @@
 Run Framekit as persistent background service on Linux via systemd user-unit,
 or in Docker with packaged Web UI assets (no npm/runtime Node).
 
+For full operations (backup/restore, intake token lifecycle, queue
+drain/shutdown controls), see `docs/service-ops-runbook.md`.
+
 ---
 
 ## Linux (systemd user service)

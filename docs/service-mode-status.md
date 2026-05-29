@@ -1,7 +1,8 @@
 # Framekit Service Mode — Current Status
 
-Last updated after completing phases S1–S5, production UI serving, packaged
-Web UI static assets, Web UI v1.0 application-first UX (H1–H6), and auth loop fix.
+Last updated after completing phases S1–S5, Web UI H1–H6, Intake UI, Service
+Events/SSE with persisted history, queue controls, watch rules API, CI packaging
+gate, and Retry/Resume Policy v1.
 
 ---
 
@@ -16,11 +17,13 @@ Web UI static assets, Web UI v1.0 application-first UX (H1–H6), and auth loop 
 | H3 | All module pages use `InlineJobPanel`; `DedicatedModuleLauncher` no longer navigates away; dry_run default on for destructive modules; destructive-confirm dialog |
 | H4 | Pipeline, Batch, Upload, Seedbox pages use `InlineJobPanel`; inline result replaces standalone progress card |
 | H5 | Jobs page cleaned up; "Configuration" title removed; pipeline/batch builders removed from jobs page |
-| H6 | Settings accessible from nav; active profile chip; language picker wired |
+| H6 | Settings moved to user menu; active profile chip; language picker wired |
 
 Additional UI work completed:
 - Rollback page (`/rollback`): ledger table, select run, inline job panel
+- Intake page (`/intake`): source list/create/delete, one-time token reveal, copy action, security warning
 - Inspect / Validate: structured result cards from `parsed_payload` JSON output
+- Jobs canonical routes renamed to `/jobs` + `/jobs/:jobId` with legacy `/modules*` redirect
 - Watch session wording corrections
 - Full frontend build: `tsc -b && vite build` clean
 
@@ -31,13 +34,38 @@ Additional UI work completed:
 - Heartbeat thread writes `service.state.json` every 5 s
 - `service.pid` written on start, removed on clean stop
 - `service.lock` prevents duplicate instances
-- DB-first SQLite job claiming: additive schema migration (priority, claimed_by, claimed_at, category, origin, request_hash, attempts); claim-based worker loop replaces ThreadPoolExecutor
+- DB-first SQLite job claiming: additive schema migration (priority, claimed_by, claimed_at, category, origin, request_hash, attempts, max_attempts, next_retry_at, last_failure_kind); claim-based worker loop replaces ThreadPoolExecutor
 - Orphan recovery on restart: claimed rows whose worker is gone are re-enqueued or marked failed
+
+**Retry / Resume Policy v1**
+- Queue jobs support `attempts`, `max_attempts`, `next_retry_at`, `last_failure_kind`
+- Pending jobs survive restart
+- Running orphan jobs follow retry policy:
+  - retryable transient failure path → back to pending with retry schedule
+  - terminal path → failed with explicit failure kind
+- Safe jobs auto-retry transient failures (`timeout`, `spawn_error`, `interrupted_restart`)
+- Destructive apply-mode jobs are never auto-retried (manual rerun only)
+- `retryable` is computed in API responses, not stored in DB
+- Web UI shows retry metadata minimally (attempts/retry time/failure kind)
+
+**Queue controls + drain/shutdown**
+- `GET /api/v1/jobs/queue` returns pending/paused/running counts with per-category split
+- `POST /api/v1/jobs/{id}/priority` updates pending job priority
+- `POST /api/v1/jobs/{id}/pause` and `POST /api/v1/jobs/{id}/resume` control queue-level execution
+- `POST /api/v1/service/drain` toggles drain mode (new jobs rejected while active)
+- `POST /api/v1/service/shutdown` schedules graceful process shutdown after running jobs complete
+- Claim query skips paused jobs and honors category concurrency limits from `settings.service.category_concurrency`
 
 **S1c — Embedded watcher**
 - `WatcherService` runs as a supervised in-process thread inside `framekit serve`
 - File detection → job enqueue pipeline; no 7 200 s timeout workaround
 - Watch folder reconciliation on settings reload
+- Watch rules API added:
+  - `GET /api/v1/watch/rules`
+  - `POST /api/v1/watch/rules`
+  - `PATCH /api/v1/watch/rules/{id}`
+  - `DELETE /api/v1/watch/rules/{id}`
+- Legacy `/api/v1/watch/folders` remains supported and maps to same storage
 
 **S2 — Service status / reload / UI awareness**
 - `GET /api/v1/service/status` returns mode, pid, uptime, subsystem states (watcher, worker, webhook, intake)
@@ -72,6 +100,7 @@ Additional UI work completed:
 
 **Service events / SSE**
 - In-process event bus/ring buffer implemented (`src/framekit/core/service/events.py`)
+- Persisted history enabled: append-only `service/events.ndjson` with rotation
 - `GET /api/v1/events/recent` implemented with limit validation
 - `GET /api/v1/events/stream` implemented (`text/event-stream`, initial connected comment, keepalive ping, graceful disconnect)
 - Lifecycle events emitted from service/job/watch/intake paths
@@ -101,11 +130,17 @@ Additional UI work completed:
 
 - Root `package.json` now has `build`, `dev`, `typecheck` scripts proxied to `web-ui/`
 - `npm run build` from repo root builds frontend and syncs static files into package path
+- CI gating job added for service/web packaging:
+  - `npm run build`
+  - targeted service/web tests
+  - `uv build --sdist --wheel`
+  - wheel smoke install + `framekit serve` + `/healthz` + index check
+- Pytest diagnostic CI job added (non-blocking): collect order + durations + tracemalloc subset
 
 ### Validation caveat (current runner)
 
 - Full `uv run pytest tests/ -q` is interrupted by external `KeyboardInterrupt` (code 137)
-- Targeted static-serving tests pass
+- Targeted service/events/queue/watch/intake tests pass
 - `npm run build` passes
 - `uv build --sdist --wheel` passes
 
@@ -145,6 +180,9 @@ framekit service stop
 framekit service uninstall
 ```
 
+Cross-platform operations runbook:
+- `docs/service-ops-runbook.md`
+
 ---
 
 ## Known limitations
@@ -156,9 +194,7 @@ framekit service uninstall
 | Linux systemd user service | Requires `systemd --user` session/tools (`systemctl`, `journalctl`) |
 | Docker bind on `0.0.0.0` | Requires auth active (create admin first) due serve non-loopback guard |
 | Token expiry | In-session expiry clears React state softly via DOM event; no toast shown to user |
-| Intake UI | No management page for intake sources in Web UI (API exists, UI not yet built) |
-| Service events/SSE | In-memory ring buffer only; no persisted event history yet |
-| Job retry/resume | `attempts` column in DB; retry policy (max attempts, backoff) not yet wired |
+| Job retry/resume follow-up | Attempt history table optional; intra-module resume not implemented; destructive retry policy remains manual-only |
 
 ---
 
@@ -178,27 +214,17 @@ framekit service uninstall
 
 ### Priority order
 
-1. **Intake UI**
-- Source list page: create source (token shown once), revoke, toggle enabled
-- Intake history table (accepted/rejected, dedup_hit flag)
-- No new backend endpoints needed — all exist under `/api/v1/intake/`
+1. **Attempt history table (optional)**
+- Keep current job table and add separate attempt ledger only if deeper audit/debug is required.
 
-2. **Job retry / resume policy**
-`attempts` column already in DB. Add `max_attempts` setting and per-category
-backoff in the worker loop.
+2. **Intra-module resume (not implemented)**
+- Current policy retries whole job attempts; no partial step resume yet.
 
-3. **Windows smoke checklist / docs polish**
-- Refresh checklist: install, start, status, logs, stop, uninstall
-- Keep docs aligned with current task-mode quoting and logging behavior
+3. **Destructive retry policy stays manual-only**
+- Keep auto-retry disabled for destructive apply-mode jobs unless policy changes are explicitly approved.
 
-4. **Linux service hardening**
-- Broader smoke checklist for `systemctl --user` lifecycle on multiple distros
-- Optional fallback UX when `systemd --user` unavailable
-- Container auth/bootstrap ergonomics improvements
-
-5. **Events persistence/history (optional)**
-- Keep current SSE contract; add persistence only if history requirements grow
-- Candidate scope: append-only event log + bounded history API
+4. **Runner stability (`code 137`)**
+- Continue diagnosing external KeyboardInterrupt in full-suite runs; targeted suites are currently stable.
 
 ---
 
@@ -208,7 +234,6 @@ backoff in the worker loop.
 |---|---|
 | Global handoff | `docs/codex-handoff.md` |
 | Linux/Docker service | `docs/linux-docker-service.md`, `src/framekit/core/service/linux.py`, `src/framekit/commands/service.py`, `Dockerfile`, `docker-compose.service.yml` |
-| Intake UI | `web-ui/src/lib/api/endpoints.ts` (intake fns), `web-ui/src/lib/api/schemas.ts` (`IntakeSource*`) |
-| Events persistence/history (optional) | `SERVICE_MODE_PLAN.md` §8.5, `src/framekit/core/service/events.py`, `src/framekit/web/app.py`, `web-ui/src/routes/events.tsx` |
-| Retry/resume policy | `src/framekit/modules/batch/service.py`, `src/framekit/core/jobs/queue.py` |
+| Queue controls / retry follow-up | `src/framekit/web/modules.py`, `src/framekit/web/app.py`, `tests/test_web_modules_runner.py` |
+| Events persistence/history follow-up | `src/framekit/core/service/events.py`, `src/framekit/web/app.py`, `web-ui/src/routes/events.tsx` |
 | Windows smoke/docs polish | `docs/windows-service.md`, `src/framekit/core/service/windows.py`, `src/framekit/commands/service.py` |

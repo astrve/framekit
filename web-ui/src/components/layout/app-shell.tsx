@@ -16,7 +16,6 @@ import {
   Signal,
   ScrollText,
   Server,
-  Settings,
   ShieldCheck,
   Stethoscope,
   Sun,
@@ -56,7 +55,7 @@ const topNav = [
   { to: "/logs", label: "Logs", icon: ScrollText },
   { to: "/doctor", label: "Diagnostics", icon: Stethoscope },
   { to: "/cli", label: "Terminal", icon: Terminal },
-  { to: "/modules", label: "Jobs", icon: ActivitySquare },
+  { to: "/jobs", label: "Jobs", icon: ActivitySquare },
   { to: "/about", label: "About", icon: Info },
 ] as const;
 
@@ -114,7 +113,7 @@ function FramekitLogo() {
 function ContextualSidebar({ pathname }: { pathname: string }) {
   const isSettings = pathname === "/settings-setup";
   const isPresets = pathname === "/presets";
-  const isModules = pathname === "/modules" || pathname === "/studios" || pathname === "/configuration";
+  const isModules = pathname === "/jobs" || pathname === "/modules" || pathname === "/studios" || pathname === "/configuration";
 
   if (!isSettings && !isPresets && !isModules) return null;
 
@@ -213,6 +212,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hasContextualSidebar =
     pathname === "/settings-setup" ||
     pathname === "/presets" ||
+    pathname === "/jobs" ||
     pathname === "/modules" ||
     pathname === "/studios" ||
     pathname === "/configuration";
@@ -239,7 +239,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "shrink-0 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors whitespace-nowrap",
                   "hover:bg-secondary hover:text-foreground",
-                  pathname === item.to || (item.to === "/modules" && pathname === "/configuration")
+                  pathname === item.to || (item.to === "/jobs" && (pathname === "/configuration" || pathname === "/modules"))
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground",
                 )}
@@ -279,18 +279,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <Link
-              to="/settings-setup"
-              className={cn(
-                "shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                "hover:bg-secondary hover:text-foreground",
-                pathname === "/settings-setup" ? "bg-secondary text-foreground" : "text-muted-foreground",
-              )}
-            >
-              <Settings className="h-3.5 w-3.5" />
-              Settings
-            </Link>
 
             {activeProfile ? (
               <Link

@@ -167,6 +167,11 @@ describe("runTimeline", () => {
       finished_at: null,
       request: {},
       priority: 0,
+      attempts: 0,
+      max_attempts: 1,
+      next_retry_at: null,
+      last_failure_kind: null,
+      retryable: false,
     };
   }
 

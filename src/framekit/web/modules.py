@@ -13,7 +13,7 @@ import sys
 import time as _time_module
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from queue import Empty, SimpleQueue
 from threading import Event, Lock, Semaphore, Thread
@@ -106,6 +106,16 @@ _WORKER_SEMAPHORE = Semaphore(_MAX_CONCURRENT_JOBS)
 _PENDING_SIGNAL = Event()
 _WORKER_INIT_LOCK = Lock()
 _WORKER_THREAD: Thread | None = None
+_DRAIN_MODE = Event()
+_SHUTDOWN_REQUESTED = Event()
+
+_DEFAULT_CATEGORY_LIMITS: dict[str, int] = {
+    "transform": 2,
+    "upload": 1,
+    "transfer": 1,
+    "inspect": 1,
+    "uncategorized": _MAX_CONCURRENT_JOBS,
+}
 
 _MODULE_SPEC_CACHE: dict[str, Any] | None = None
 _MODULE_SPEC_CACHE_LOCK = Lock()
@@ -208,6 +218,12 @@ class ModuleJob(BaseModel):
     origin: str | None = None
     category: str | None = None
     priority: int = 0
+    attempts: int = 0
+    max_attempts: int = 1
+    next_retry_at: str | None = None
+    last_failure_kind: str | None = None
+    retryable: bool = False
+    paused: bool = False
 
 
 class IntakeSource(BaseModel):
@@ -292,6 +308,143 @@ def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _retry_backoff_seconds(attempts: int) -> int:
+    """Return retry delay in seconds from current attempts count."""
+    if attempts <= 1:
+        return 5
+    if attempts == 2:
+        return 15
+    return 30
+
+
+def _effective_retry_safe(module: str, request: RunModuleRequest) -> bool:
+    spec = MODULE_INDEX.get(module)
+    if spec is None:
+        return False
+    if not spec.destructive:
+        return True
+    return bool(request.dry_run and spec.supports_dry_run)
+
+
+def _initial_max_attempts(request: RunModuleRequest) -> int:
+    return 3 if _effective_retry_safe(request.module, request) else 1
+
+
+def _next_retry_at_from_attempts(attempts: int) -> str:
+    delay = _retry_backoff_seconds(attempts)
+    return (datetime.now(UTC) + timedelta(seconds=delay)).isoformat()
+
+
+def _compute_retryable(job: ModuleJob) -> bool:
+    if job.status not in {"pending", "running"}:
+        return False
+    if job.attempts >= job.max_attempts:
+        return False
+    return _effective_retry_safe(job.request.module, job.request)
+
+
+def _classify_failure_kind(
+    *,
+    result: RunModuleResponse | None,
+    cancelled: bool,
+    raised_exc: Exception | None = None,
+) -> str | None:
+    if cancelled:
+        return "cancelled"
+    if raised_exc is not None:
+        return "spawn_error"
+    if result is None:
+        return "spawn_error"
+    if result.returncode == 124:
+        return "timeout"
+    if result.returncode == 130:
+        return "cancelled"
+    if result.returncode != 0:
+        # SafeSubprocessError path in _run_module_command_cancellable returns a synthetic
+        # failure payload. Keep this pattern narrow to avoid classifying regular tool
+        # non-zero exits as spawn failures.
+        if result.stderr.startswith("[spawn_error]"):
+            return "spawn_error"
+        return "exit_nonzero"
+    return None
+
+
+def _failure_kind_retryable(kind: str | None) -> bool:
+    return kind in {"timeout", "spawn_error", "interrupted_restart"}
+
+
+def _should_schedule_retry(job: ModuleJob, failure_kind: str | None) -> bool:
+    if not _failure_kind_retryable(failure_kind):
+        return False
+    if not _effective_retry_safe(job.request.module, job.request):
+        return False
+    return job.attempts < job.max_attempts
+
+
+def _refresh_job_policy_fields(job: ModuleJob) -> ModuleJob:
+    max_attempts = job.max_attempts if job.max_attempts >= 1 else _initial_max_attempts(job.request)
+    refreshed = job.model_copy(update={"max_attempts": max_attempts})
+    return refreshed.model_copy(update={"retryable": _compute_retryable(refreshed)})
+
+
+def _normalize_category(value: str | None) -> str:
+    text = (value or "").strip().lower()
+    return text if text else "uncategorized"
+
+
+def _category_limits_from_settings() -> dict[str, int]:
+    limits = dict(_DEFAULT_CATEGORY_LIMITS)
+    try:
+        store = SettingsStore()
+        settings = store.load()
+        cfg = settings.get("service", {}).get("category_concurrency", {})
+        if isinstance(cfg, dict):
+            for key, raw in cfg.items():
+                normalized = _normalize_category(str(key))
+                try:
+                    parsed = int(raw)
+                except (TypeError, ValueError):
+                    continue
+                limits[normalized] = max(0, parsed)
+    except Exception:
+        pass
+    limits["uncategorized"] = max(0, int(limits.get("uncategorized", _MAX_CONCURRENT_JOBS)))
+    return limits
+
+
+def _running_counts_by_category() -> dict[str, int]:
+    counts: dict[str, int] = {}
+    with _JOBS_LOCK:
+        for job in _JOBS.values():
+            if job.status != "running":
+                continue
+            category = _normalize_category(job.category)
+            counts[category] = counts.get(category, 0) + 1
+    return counts
+
+
+def _pending_counts_by_category() -> dict[str, int]:
+    counts: dict[str, int] = {}
+    with _JOBS_LOCK:
+        for job in _JOBS.values():
+            if job.status != "pending":
+                continue
+            category = _normalize_category(job.category)
+            counts[category] = counts.get(category, 0) + 1
+    return counts
+
+
+def _paused_counts_by_category() -> dict[str, int]:
+    counts: dict[str, int] = {}
+    with _JOBS_LOCK:
+        for job in _JOBS.values():
+            if job.status != "pending" or not job.paused:
+                continue
+            category = _normalize_category(job.category)
+            counts[category] = counts.get(category, 0) + 1
+    return counts
+
+
 def _jobs_db_path() -> Path:
     base = get_cache_dir() / "web"
     base.mkdir(parents=True, exist_ok=True)
@@ -324,13 +477,6 @@ def _init_db() -> None:
             ON web_module_jobs(created_at)
             """
         )
-        # Compound index for the claim query: WHERE status='pending' ORDER BY priority DESC, created_at ASC.
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_web_module_jobs_claim
-            ON web_module_jobs(status, priority, created_at)
-            """
-        )
         # Additive migration: add service columns when upgrading from an older DB.
         # ALTER TABLE ADD COLUMN is idempotent when guarded by the existing-column check.
         existing: set[str] = {
@@ -345,31 +491,87 @@ def _init_db() -> None:
             ("origin",       "TEXT DEFAULT NULL"),
             ("request_hash", "TEXT DEFAULT NULL"),
             ("attempts",     "INTEGER DEFAULT 0"),
+            ("max_attempts", "INTEGER DEFAULT 1"),
+            ("next_retry_at", "TEXT DEFAULT NULL"),
+            ("last_failure_kind", "TEXT DEFAULT NULL"),
+            ("paused", "INTEGER DEFAULT 0"),
         ]
         for col_name, col_def in new_cols:
             if col_name not in existing:
                 conn.execute(
                     f"ALTER TABLE web_module_jobs ADD COLUMN {col_name} {col_def}"
                 )
+        # Compound index for the claim query:
+        #   WHERE status='pending' AND (next_retry_at IS NULL OR next_retry_at <= now)
+        #   ORDER BY priority DESC, created_at ASC
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_module_jobs_claim
+            ON web_module_jobs(status, next_retry_at, priority, created_at)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_module_jobs_retry_window
+            ON web_module_jobs(status, next_retry_at, attempts, max_attempts)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_module_jobs_pending_unpaused
+            ON web_module_jobs(status, paused, priority, created_at)
+            """
+        )
         conn.commit()
 
 
 def _persist_job(job: ModuleJob) -> None:
-    payload_json = job.model_dump_json()
+    payload_json = job.model_dump_json(exclude={"retryable"})
     with _DB_LOCK, _db_connect() as conn:
         conn.execute(
             """
-            INSERT INTO web_module_jobs(id, created_at, status, payload_json, priority, category, origin)
-            VALUES(?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO web_module_jobs(
+                id,
+                created_at,
+                status,
+                payload_json,
+                priority,
+                category,
+                origin,
+                attempts,
+                max_attempts,
+                next_retry_at,
+                last_failure_kind,
+                paused
+            )
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 created_at=excluded.created_at,
                 status=excluded.status,
                 payload_json=excluded.payload_json,
                 priority=excluded.priority,
                 category=excluded.category,
-                origin=excluded.origin
+                origin=excluded.origin,
+                attempts=excluded.attempts,
+                max_attempts=excluded.max_attempts,
+                next_retry_at=excluded.next_retry_at,
+                last_failure_kind=excluded.last_failure_kind,
+                paused=excluded.paused
             """,
-            (job.id, job.created_at, job.status, payload_json, job.priority, job.category, job.origin),
+            (
+                job.id,
+                job.created_at,
+                job.status,
+                payload_json,
+                job.priority,
+                job.category,
+                job.origin,
+                job.attempts,
+                job.max_attempts,
+                job.next_retry_at,
+                job.last_failure_kind,
+                1 if job.paused else 0,
+            ),
         )
         conn.commit()
 
@@ -393,6 +595,7 @@ def _load_jobs_from_db() -> None:
         ).fetchall()
 
     recovered: dict[str, ModuleJob] = {}
+    has_pending = False
     for row in rows:
         try:
             job = ModuleJob.model_validate_json(row["payload_json"])
@@ -400,14 +603,44 @@ def _load_jobs_from_db() -> None:
             logger.warning("Skipping corrupted job row from DB: {}", exc)
             continue
 
-        if job.status in {"pending", "running"}:
-            job = job.model_copy(
-                update={
-                    "status": "failed",
-                    "finished_at": _utc_now(),
-                    "error": "Interrupted by backend restart.",
-                }
-            )
+        # Backfill policy defaults when loading older payload rows.
+        if job.max_attempts < 1:
+            job = job.model_copy(update={"max_attempts": _initial_max_attempts(job.request)})
+        if job.attempts < 0:
+            job = job.model_copy(update={"attempts": 0})
+        if not isinstance(job.paused, bool):
+            job = job.model_copy(update={"paused": False})
+
+        if job.status == "running":
+            interrupted_kind = "interrupted_restart"
+            if _should_schedule_retry(job, interrupted_kind):
+                job = job.model_copy(
+                    update={
+                        "status": "pending",
+                        "next_retry_at": _next_retry_at_from_attempts(job.attempts),
+                        "last_failure_kind": interrupted_kind,
+                        "error": "Interrupted by backend restart. Retry scheduled.",
+                        "paused": False,
+                    }
+                )
+            else:
+                job = job.model_copy(
+                    update={
+                        "status": "failed",
+                        "finished_at": _utc_now(),
+                        "last_failure_kind": interrupted_kind,
+                        "next_retry_at": None,
+                        "error": "Interrupted by backend restart.",
+                        "paused": False,
+                    }
+                )
+        elif job.status == "pending":
+            # Pending jobs survive restart by design.
+            pass
+
+        job = _refresh_job_policy_fields(job)
+        if job.status == "pending":
+            has_pending = True
         recovered[job.id] = job
         _JOB_CANCEL_EVENTS[job.id] = Event()
 
@@ -415,6 +648,9 @@ def _load_jobs_from_db() -> None:
     _JOBS.update(recovered)
     for job in recovered.values():
         _persist_job(job)
+    if has_pending:
+        _ensure_worker_started()
+        _PENDING_SIGNAL.set()
 
 
 def _trim_jobs_if_needed() -> None:
@@ -1558,58 +1794,164 @@ def check_tools() -> dict[str, Any]:
 
 def list_watch_folders() -> list[dict[str, Any]]:
     """Return the configured watch folders list."""
+    result: list[dict[str, Any]] = []
+    for rule in list_watch_rules():
+        result.append({
+            "path": str(rule.get("path", "") or ""),
+            "preset": str(rule.get("preset", "default") or "default"),
+            "enabled": bool(rule.get("enabled", True)),
+        })
+    return result
+
+
+def _watch_folder_to_rule(item: Any, index: int) -> dict[str, Any] | None:
+    if isinstance(item, dict):
+        path = str(item.get("path", "") or "")
+        if not path:
+            return None
+        return {
+            "id": str(item.get("rule_id") or f"rule-{index}"),
+            "path": path,
+            "preset": str(item.get("preset", "default") or "default"),
+            "enabled": bool(item.get("enabled", True)),
+            "pattern": str(item.get("pattern", "") or ""),
+        }
+    if isinstance(item, str) and item.strip():
+        return {
+            "id": f"rule-{index}",
+            "path": item.strip(),
+            "preset": "default",
+            "enabled": True,
+            "pattern": "",
+        }
+    return None
+
+
+def _watch_rules_to_folders(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "rule_id": str(rule["id"]),
+            "path": str(rule["path"]),
+            "preset": str(rule.get("preset", "default") or "default"),
+            "enabled": bool(rule.get("enabled", True)),
+            "pattern": str(rule.get("pattern", "") or ""),
+        }
+        for rule in rules
+    ]
+
+
+def list_watch_rules() -> list[dict[str, Any]]:
+    """Return watch rules (folder + preset + optional pattern)."""
     store = SettingsStore()
     settings = store.load()
     folders_raw = settings.get("watch", {}).get("folders", [])
     if not isinstance(folders_raw, list):
         return []
-    result = []
-    for item in folders_raw:
-        if isinstance(item, dict):
-            result.append({
-                "path": str(item.get("path", "") or ""),
-                "preset": str(item.get("preset", "default") or "default"),
-                "enabled": bool(item.get("enabled", True)),
-            })
-        elif isinstance(item, str) and item.strip():
-            result.append({"path": item.strip(), "preset": "default", "enabled": True})
-    return result
+    rules: list[dict[str, Any]] = []
+    for index, item in enumerate(folders_raw):
+        rule = _watch_folder_to_rule(item, index)
+        if rule is not None:
+            rules.append(rule)
+    return rules
 
 
-def add_watch_folder(path: str, preset: str = "default") -> list[dict[str, Any]]:
-    """Append a watch folder and return updated list."""
+def add_watch_rule(
+    path: str,
+    *,
+    preset: str = "default",
+    enabled: bool = True,
+    pattern: str = "",
+) -> list[dict[str, Any]]:
+    """Append watch rule and return updated list."""
     normalized = path.strip()
     if not normalized:
         raise ValueError("path is required")
     store = SettingsStore()
     settings = store.load()
-    watch_cfg = settings.setdefault("watch", {})
-    folders_raw = watch_cfg.get("folders", [])
-    folders: list[Any] = list(folders_raw) if isinstance(folders_raw, list) else []
-    for item in folders:
-        item_path = str(item.get("path", "") if isinstance(item, dict) else item).strip()
-        if item_path == normalized:
+    rules = list_watch_rules()
+    for rule in rules:
+        if str(rule.get("path", "")).strip() == normalized:
             raise ValueError(f"folder '{normalized}' already registered")
-    folders.append({"path": normalized, "preset": (preset or "default").strip(), "enabled": True})
-    watch_cfg["folders"] = folders
+    rules.append(
+        {
+            "id": str(uuid4()),
+            "path": normalized,
+            "preset": (preset or "default").strip() or "default",
+            "enabled": bool(enabled),
+            "pattern": pattern.strip(),
+        }
+    )
+    watch_cfg = settings.setdefault("watch", {})
+    watch_cfg["folders"] = _watch_rules_to_folders(rules)
     settings["watch"] = watch_cfg
     store.save(settings)
+    return list_watch_rules()
+
+
+def patch_watch_rule(
+    rule_id: str,
+    *,
+    path: str | None = None,
+    preset: str | None = None,
+    enabled: bool | None = None,
+    pattern: str | None = None,
+) -> list[dict[str, Any]]:
+    """Patch one watch rule by id and return full list."""
+    store = SettingsStore()
+    settings = store.load()
+    rules = list_watch_rules()
+    target = next((rule for rule in rules if rule["id"] == rule_id), None)
+    if target is None:
+        raise ValueError(f"rule '{rule_id}' not found")
+    if path is not None:
+        normalized = path.strip()
+        if not normalized:
+            raise ValueError("path is required")
+        for rule in rules:
+            if rule["id"] != rule_id and str(rule.get("path", "")).strip() == normalized:
+                raise ValueError(f"folder '{normalized}' already registered")
+        target["path"] = normalized
+    if preset is not None:
+        target["preset"] = (preset or "default").strip() or "default"
+    if enabled is not None:
+        target["enabled"] = bool(enabled)
+    if pattern is not None:
+        target["pattern"] = pattern.strip()
+    watch_cfg = settings.setdefault("watch", {})
+    watch_cfg["folders"] = _watch_rules_to_folders(rules)
+    settings["watch"] = watch_cfg
+    store.save(settings)
+    return list_watch_rules()
+
+
+def delete_watch_rule(rule_id: str) -> list[dict[str, Any]]:
+    """Delete one watch rule by id and return updated list."""
+    store = SettingsStore()
+    settings = store.load()
+    rules = list_watch_rules()
+    before = len(rules)
+    rules = [rule for rule in rules if rule["id"] != rule_id]
+    if len(rules) == before:
+        raise ValueError(f"rule '{rule_id}' not found")
+    watch_cfg = settings.setdefault("watch", {})
+    watch_cfg["folders"] = _watch_rules_to_folders(rules)
+    settings["watch"] = watch_cfg
+    store.save(settings)
+    return list_watch_rules()
+
+
+def add_watch_folder(path: str, preset: str = "default") -> list[dict[str, Any]]:
+    """Append a watch folder and return updated list."""
+    add_watch_rule(path, preset=preset, enabled=True)
     return list_watch_folders()
 
 
 def remove_watch_folder(index: int) -> list[dict[str, Any]]:
     """Remove a watch folder by index and return updated list."""
-    store = SettingsStore()
-    settings = store.load()
-    watch_cfg = settings.setdefault("watch", {})
-    folders_raw = watch_cfg.get("folders", [])
-    folders: list[Any] = list(folders_raw) if isinstance(folders_raw, list) else []
-    if index < 0 or index >= len(folders):
+    rules = list_watch_rules()
+    if index < 0 or index >= len(rules):
         raise ValueError(f"index {index} out of range")
-    folders.pop(index)
-    watch_cfg["folders"] = folders
-    settings["watch"] = watch_cfg
-    store.save(settings)
+    delete_watch_rule(str(rules[index]["id"]))
     return list_watch_folders()
 
 
@@ -1644,7 +1986,7 @@ def run_module_command(request: RunModuleRequest) -> RunModuleResponse:
             argv=argv,
             returncode=exc.returncode or 1,
             stdout="",
-            stderr=str(exc),
+            stderr=f"[spawn_error] {exc}",
         )
 
     clean_stdout = _clean_web_job_output(completed.stdout)
@@ -1816,7 +2158,7 @@ def _run_module_command_cancellable(
             argv=argv,
             returncode=exc.returncode or 1,
             stdout="",
-            stderr=str(exc),
+            stderr=f"[spawn_error] {exc}",
         )
     finally:
         with _JOBS_LOCK:
@@ -1827,15 +2169,18 @@ def _run_module_command_cancellable(
 # Claim-based job worker
 # ---------------------------------------------------------------------------
 
-def _claim_pending_job_from_db(worker_id: str) -> tuple[str, str] | None:
+def _claim_pending_job_from_db(
+    worker_id: str,
+    allowed_categories: set[str] | None = None,
+) -> tuple[str, str, int] | None:
     """Atomically claim one pending job directly from SQLite.
 
     Uses BEGIN IMMEDIATE so the SELECT+UPDATE is serialized against any
     concurrent writers — correct for both single-process (S1b) and future
     multi-process (S2) use.
 
-    Returns (job_id, payload_json) of the claimed job, or None when the queue
-    is empty.  The returned payload_json is the snapshot *before* the claim
+    Returns (job_id, payload_json, attempts_after_claim) of the claimed job,
+    or None when the queue is empty. The returned payload_json is the snapshot *before* the claim
     (status still 'pending' in the blob); callers must apply the running
     transition to the in-memory model themselves.
     """
@@ -1847,15 +2192,35 @@ def _claim_pending_job_from_db(worker_id: str) -> tuple[str, str] | None:
         conn.row_factory = sqlite3.Row
         try:
             conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(
-                """
-                SELECT id, payload_json
+            where_parts = [
+                "status = 'pending'",
+                "(next_retry_at IS NULL OR next_retry_at <= ?)",
+                "COALESCE(attempts, 0) < COALESCE(max_attempts, 1)",
+                "COALESCE(paused, 0) = 0",
+            ]
+            params: list[Any] = [_utc_now()]
+            if allowed_categories is not None:
+                normalized = {_normalize_category(item) for item in allowed_categories}
+                explicit = sorted(item for item in normalized if item != "uncategorized")
+                clauses: list[str] = []
+                if explicit:
+                    placeholders = ", ".join("?" for _ in explicit)
+                    clauses.append(f"LOWER(TRIM(COALESCE(category, ''))) IN ({placeholders})")
+                    params.extend(explicit)
+                if "uncategorized" in normalized:
+                    clauses.append("TRIM(COALESCE(category, '')) = ''")
+                if not clauses:
+                    conn.execute("ROLLBACK")
+                    return None
+                where_parts.append(f"({' OR '.join(clauses)})")
+            sql = f"""
+                SELECT id, payload_json, COALESCE(attempts, 0) AS attempts
                 FROM web_module_jobs
-                WHERE status = 'pending'
+                WHERE {' AND '.join(where_parts)}
                 ORDER BY priority DESC, created_at ASC
                 LIMIT 1
                 """
-            ).fetchone()
+            row = conn.execute(sql, tuple(params)).fetchone()
             if row is None:
                 conn.execute("ROLLBACK")
                 return None
@@ -1864,13 +2229,16 @@ def _claim_pending_job_from_db(worker_id: str) -> tuple[str, str] | None:
             conn.execute(
                 """
                 UPDATE web_module_jobs
-                SET status = 'running', claimed_by = ?, claimed_at = ?
+                SET status = 'running',
+                    claimed_by = ?,
+                    claimed_at = ?,
+                    attempts = COALESCE(attempts, 0) + 1
                 WHERE id = ?
                 """,
                 (worker_id, now, job_id),
             )
             conn.execute("COMMIT")
-            return job_id, str(row["payload_json"])
+            return job_id, str(row["payload_json"]), int(row["attempts"]) + 1
         except Exception:
             try:
                 conn.execute("ROLLBACK")
@@ -1881,14 +2249,14 @@ def _claim_pending_job_from_db(worker_id: str) -> tuple[str, str] | None:
             conn.close()
 
 
-def _claim_pending_job() -> str | None:
+def _claim_pending_job(allowed_categories: set[str] | None = None) -> str | None:
     """Claim the highest-priority pending job from SQLite and sync to _JOBS cache.
 
     Returns job_id of the now-running job, or None when nothing is pending.
     Source of truth for claiming is SQLite; _JOBS is updated as a fast-read cache.
     """
     try:
-        result = _claim_pending_job_from_db(_WORKER_ID)
+        result = _claim_pending_job_from_db(_WORKER_ID, allowed_categories=allowed_categories)
     except Exception as exc:
         logger.warning("DB claim failed: {}", exc)
         return None
@@ -1896,7 +2264,7 @@ def _claim_pending_job() -> str | None:
     if result is None:
         return None
 
-    job_id, payload_json = result
+    job_id, payload_json, attempts_after_claim = result
     try:
         job = ModuleJob.model_validate_json(payload_json)
     except Exception as exc:
@@ -1910,8 +2278,14 @@ def _claim_pending_job() -> str | None:
             "started_at": _utc_now(),
             "live_stdout": "",
             "live_stderr": "",
+            "attempts": attempts_after_claim,
+            "next_retry_at": None,
+            "paused": False,
         }
     )
+    if updated.max_attempts < 1:
+        updated = updated.model_copy(update={"max_attempts": _initial_max_attempts(updated.request)})
+    updated = updated.model_copy(update={"retryable": _compute_retryable(updated)})
 
     with _JOBS_LOCK:
         # Race guard: a cancel request may have arrived between the DB claim and here.
@@ -1981,18 +2355,70 @@ def _execute_job(job_id: str) -> None:
     except Exception as exc:  # nosec B110
         with _JOBS_LOCK:
             current = _JOBS.get(job_id)
-            if current is not None:
-                cancelled = cancel_event.is_set()
+            if current is None:
+                return
+            cancelled = cancel_event.is_set()
+            failure_kind = _classify_failure_kind(
+                result=None,
+                cancelled=cancelled,
+                raised_exc=exc,
+            )
+            if cancelled:
                 upd = current.model_copy(
                     update={
-                        "status": "cancelled" if cancelled else "failed",
+                        "status": "cancelled",
                         "error": str(exc),
                         "finished_at": _utc_now(),
+                        "last_failure_kind": "cancelled",
+                        "next_retry_at": None,
                     }
                 )
-                _JOBS[job_id] = upd
-                _persist_job(upd)
-        event_name = "job.cancelled" if cancel_event.is_set() else "job.failed"
+                event_name = "job.cancelled"
+            elif _should_schedule_retry(current, failure_kind):
+                upd = current.model_copy(
+                    update={
+                        "status": "pending",
+                        "error": str(exc),
+                        "started_at": None,
+                        "finished_at": None,
+                        "next_retry_at": _next_retry_at_from_attempts(current.attempts),
+                        "last_failure_kind": failure_kind,
+                        "retryable": _compute_retryable(current),
+                    }
+                )
+                event_name = "job.retry_scheduled"
+            else:
+                upd = current.model_copy(
+                    update={
+                        "status": "failed",
+                        "error": str(exc),
+                        "finished_at": _utc_now(),
+                        "last_failure_kind": failure_kind,
+                        "next_retry_at": None,
+                    }
+                )
+                event_name = "job.failed"
+            upd = upd.model_copy(update={"retryable": _compute_retryable(upd)})
+            _JOBS[job_id] = upd
+            _persist_job(upd)
+
+        if event_name == "job.retry_scheduled":
+            emit_service_event(
+                event_name,
+                level="warning",
+                message="Job retry scheduled",
+                data={
+                    "job_id": job_id,
+                    "module": request.module,
+                    "args_text": request.args_text,
+                    "failure_kind": failure_kind,
+                    "attempts": upd.attempts,
+                    "max_attempts": upd.max_attempts,
+                    "next_retry_at": upd.next_retry_at,
+                },
+            )
+            return
+
         dispatch_webhook_event(
             "job.failed" if event_name == "job.failed" else "job.completed",
             {
@@ -2019,29 +2445,79 @@ def _execute_job(job_id: str) -> None:
         current = _JOBS.get(job_id)
         if current is None:
             return
+
+        cancelled = cancel_event.is_set()
         status: Literal["completed", "failed", "cancelled"]
-        if cancel_event.is_set():
+        if cancelled:
             status = "cancelled"
         else:
             status = "completed" if result.ok else "failed"
-        upd = current.model_copy(
-            update={
-                "status": status,
-                "live_stdout": result.stdout,
-                "live_stderr": result.stderr,
-                "result": result,
-                "finished_at": _utc_now(),
-            }
-        )
+        failure_kind = _classify_failure_kind(result=result, cancelled=cancelled)
+
+        if status == "failed" and _should_schedule_retry(current, failure_kind):
+            upd = current.model_copy(
+                update={
+                    "status": "pending",
+                    "live_stdout": result.stdout,
+                    "live_stderr": result.stderr,
+                    "result": result,
+                    "error": f"Retry scheduled after {failure_kind}.",
+                    "started_at": None,
+                    "finished_at": None,
+                    "next_retry_at": _next_retry_at_from_attempts(current.attempts),
+                    "last_failure_kind": failure_kind,
+                }
+            )
+            event_name = "job.retry_scheduled"
+        else:
+            terminal_error = current.error
+            if status == "failed":
+                terminal_error = (result.stderr or "").strip() or f"Command exited with code {result.returncode}"
+            elif status == "cancelled":
+                terminal_error = "Cancelled by user."
+            else:
+                terminal_error = None
+            upd = current.model_copy(
+                update={
+                    "status": status,
+                    "live_stdout": result.stdout,
+                    "live_stderr": result.stderr,
+                    "result": result,
+                    "finished_at": _utc_now(),
+                    "error": terminal_error,
+                    "next_retry_at": None,
+                    "last_failure_kind": failure_kind if status != "completed" else None,
+                }
+            )
+            if status == "completed":
+                event_name = "job.completed"
+            elif status == "cancelled":
+                event_name = "job.cancelled"
+            else:
+                event_name = "job.failed"
+
+        upd = upd.model_copy(update={"retryable": _compute_retryable(upd)})
         _JOBS[job_id] = upd
         _persist_job(upd)
 
-    if status == "completed":
-        event_name = "job.completed"
-    elif status == "cancelled":
-        event_name = "job.cancelled"
-    else:
-        event_name = "job.failed"
+    if event_name == "job.retry_scheduled":
+        emit_service_event(
+            "job.retry_scheduled",
+            level="warning",
+            message="Job retry scheduled",
+            data={
+                "job_id": job_id,
+                "module": request.module,
+                "args_text": request.args_text,
+                "returncode": result.returncode,
+                "failure_kind": failure_kind,
+                "attempts": upd.attempts,
+                "max_attempts": upd.max_attempts,
+                "next_retry_at": upd.next_retry_at,
+            },
+        )
+        return
+
     dispatch_webhook_event(
         "job.completed" if status == "cancelled" else event_name,
         {
@@ -2066,6 +2542,7 @@ def _execute_job(job_id: str) -> None:
             "args_text": request.args_text,
             "returncode": result.returncode,
             "ok": result.ok,
+            "failure_kind": failure_kind,
         },
     )
 
@@ -2080,17 +2557,59 @@ def _execute_job_and_release(job_id: str) -> None:
         _PENDING_SIGNAL.set()
 
 
+def _allowed_categories_for_claim() -> set[str]:
+    limits = _category_limits_from_settings()
+    running = _running_counts_by_category()
+    pending: dict[str, int] = {}
+    with _JOBS_LOCK:
+        for job in _JOBS.values():
+            if job.status != "pending" or job.paused:
+                continue
+            category = _normalize_category(job.category)
+            pending[category] = pending.get(category, 0) + 1
+    allowed: set[str] = set()
+
+    uncategorized_limit = max(0, int(limits.get("uncategorized", _MAX_CONCURRENT_JOBS)))
+    uncategorized_running = running.get("uncategorized", 0) + sum(
+        count for key, count in running.items() if key not in limits
+    )
+
+    for category, limit in limits.items():
+        if category == "uncategorized":
+            continue
+        if max(0, int(limit)) <= running.get(category, 0):
+            continue
+        allowed.add(category)
+
+    if uncategorized_running < uncategorized_limit:
+        allowed.add("uncategorized")
+        for category in pending:
+            if category not in limits:
+                allowed.add(category)
+    return allowed
+
+
 def _worker_loop() -> None:
     """Dispatcher: drains pending jobs up to _MAX_CONCURRENT_JOBS concurrently."""
     while True:
         _PENDING_SIGNAL.wait(timeout=5.0)
         _PENDING_SIGNAL.clear()
+        if _SHUTDOWN_REQUESTED.is_set():
+            break
+        if _DRAIN_MODE.is_set():
+            continue
         # Claim and launch all claimable pending jobs in one pass.
         while True:
+            if _DRAIN_MODE.is_set():
+                break
             if not _WORKER_SEMAPHORE.acquire(blocking=False):
                 # At capacity; a running job will signal when it finishes.
                 break
-            job_id = _claim_pending_job()
+            allowed_categories = _allowed_categories_for_claim()
+            if not allowed_categories:
+                _WORKER_SEMAPHORE.release()
+                break
+            job_id = _claim_pending_job(allowed_categories=allowed_categories)
             if job_id is None:
                 _WORKER_SEMAPHORE.release()
                 break
@@ -2129,6 +2648,9 @@ def enqueue_module_job(
     priority: int = 0,
 ) -> ModuleJob:
     """Queue one module execution and return initial pending job snapshot."""
+    if _DRAIN_MODE.is_set():
+        raise ValueError("Service is draining: new jobs are temporarily rejected.")
+    max_attempts = _initial_max_attempts(request)
     job = ModuleJob(
         id=str(uuid4()),
         status="pending",
@@ -2137,6 +2659,12 @@ def enqueue_module_job(
         origin=origin,
         category=category,
         priority=priority,
+        attempts=0,
+        max_attempts=max_attempts,
+        next_retry_at=None,
+        last_failure_kind=None,
+        retryable=(max_attempts > 1),
+        paused=False,
     )
     with _JOBS_LOCK:
         _JOBS[job.id] = job
@@ -2165,14 +2693,123 @@ def get_module_job(job_id: str) -> ModuleJob | None:
     """Return one job snapshot by id, or ``None`` when missing."""
     with _JOBS_LOCK:
         job = _JOBS.get(job_id)
-        return job.model_copy(deep=True) if job else None
+        if job is None:
+            return None
+        return _refresh_job_policy_fields(job.model_copy(deep=True))
 
 
 def list_module_jobs(limit: int = 20) -> list[ModuleJob]:
     """Return newest jobs first, bounded by ``limit``."""
     with _JOBS_LOCK:
         jobs = sorted(_JOBS.values(), key=lambda item: item.created_at, reverse=True)
-        return [job.model_copy(deep=True) for job in jobs[:limit]]
+        return [_refresh_job_policy_fields(job.model_copy(deep=True)) for job in jobs[:limit]]
+
+
+def list_queue_snapshot() -> dict[str, Any]:
+    """Return queue depth snapshot for pending/running buckets."""
+    pending_by_category = _pending_counts_by_category()
+    paused_by_category = _paused_counts_by_category()
+    running_by_category = _running_counts_by_category()
+    pending_total = sum(pending_by_category.values())
+    paused_total = sum(paused_by_category.values())
+    running_total = sum(running_by_category.values())
+    return {
+        "draining": _DRAIN_MODE.is_set(),
+        "pending": pending_total,
+        "paused": paused_total,
+        "running": running_total,
+        "by_category": {
+            key: {
+                "pending": pending_by_category.get(key, 0),
+                "paused": paused_by_category.get(key, 0),
+                "running": running_by_category.get(key, 0),
+            }
+            for key in sorted(set(pending_by_category) | set(paused_by_category) | set(running_by_category))
+        },
+    }
+
+
+def set_module_job_priority(job_id: str, priority: int) -> ModuleJob | None:
+    """Update queue priority for a non-running job."""
+    clamped = max(-100, min(100, int(priority)))
+    with _JOBS_LOCK:
+        current = _JOBS.get(job_id)
+        if current is None:
+            return None
+        if current.status == "running":
+            raise ValueError("Cannot change priority for a running job.")
+        updated = current.model_copy(update={"priority": clamped})
+        _JOBS[job_id] = updated
+        _persist_job(updated)
+    _PENDING_SIGNAL.set()
+    return updated.model_copy(deep=True)
+
+
+def pause_module_job(job_id: str) -> ModuleJob | None:
+    """Pause one pending queue job (claim-disabled until resumed)."""
+    with _JOBS_LOCK:
+        current = _JOBS.get(job_id)
+        if current is None:
+            return None
+        if current.status != "pending":
+            raise ValueError("Only pending jobs can be paused.")
+        if current.paused:
+            return current.model_copy(deep=True)
+        updated = current.model_copy(update={"paused": True})
+        _JOBS[job_id] = updated
+        _persist_job(updated)
+        return updated.model_copy(deep=True)
+
+
+def resume_module_job(job_id: str) -> ModuleJob | None:
+    """Resume one paused pending queue job."""
+    with _JOBS_LOCK:
+        current = _JOBS.get(job_id)
+        if current is None:
+            return None
+        if current.status != "pending":
+            raise ValueError("Only pending jobs can be resumed.")
+        if not current.paused:
+            return current.model_copy(deep=True)
+        updated = current.model_copy(update={"paused": False})
+        _JOBS[job_id] = updated
+        _persist_job(updated)
+    _PENDING_SIGNAL.set()
+    return updated.model_copy(deep=True)
+
+
+def set_service_drain(enabled: bool) -> dict[str, Any]:
+    """Enable or disable queue drain mode."""
+    if enabled:
+        _DRAIN_MODE.set()
+    else:
+        _DRAIN_MODE.clear()
+        _PENDING_SIGNAL.set()
+    return {"draining": _DRAIN_MODE.is_set(), **list_queue_snapshot()}
+
+
+def request_service_shutdown() -> dict[str, Any]:
+    """Request graceful process shutdown after running jobs finish."""
+    import os
+
+    if _SHUTDOWN_REQUESTED.is_set():
+        return {"scheduled": True, "already_requested": True}
+
+    _SHUTDOWN_REQUESTED.set()
+    _DRAIN_MODE.set()
+
+    def _shutdown_worker() -> None:
+        deadline = monotonic() + 15.0
+        while monotonic() < deadline:
+            snapshot = list_queue_snapshot()
+            if snapshot["running"] == 0:
+                break
+            sleep(0.25)
+        os._exit(0)  # nosec B605,B606
+
+    t = Thread(target=_shutdown_worker, daemon=True, name="framekit-service-shutdown")
+    t.start()
+    return {"scheduled": True, "already_requested": False}
 
 
 def get_watch_service_status() -> dict[str, Any]:
@@ -2379,6 +3016,9 @@ def cancel_module_job(job_id: str) -> ModuleJob | None:
                     "status": "cancelled",
                     "finished_at": _utc_now(),
                     "error": "Cancelled by user.",
+                    "last_failure_kind": "cancelled",
+                    "next_retry_at": None,
+                    "retryable": False,
                 }
             )
             _JOBS[job_id] = updated

@@ -327,6 +327,21 @@ export function InlineJobPanel({
         <span className="text-xs text-muted-foreground">
           {formatDuration(job?.started_at, job?.finished_at)}
         </span>
+        {job ? (
+          <span className="text-xs text-muted-foreground font-mono">
+            {job.attempts}/{job.max_attempts}
+          </span>
+        ) : null}
+        {job?.last_failure_kind ? (
+          <span className="text-xs text-amber-600 dark:text-amber-400 font-mono">
+            {job.last_failure_kind}
+          </span>
+        ) : null}
+        {job?.next_retry_at ? (
+          <span className="text-xs text-blue-600 dark:text-blue-400">
+            retry {new Date(job.next_retry_at).toLocaleTimeString()}
+          </span>
+        ) : null}
 
         {/* Non-zero exit code — visible only after terminal */}
         {isTerminal && job?.result && job.result.returncode !== 0 && (
@@ -367,7 +382,7 @@ export function InlineJobPanel({
           )}
           {/* Always visible — secondary debug path */}
           <Link
-            to="/modules/$jobId"
+            to="/jobs/$jobId"
             params={{ jobId }}
             className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >

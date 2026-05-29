@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/client";
 import {
   cancelModuleJob,
+  clearModuleJobs,
   getModuleJob,
   listModuleJobs,
   rerunModuleJob,
@@ -126,6 +127,7 @@ export function ModulesPage() {
   const [jobsLimit, setJobsLimit] = useState(20);
   const [statusFilter, setStatusFilter] = useState<JobStatusFilter>("all");
   const [searchText, setSearchText] = useState("");
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const jobsQuery = useQuery({
     queryKey: ["modules-jobs", jobsLimit],
@@ -145,6 +147,15 @@ export function ModulesPage() {
     mutationFn: rerunModuleJob,
     onSuccess: (job) => {
       setSelectedJobId(job.id);
+      void jobStatusQuery.refetch();
+      void jobsQuery.refetch();
+    },
+  });
+  const clearJobsMutation = useMutation({
+    mutationFn: clearModuleJobs,
+    onSuccess: () => {
+      setConfirmClear(false);
+      setSelectedJobId(null);
       void jobStatusQuery.refetch();
       void jobsQuery.refetch();
     },
@@ -189,7 +200,7 @@ export function ModulesPage() {
     });
   }, [jobsQuery.data?.jobs, searchText, statusFilter]);
 
-  const mutationError = cancelJobMutation.error ?? rerunJobMutation.error;
+  const mutationError = cancelJobMutation.error ?? rerunJobMutation.error ?? clearJobsMutation.error;
 
   return (
     <div className="space-y-6">
@@ -201,12 +212,41 @@ export function ModulesPage() {
       </section>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock3 className="h-4 w-4 text-primary" />
-            Job history
-          </CardTitle>
-          <CardDescription>All background jobs — filter, search, and inspect.</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Clock3 className="h-4 w-4 text-primary" />
+              Job history
+            </CardTitle>
+            <CardDescription>All background jobs — filter, search, and inspect.</CardDescription>
+          </div>
+          {confirmClear ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-destructive">Clear completed/failed jobs?</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={clearJobsMutation.isPending}
+                onClick={() => { void clearJobsMutation.mutateAsync(); }}
+              >
+                Yes
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => { setConfirmClear(false); }}>
+                No
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={clearJobsMutation.isPending}
+              onClick={() => { setConfirmClear(true); }}
+            >
+              Clear history
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="grid gap-2 md:grid-cols-[120px_160px_1fr_auto]">
@@ -262,7 +302,12 @@ export function ModulesPage() {
               <button type="button" className="text-left" onClick={() => { setSelectedJobId(job.id); }}>
                 <p className="text-xs text-muted-foreground">{job.id}</p>
               </button>
-              <p className="font-medium">{String((job.request["module"] as string) ?? "-")}</p>
+              <div>
+                <p className="font-medium">{String((job.request["module"] as string) ?? "-")}</p>
+                <p className="text-xs text-muted-foreground font-mono">
+                  attempts {job.attempts}/{job.max_attempts}
+                </p>
+              </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Badge
                   variant={
@@ -280,11 +325,21 @@ export function ModulesPage() {
                     {job.origin}
                   </Badge>
                 ) : null}
+                {job.last_failure_kind ? (
+                  <Badge variant="warning" className="font-mono text-[10px]">
+                    {job.last_failure_kind}
+                  </Badge>
+                ) : null}
+                {job.next_retry_at ? (
+                  <Badge variant="secondary" className="font-mono text-[10px]">
+                    retry {new Date(job.next_retry_at).toLocaleTimeString()}
+                  </Badge>
+                ) : null}
               </div>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => { void navigate({ to: "/modules/$jobId", params: { jobId: job.id } }); }}
+                onClick={() => { void navigate({ to: "/jobs/$jobId", params: { jobId: job.id } }); }}
               >
                 Details
               </Button>
@@ -322,6 +377,15 @@ export function ModulesPage() {
             >
               {jobStatusQuery.data?.status ?? "pending"}
             </Badge>
+            {jobStatusQuery.data ? (
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground font-mono">
+                <span>attempts {jobStatusQuery.data.attempts}/{jobStatusQuery.data.max_attempts}</span>
+                {jobStatusQuery.data.last_failure_kind ? <span>{jobStatusQuery.data.last_failure_kind}</span> : null}
+                {jobStatusQuery.data.next_retry_at ? (
+                  <span>retry {new Date(jobStatusQuery.data.next_retry_at).toLocaleString()}</span>
+                ) : null}
+              </div>
+            ) : null}
             {jobStatusQuery.data &&
             (jobStatusQuery.data.status === "pending" ||
               jobStatusQuery.data.status === "running") ? (
@@ -340,7 +404,7 @@ export function ModulesPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => { void navigate({ to: "/modules/$jobId", params: { jobId: jobStatusQuery.data.id } }); }}
+                  onClick={() => { void navigate({ to: "/jobs/$jobId", params: { jobId: jobStatusQuery.data.id } }); }}
                 >
                   View Details
                 </Button>

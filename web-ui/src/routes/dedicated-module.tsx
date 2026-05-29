@@ -11,7 +11,7 @@ export function DedicatedModulePage() {
     return (
       <div className="space-y-4">
         <p>Module dédié inconnu: {moduleSlug}</p>
-        <Link to="/modules">Retour modules</Link>
+        <Link to="/jobs">Retour modules</Link>
       </div>
     );
   }
