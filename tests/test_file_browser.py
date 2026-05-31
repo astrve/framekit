@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from ouro.core.file_browser import (
+from swirrl.core.file_browser import (
     BrowserConfig,
     FileBrowserEngine,
     FileBrowserState,

@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from ouro.core.models.metadata import (
+from swirrl.core.models.metadata import (
     EpisodeMetadata,
     MetadataCandidate,
     MetadataLookupRequest,
     MovieMetadata,
     SeasonMetadata,
 )
-from ouro.modules.metadata.base import MetadataProvider
-from ouro.modules.metadata.chain import ProviderChain, ProviderResult
+from swirrl.modules.metadata.base import MetadataProvider
+from swirrl.modules.metadata.chain import ProviderChain, ProviderResult
 
 
 class MockProvider(MetadataProvider):

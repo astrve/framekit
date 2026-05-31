@@ -128,7 +128,7 @@ export function LogsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ouro-logs-${new Date().toISOString().slice(0, 10)}.jsonl`;
+    a.download = `swirrl-logs-${new Date().toISOString().slice(0, 10)}.jsonl`;
     a.click();
     URL.revokeObjectURL(url);
   }

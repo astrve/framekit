@@ -24,8 +24,8 @@ from pathlib import Path
 import click
 import pytest
 
-from ouro.commands import pipeline as pipeline_module
-from ouro.core.settings import DEFAULT_SETTINGS
+from swirrl.commands import pipeline as pipeline_module
+from swirrl.core.settings import DEFAULT_SETTINGS
 
 
 def test_module_exports_public_surface():

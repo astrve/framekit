@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from ouro.core.settings.high_level import Settings
+from swirrl.core.settings.high_level import Settings
 
 
 class _FakeStore:

@@ -26,8 +26,8 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from ouro.core.tools import ToolRegistry  # noqa: E402
-from ouro.modules.extract.models import (  # noqa: E402
+from swirrl.core.tools import ToolRegistry  # noqa: E402
+from swirrl.modules.extract.models import (  # noqa: E402
     AudioExtractionOptions,
     AudioFormat,
     AudioTrack,
@@ -127,7 +127,7 @@ class TestAudioExtractor:
     @pytest.fixture
     def audio_extractor(self, mock_registry):
         """Create AudioExtractor instance with mocked registry."""
-        from ouro.modules.extract.audio_extractor import AudioExtractor
+        from swirrl.modules.extract.audio_extractor import AudioExtractor
 
         return AudioExtractor(mock_registry)
 

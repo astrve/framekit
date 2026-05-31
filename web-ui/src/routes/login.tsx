@@ -43,9 +43,9 @@ export function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-3">
           <div className="flex justify-center">
-            <img src="/logo.svg" alt="Ouro" className="h-10 w-10" />
+            <img src="/logo.svg" alt="Swirrl" className="h-10 w-10" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Ouro</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Swirrl</h1>
           <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
             Self-hosted media workflow automation
           </p>

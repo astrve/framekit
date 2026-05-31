@@ -58,7 +58,7 @@ export function DoctorPage() {
       <div className="space-y-6">
         <section className="rounded-2xl border border-border bg-card p-5">
           <h1 className="text-2xl font-semibold tracking-tight">System Diagnostics</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Real-time health check for your Ouro installation. Read-only — no files are modified.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Real-time health check for your Swirrl installation. Read-only — no files are modified.</p>
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
@@ -80,10 +80,10 @@ export function DoctorPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Versions</CardTitle>
-              <CardDescription>Ouro and Python</CardDescription>
+              <CardDescription>Swirrl and Python</CardDescription>
             </CardHeader>
             <CardContent className="space-y-1 text-sm">
-              <p>Ouro: <span className="font-medium">{systemInfoQuery.data?.version ?? "…"}</span></p>
+              <p>Swirrl: <span className="font-medium">{systemInfoQuery.data?.version ?? "…"}</span></p>
               <p>Python: <span className="font-medium">{systemInfoQuery.data?.python_version ?? "…"}</span></p>
             </CardContent>
           </Card>

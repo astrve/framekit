@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Input } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
-import { createModuleJob, getUploadHistory, getUploadState, getUploadTrackerInfo, getUploadTrackers, runModule, setUploadState } from "@/lib/api/endpoints";
+import { createModuleJob, getUploadHistory, getUploadState, getUploadTrackerInfo, getUploadTrackers, removeUploadTracker, runModule, setUploadState, setUploadTrackerEnabled } from "@/lib/api/endpoints";
 import type { ModuleJob, RunModuleResult, UploadState } from "@/lib/api/schemas";
 
 type UploadAction = "setup" | "list-trackers" | "show-tracker" | "run" | "history";
@@ -66,6 +66,19 @@ export function UploadPage() {
       stateQuery.refetch().catch(() => undefined);
       setLocalError(null);
     },
+  });
+  const toggleTrackerMutation = useMutation({
+    mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) => setUploadTrackerEnabled(name, enabled),
+    onSuccess: () => { trackersQuery.refetch().catch(() => undefined); },
+    onError: (err: unknown) => setLocalError(err instanceof Error ? err.message : "Failed to update tracker."),
+  });
+  const removeTrackerMutation = useMutation({
+    mutationFn: (name: string) => removeUploadTracker(name),
+    onSuccess: () => {
+      trackersQuery.refetch().catch(() => undefined);
+      setLocalError(null);
+    },
+    onError: (err: unknown) => setLocalError(err instanceof Error ? err.message : "Failed to remove tracker."),
   });
 
   const result: RunModuleResult | null = runMutation.data ?? null;
@@ -264,7 +277,7 @@ export function UploadPage() {
             <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
               Advanced — show generated command
             </summary>
-            <pre className="max-h-40 overflow-auto border-t border-border bg-muted p-3 text-xs">ouro upload {buildArgs()}</pre>
+            <pre className="max-h-40 overflow-auto border-t border-border bg-muted p-3 text-xs">swirrl upload {buildArgs()}</pre>
           </details>
 
           {localError ? (
@@ -299,7 +312,7 @@ export function UploadPage() {
               type="button"
               variant="outline"
               onClick={async () => {
-                await navigator.clipboard.writeText(`ouro upload ${buildArgs()}`.trim());
+                await navigator.clipboard.writeText(`swirrl upload ${buildArgs()}`.trim());
                 setCopied(true);
                 window.setTimeout(() => setCopied(false), 1400);
               }}
@@ -355,6 +368,31 @@ export function UploadPage() {
                   <span className="text-muted-foreground">{item.type}</span>
                   <span className="truncate text-xs text-muted-foreground">{item.url}</span>
                   <Badge variant={item.enabled ? "success" : "warning"}>{item.enabled ? "Enabled" : "Disabled"}</Badge>
+                  <div className="ml-auto flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={toggleTrackerMutation.isPending}
+                      onClick={() => toggleTrackerMutation.mutate({ name: item.name, enabled: !item.enabled })}
+                    >
+                      {item.enabled ? "Disable" : "Enable"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                      disabled={removeTrackerMutation.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Remove tracker "${item.name}"? This deletes it from settings.`)) {
+                          removeTrackerMutation.mutate(item.name);
+                        }
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

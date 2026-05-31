@@ -117,6 +117,130 @@ export const ModulesResourcesSchema = z.object({
   encoder_presets: z.array(z.string()).optional().default([]),
 });
 
+export const JobCheckpointOptionSchema = z.object({
+  index: z.number(),
+  label: z.string(),
+  hint: z.string().optional().default(""),
+});
+
+export const JobCheckpointSchema = z.object({
+  pending: z.boolean(),
+  type: z.enum(["select_one", "step_confirm"]).optional(),
+  title: z.string().optional(),
+  options: z.array(JobCheckpointOptionSchema).optional().default([]),
+  default_index: z.number().optional().default(0),
+  // step_confirm fields
+  step: z.string().optional(),
+  step_index: z.number().optional(),
+  step_total: z.number().optional(),
+  summary: z.string().optional(),
+});
+
+export type JobCheckpoint = z.infer<typeof JobCheckpointSchema>;
+
+export const InspectTrackSchema = z.object({
+  track_id: z.number(),
+  codec: z.string(),
+  language: z.string().nullable().optional(),
+  language_variant: z.string().nullable().optional(),
+  subtitle_variant: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  channels: z.string().nullable().optional(),
+  bitrate: z.number().nullable().optional(),
+  is_default: z.boolean(),
+  is_forced: z.boolean(),
+  format_name: z.string().nullable().optional(),
+});
+
+export const InspectFileScanSchema = z.object({
+  filename: z.string(),
+  audio: z.array(InspectTrackSchema).default([]),
+  subtitles: z.array(InspectTrackSchema).default([]),
+});
+
+export const InspectRenamerFileSchema = z.object({
+  original: z.string(),
+  renamed: z.string(),
+  changed: z.boolean(),
+  collision: z.boolean(),
+  inferred_video_tag: z.string().nullable().optional(),
+  inferred_audio_tag: z.string().nullable().optional(),
+  inferred_source: z.string().nullable().optional(),
+  inferred_resolution: z.string().nullable().optional(),
+  hdr_display_label: z.string().nullable().optional(),
+  existing_language_tag: z.string().nullable().optional(),
+  resulting_language_tag: z.string().nullable().optional(),
+  parsed_episode_code: z.string().nullable().optional(),
+});
+
+export const PipelineInspectSchema = z.object({
+  path: z.string(),
+  folder_name: z.string(),
+  effective_locale: z.string(),
+  renamer: z.object({
+    files: z.array(InspectRenamerFileSchema).default([]),
+    total: z.number(),
+    changed: z.number(),
+    collisions: z.number(),
+    error: z.string().optional(),
+  }),
+  tracks: z.array(InspectFileScanSchema).default([]),
+  nfo: z.object({
+    template: z.string().optional(),
+    locale: z.string().optional(),
+  }),
+  prez: z.object({
+    preset: z.string().optional(),
+    html_template: z.string().optional(),
+    bbcode_template: z.string().optional(),
+  }),
+});
+
+export type PipelineInspect = z.infer<typeof PipelineInspectSchema>;
+export type InspectFileScan = z.infer<typeof InspectFileScanSchema>;
+export type InspectTrack = z.infer<typeof InspectTrackSchema>;
+export type InspectRenamerFile = z.infer<typeof InspectRenamerFileSchema>;
+
+export const CleanmkvSelectionPresetSchema = z.object({
+  preset_file: z.string(),
+});
+export type CleanmkvSelectionPreset = z.infer<typeof CleanmkvSelectionPresetSchema>;
+
+export const PipelineRenamerFileSchema = z.object({
+  original: z.string(),
+  renamed: z.string(),
+  changed: z.boolean(),
+  collision: z.boolean(),
+  language_tag_conflict: z.boolean().optional(),
+});
+
+export const PipelinePlanSchema = z.object({
+  enabled_modules: z.array(z.string()),
+  effective_locale: z.string(),
+  renamer: z.object({
+    files: z.array(PipelineRenamerFileSchema).default([]),
+    total: z.number(),
+    changed: z.number(),
+    collisions: z.number(),
+  }),
+  cleanmkv: z.object({
+    preset: z.string().optional(),
+    files: z.array(z.object({ filename: z.string() })).default([]),
+    total: z.number(),
+  }),
+  nfo: z.object({
+    template: z.string().optional(),
+    locale: z.string().optional(),
+  }),
+  prez: z.object({
+    preset: z.string().optional(),
+    html_template: z.string().optional(),
+    bbcode_template: z.string().optional(),
+  }),
+});
+
+export type PipelinePlan = z.infer<typeof PipelinePlanSchema>;
+
 export const VaultStatusSchema = z.object({
   enabled: z.boolean().optional(),
   vault_exists: z.boolean().optional(),
@@ -195,8 +319,19 @@ export const UploadHistorySchema = z.object({
   entries: z.array(UploadHistoryEntrySchema),
 });
 
+export const SeedboxHistoryEntrySchema = z
+  .object({
+    timestamp: z.string().optional(),
+    action: z.string().optional(),
+    seedbox: z.string().optional(),
+    local_path: z.string().optional(),
+    remote_path: z.string().optional(),
+    success: z.boolean().optional(),
+  })
+  .passthrough();
+
 export const SeedboxHistorySchema = z.object({
-  entries: z.array(z.record(z.string(), z.unknown())),
+  entries: z.array(SeedboxHistoryEntrySchema),
 });
 
 export const RunModuleResultSchema = z.object({
@@ -321,6 +456,39 @@ export const WatchFoldersSchema = z.object({
 export type WatchFolder = z.infer<typeof WatchFolderSchema>;
 export type WatchFolders = z.infer<typeof WatchFoldersSchema>;
 
+export const WatchRulePostActionsSchema = z.object({
+  seedbox_push: z.boolean().default(false),
+  seedbox_profile: z.string().nullable().default(null),
+  tracker_upload: z.boolean().default(false),
+  tracker: z.string().nullable().default(null),
+});
+
+export const WatchRulePresetsByKindSchema = z.object({
+  movie: z.string().nullable().default(null),
+  series: z.string().nullable().default(null),
+  single_episode: z.string().nullable().default(null),
+});
+
+export const WatchRuleSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  preset: z.string().default("default"),
+  enabled: z.boolean().default(true),
+  pattern: z.string().default(""),
+  kind_routing: z.enum(["fixed", "auto"]).default("fixed"),
+  presets_by_kind: WatchRulePresetsByKindSchema.default(() => ({ movie: null, series: null, single_episode: null })),
+  post_actions: WatchRulePostActionsSchema.default(() => ({ seedbox_push: false, seedbox_profile: null, tracker_upload: false, tracker: null })),
+});
+
+export const WatchRulesListSchema = z.object({
+  rules: z.array(WatchRuleSchema),
+});
+
+export type WatchRule = z.infer<typeof WatchRuleSchema>;
+export type WatchRulePostActions = z.infer<typeof WatchRulePostActionsSchema>;
+export type WatchRulePresetsByKind = z.infer<typeof WatchRulePresetsByKindSchema>;
+export type WatchRulesList = z.infer<typeof WatchRulesListSchema>;
+
 export const WatchServiceStatusSchema = z.object({
   status: z.enum(["running", "stopped"]),
   pid: z.number().nullable(),
@@ -333,7 +501,7 @@ export const WatchServiceStopSchema = z.object({
 export type WatchServiceStatus = z.infer<typeof WatchServiceStatusSchema>;
 export type WatchServiceStop = z.infer<typeof WatchServiceStopSchema>;
 
-// ── Service status (ouro serve) ──────────────────────────────────────────
+// ── Service status (swirrl serve) ──────────────────────────────────────────
 
 export const ServiceWatcherStateSchema = z.object({
   status: z.enum(["running", "stopped", "error"]),
@@ -536,3 +704,184 @@ export type IntakeSourceList = z.infer<typeof IntakeSourceListSchema>;
 export type IntakeReleaseResponse = z.infer<typeof IntakeReleaseResponseSchema>;
 export type ServiceEvent = z.infer<typeof ServiceEventSchema>;
 export type ServiceEventsList = z.infer<typeof ServiceEventsListSchema>;
+
+export const ReleaseStatusSchema = z.enum(["local", "processing", "done", "failed", "on_seedbox", "uploaded"]);
+
+export const ReleaseSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  folder_name: z.string(),
+  detected_kind: z.string(),
+  status: ReleaseStatusSchema,
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const ReleasesListSchema = z.object({
+  releases: z.array(ReleaseSchema),
+});
+
+export const ReleaseOperationSchema = z.object({
+  id: z.string(),
+  release_id: z.string(),
+  job_id: z.string(),
+  module: z.string(),
+  timestamp: z.string(),
+  result_ok: z.number(),
+});
+
+export const ReleaseOperationsListSchema = z.object({
+  operations: z.array(ReleaseOperationSchema),
+});
+
+export type Release = z.infer<typeof ReleaseSchema>;
+export type ReleasesList = z.infer<typeof ReleasesListSchema>;
+export type ReleaseOperation = z.infer<typeof ReleaseOperationSchema>;
+export type ReleaseOperationsList = z.infer<typeof ReleaseOperationsListSchema>;
+
+export const WorkflowSessionStatusSchema = z.enum([
+  "draft",
+  "running",
+  "paused",
+  "blocked",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export const WorkflowStepStateSchema = z.enum([
+  "locked",
+  "ready",
+  "in_progress",
+  "blocked_decision",
+  "done",
+  "skipped",
+  "failed",
+  "cancelled",
+]);
+
+export const WorkflowExecutionStatusSchema = z.enum([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export const WorkflowModeSchema = z.enum([
+  "interactive",
+  "auto",
+  "batch_interactive",
+  "batch_auto",
+]);
+
+export const WorkflowSessionSchema = z.object({
+  id: z.string(),
+  release_id: z.string(),
+  status: WorkflowSessionStatusSchema,
+  mode: WorkflowModeSchema,
+  stop_on_error: z.boolean(),
+  current_step_key: z.string().nullable(),
+  source: z.string(),
+  created_by: z.string().nullable(),
+  context: z.record(z.string(), z.unknown()),
+  last_error: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  started_at: z.string().nullable(),
+  finished_at: z.string().nullable(),
+});
+
+export const WorkflowStepSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  step_key: z.string(),
+  step_label: z.string(),
+  module_name: z.string(),
+  position: z.number(),
+  state: WorkflowStepStateSchema,
+  required: z.boolean(),
+  continue_on_prev_failure: z.boolean(),
+  latest_execution_id: z.string().nullable(),
+  last_error: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  started_at: z.string().nullable(),
+  finished_at: z.string().nullable(),
+});
+
+export const WorkflowDecisionSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  step_id: z.string(),
+  decision_key: z.string(),
+  value: z.unknown(),
+  source: z.string(),
+  revision: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const WorkflowExecutionSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  step_id: z.string(),
+  attempt: z.number(),
+  status: WorkflowExecutionStatusSchema,
+  job_id: z.string().nullable(),
+  module_name: z.string(),
+  input: z.record(z.string(), z.unknown()),
+  args_text: z.string(),
+  command_preview: z.string().nullable(),
+  dry_run: z.boolean(),
+  returncode: z.number().nullable(),
+  stdout_tail: z.string(),
+  stderr_tail: z.string(),
+  failure_kind: z.string().nullable(),
+  error: z.string().nullable(),
+  queued_at: z.string(),
+  started_at: z.string().nullable(),
+  finished_at: z.string().nullable(),
+  updated_at: z.string(),
+});
+
+export const WorkflowArtifactSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  step_id: z.string().nullable(),
+  execution_id: z.string().nullable(),
+  kind: z.string(),
+  path: z.string(),
+  exists: z.boolean(),
+  metadata: z.record(z.string(), z.unknown()),
+  created_at: z.string(),
+});
+
+export const WorkflowSessionsListSchema = z.object({
+  sessions: z.array(WorkflowSessionSchema),
+});
+
+export const WorkflowSessionDetailSchema = z.object({
+  session: WorkflowSessionSchema,
+  steps: z.array(WorkflowStepSchema),
+  decisions: z.array(WorkflowDecisionSchema),
+  executions: z.array(WorkflowExecutionSchema),
+  artifacts: z.array(WorkflowArtifactSchema),
+});
+
+export const WorkflowArtifactsListSchema = z.object({
+  artifacts: z.array(WorkflowArtifactSchema),
+});
+
+export type WorkflowSessionStatus = z.infer<typeof WorkflowSessionStatusSchema>;
+export type WorkflowStepState = z.infer<typeof WorkflowStepStateSchema>;
+export type WorkflowExecutionStatus = z.infer<typeof WorkflowExecutionStatusSchema>;
+export type WorkflowMode = z.infer<typeof WorkflowModeSchema>;
+export type WorkflowSession = z.infer<typeof WorkflowSessionSchema>;
+export type WorkflowStep = z.infer<typeof WorkflowStepSchema>;
+export type WorkflowDecision = z.infer<typeof WorkflowDecisionSchema>;
+export type WorkflowExecution = z.infer<typeof WorkflowExecutionSchema>;
+export type WorkflowArtifact = z.infer<typeof WorkflowArtifactSchema>;
+export type WorkflowSessionsList = z.infer<typeof WorkflowSessionsListSchema>;
+export type WorkflowSessionDetail = z.infer<typeof WorkflowSessionDetailSchema>;
+export type WorkflowArtifactsList = z.infer<typeof WorkflowArtifactsListSchema>;

@@ -140,7 +140,7 @@ export function SeedboxPage() {
     return args.join(" ").trim();
   }, [action, allowCwd, category, destinationPath, dryRun, limit, remotePath, seedboxName, sourcePath, verbose]);
 
-  const previewCommand = useMemo(() => `ouro seedbox ${argsText}`.trim(), [argsText]);
+  const previewCommand = useMemo(() => `swirrl seedbox ${argsText}`.trim(), [argsText]);
   const result: RunModuleResult | null = runMutation.data ?? null;
   const seedboxes = listQuery.data?.seedboxes ?? [];
   const historyEntries = historyQuery.data?.entries ?? [];
@@ -557,7 +557,7 @@ export function SeedboxPage() {
       <Card>
         <CardHeader>
           <CardTitle>Profile Bindings</CardTitle>
-          <CardDescription>Map a Ouro settings profile to a specific seedbox. When that profile is active, this seedbox is used automatically.</CardDescription>
+          <CardDescription>Map a Swirrl settings profile to a specific seedbox. When that profile is active, this seedbox is used automatically.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {Object.keys(listQuery.data?.default_by_profile ?? {}).length > 0 && (
@@ -573,7 +573,7 @@ export function SeedboxPage() {
           )}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-sm">
-              Ouro profile
+              Swirrl profile
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                 value={bindProfile}

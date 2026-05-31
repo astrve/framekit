@@ -50,12 +50,14 @@ function EventCheckboxes({ events, onChange }: { events: string[]; onChange: (ev
     onChange(events.includes(id) ? events.filter((e) => e !== id) : [...events, id]);
   }
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1">
+    <div className="flex flex-wrap gap-3">
       {ALL_EVENTS.map((ev) => (
-        <label key={ev.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
-          <input type="checkbox" checked={events.includes(ev.id)} onChange={() => toggle(ev.id)} className="rounded" />
-          {ev.label}
-        </label>
+        <Toggle
+          key={ev.id}
+          checked={events.includes(ev.id)}
+          onChange={() => toggle(ev.id)}
+          label={ev.label}
+        />
       ))}
     </div>
   );
@@ -187,7 +189,7 @@ export function WebhooksPage() {
           Webhooks
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Fire HTTP callbacks on Ouro events. Discord embeds supported.
+          Fire HTTP callbacks on Swirrl events. Discord embeds supported.
         </p>
       </section>
 
@@ -242,7 +244,7 @@ export function WebhooksPage() {
                       <Input
                         value={addForm.title_template}
                         onChange={(e) => setAddForm((f) => ({ ...f, title_template: e.target.value }))}
-                        placeholder="Ouro — Job Completed"
+                        placeholder="Swirrl — Job Completed"
                       />
                     </div>
                     <div className="space-y-1">
@@ -250,7 +252,7 @@ export function WebhooksPage() {
                       <textarea
                         value={addForm.body_template}
                         onChange={(e) => setAddForm((f) => ({ ...f, body_template: e.target.value }))}
-                        placeholder="`ouro {module} {args}`"
+                        placeholder="`swirrl {module} {args}`"
                         rows={3}
                         className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
                       />
@@ -351,7 +353,7 @@ export function WebhooksPage() {
                               <Input
                                 value={editForm.title_template}
                                 onChange={(e) => setEditForm((f) => ({ ...f, title_template: e.target.value }))}
-                                placeholder="Ouro — Job Completed"
+                                placeholder="Swirrl — Job Completed"
                               />
                             </div>
                             <div className="space-y-1">
@@ -359,7 +361,7 @@ export function WebhooksPage() {
                               <textarea
                                 value={editForm.body_template}
                                 onChange={(e) => setEditForm((f) => ({ ...f, body_template: e.target.value }))}
-                                placeholder="`ouro {module} {args}`"
+                                placeholder="`swirrl {module} {args}`"
                                 rows={3}
                                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
                               />

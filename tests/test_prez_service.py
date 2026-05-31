@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ouro.core.i18n import get_locale, set_locale
-from ouro.core.models.metadata import EpisodeMetadata, MovieMetadata, SeasonMetadata
-from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData, TrackNfoData
-from ouro.modules.prez import service as prez_service
-from ouro.modules.prez.service import (
+from swirrl.core.i18n import get_locale, set_locale
+from swirrl.core.models.metadata import EpisodeMetadata, MovieMetadata, SeasonMetadata
+from swirrl.core.models.nfo import EpisodeNfoData, ReleaseNfoData, TrackNfoData
+from swirrl.modules.prez import service as prez_service
+from swirrl.modules.prez.service import (
     PrezBuildOptions,
     PrezService,
     available_bbcode_templates,

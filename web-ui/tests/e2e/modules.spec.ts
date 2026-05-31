@@ -121,7 +121,7 @@ test("jobs flow supports create, cancel, rerun, and detail drilldown", async ({ 
         request: source.request,
         result: {
           ok: true,
-          argv: ["python", "-m", "ouro", "watch", "list"],
+          argv: ["python", "-m", "swirrl", "watch", "list"],
           returncode: 0,
           stdout: '{"status":"rerun-ok"}',
           stderr: "",

@@ -15,8 +15,8 @@ from typing import Any
 
 import pytest
 
-from ouro.core.cache.manager import CacheManager
-from ouro.core.cache.storage import CacheStorage
+from swirrl.core.cache.manager import CacheManager
+from swirrl.core.cache.storage import CacheStorage
 
 
 @pytest.fixture

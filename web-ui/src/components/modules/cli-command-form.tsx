@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Toggle } from "@/components/ui/toggle";
 import type { CliCommandSpec, CliParameterSpec } from "@/lib/api/schemas";
 import { humanizeSettingKey } from "@/lib/cli-form";
 
@@ -32,12 +33,7 @@ function ParamField(props: {
   const label = humanizeSettingKey(param.name);
 
   if (param.type === "bool" || param.is_bool_flag) {
-    return (
-      <label className="inline-flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />
-        {label}
-      </label>
-    );
+    return <Toggle checked={Boolean(value)} onChange={onChange} label={label} />;
   }
 
   if (param.type === "choice") {
@@ -67,22 +63,14 @@ function ParamField(props: {
       <div className="space-y-2 rounded-md border border-border p-3">
         <p className="text-sm font-medium">{label}</p>
         <Input placeholder="Search choice..." value={search} onChange={(event) => setSearch(event.target.value)} />
-        <div className="max-h-44 space-y-1 overflow-auto">
+        <div className="flex flex-wrap gap-2 max-h-44 overflow-auto">
           {filtered.map((item) => (
-            <label key={item} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selected.includes(item)}
-                onChange={(event) => {
-                  if (event.target.checked) {
-                    onChange([...selected, item]);
-                    return;
-                  }
-                  onChange(selected.filter((v) => v !== item));
-                }}
-              />
-              {item}
-            </label>
+            <Toggle
+              key={item}
+              checked={selected.includes(item)}
+              onChange={(v) => onChange(v ? [...selected, item] : selected.filter((x) => x !== item))}
+              label={item}
+            />
           ))}
         </div>
       </div>

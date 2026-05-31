@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from ouro.core.models.metadata import (
+from swirrl.core.models.metadata import (
     EpisodeMetadata,
     MetadataCandidate,
     MovieMetadata,
     SeasonMetadata,
 )
-from ouro.modules.metadata.providers.trakt_models import (
+from swirrl.modules.metadata.providers.trakt_models import (
     TraktIds,
     TraktMovie,
     TraktShow,

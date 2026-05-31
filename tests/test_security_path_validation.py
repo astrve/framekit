@@ -20,7 +20,7 @@ src_path = PathLib(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from ouro.core.path_validation import (  # noqa: E402
+from swirrl.core.path_validation import (  # noqa: E402
     PathValidationError,
     configure_security,
     get_security_config,

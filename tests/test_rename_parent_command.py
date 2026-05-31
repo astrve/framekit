@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 
-from ouro.commands.main import cli
+from swirrl.commands.main import cli
 
 
 def _compact_output(value: str) -> str:
@@ -10,8 +10,8 @@ def _compact_output(value: str) -> str:
 
 
 def test_rename_parent_derives_library_name_from_nested_release(tmp_path, monkeypatch) -> None:
-    settings_file = tmp_path / "ouro.yaml"
-    monkeypatch.setenv("OURO_CONFIG", str(settings_file))
+    settings_file = tmp_path / "swirrl.yaml"
+    monkeypatch.setenv("SWIRRL_CONFIG", str(settings_file))
 
     container = tmp_path / "Dirty.Parent"
     final = container / "Release" / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER"
@@ -31,8 +31,8 @@ def test_rename_parent_derives_library_name_from_nested_release(tmp_path, monkey
 
 
 def test_rename_parent_processes_children_when_given_batch_parent(tmp_path, monkeypatch) -> None:
-    settings_file = tmp_path / "ouro.yaml"
-    monkeypatch.setenv("OURO_CONFIG", str(settings_file))
+    settings_file = tmp_path / "swirrl.yaml"
+    monkeypatch.setenv("SWIRRL_CONFIG", str(settings_file))
 
     batch = tmp_path / "batch"
     first = batch / "first"
@@ -59,8 +59,8 @@ def test_rename_parent_processes_children_when_given_batch_parent(tmp_path, monk
 
 
 def test_rename_parent_dry_run_keeps_folder_unchanged(tmp_path, monkeypatch) -> None:
-    settings_file = tmp_path / "ouro.yaml"
-    monkeypatch.setenv("OURO_CONFIG", str(settings_file))
+    settings_file = tmp_path / "swirrl.yaml"
+    monkeypatch.setenv("SWIRRL_CONFIG", str(settings_file))
 
     container = tmp_path / "Dirty.Parent"
     final = container / "Release" / "EYE.FOR.AN.EYE.1996.MULTI.VFF.1080P.WEB.AAC.2.0.x264-ACKER"

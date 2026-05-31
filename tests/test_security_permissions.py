@@ -10,7 +10,7 @@ import subprocess
 
 import pytest
 
-from ouro.core.security.permissions import (
+from swirrl.core.security.permissions import (
     PermissionError,
     _grants_other_user_access,
     _iter_windows_acl_entries,

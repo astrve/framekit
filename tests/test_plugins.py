@@ -1,4 +1,4 @@
-"""Tests for the ``ouro.modules`` plugin discovery layer.
+"""Tests for the ``swirrl.modules`` plugin discovery layer.
 
 The plugin loader is best-effort and runs at CLI startup. It must:
 
@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import click
 
-from ouro.core import plugins as plugin_module
+from swirrl.core import plugins as plugin_module
 
 
 def _entry_point(name: str, target_callable: Any) -> MagicMock:
@@ -133,11 +133,11 @@ def test_load_plugins_blocks_non_allowlisted_distribution() -> None:
 def test_list_installed_plugins_returns_metadata_rows() -> None:
     """``list_installed_plugins`` exposes name + target + dist info."""
     fake_dist = MagicMock(name="dist")
-    fake_dist.name = "ouro-plugin-demo"
+    fake_dist.name = "swirrl-plugin-demo"
     fake_dist.version = "1.2.3"
     ep = MagicMock()
     ep.name = "demo"
-    ep.value = "ouro_plugin_demo:register"
+    ep.value = "swirrl_plugin_demo:register"
     ep.dist = fake_dist
 
     with patch.object(plugin_module, "iter_plugin_entry_points", return_value=[ep]):
@@ -146,8 +146,8 @@ def test_list_installed_plugins_returns_metadata_rows() -> None:
     assert rows == [
         {
             "name": "demo",
-            "target": "ouro_plugin_demo:register",
-            "distribution": "ouro-plugin-demo",
+            "target": "swirrl_plugin_demo:register",
+            "distribution": "swirrl-plugin-demo",
             "version": "1.2.3",
         }
     ]
@@ -155,4 +155,4 @@ def test_list_installed_plugins_returns_metadata_rows() -> None:
 
 def test_entry_point_group_constant() -> None:
     """The public group name must stay stable for third-party packagers."""
-    assert plugin_module.ENTRY_POINT_GROUP == "ouro.modules"
+    assert plugin_module.ENTRY_POINT_GROUP == "swirrl.modules"

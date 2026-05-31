@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ouro.core.models.media import MediaTrack
-from ouro.modules.nfo.scanner import _audio_summary_from_probe, _build_audio_tracks
+from swirrl.core.models.media import MediaTrack
+from swirrl.modules.nfo.scanner import _audio_summary_from_probe, _build_audio_tracks
 
 
 def test_audio_description_detected_from_visual_impaired_flag() -> None:

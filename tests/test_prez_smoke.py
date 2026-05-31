@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import pytest
 
-from ouro.modules.prez import service as prez_service
+from swirrl.modules.prez import service as prez_service
 
 
 def _minimal_release():
-    from ouro.core.models.nfo import ReleaseNfoData
+    from swirrl.core.models.nfo import ReleaseNfoData
 
     return ReleaseNfoData(
         media_kind="movie",

@@ -14,8 +14,8 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from ouro.commands.screenshot import screenshot_command  # noqa: E402
-from ouro.core.models.screenshot import (  # noqa: E402
+from swirrl.commands.screenshot import screenshot_command  # noqa: E402
+from swirrl.core.models.screenshot import (  # noqa: E402
     ScreenshotReport,
     ScreenshotResult,
 )
@@ -32,7 +32,7 @@ class TestScreenshotCommand:
     @pytest.fixture
     def mock_service(self):
         """Create a mock ScreenshotService."""
-        with patch("ouro.commands.screenshot.ScreenshotService") as mock_cls:
+        with patch("swirrl.commands.screenshot.ScreenshotService") as mock_cls:
             service = Mock()
             mock_cls.return_value = service
 
@@ -410,7 +410,7 @@ class TestScreenshotDirectorySupport:
     @pytest.fixture
     def mock_service(self):
         """Create a mock ScreenshotService."""
-        with patch("ouro.commands.screenshot.ScreenshotService") as mock_cls:
+        with patch("swirrl.commands.screenshot.ScreenshotService") as mock_cls:
             service = Mock()
             mock_cls.return_value = service
 
@@ -460,7 +460,7 @@ class TestScreenshotDirectorySupport:
             video.write_text(f"fake video {i}")
 
         # Mock the selector to return selected files
-        with patch("ouro.commands.screenshot.select_many") as mock_selector:
+        with patch("swirrl.commands.screenshot.select_many") as mock_selector:
             mock_selector.return_value = [
                 video_dir / "movie0.mkv",
                 video_dir / "movie2.mkv",
@@ -638,7 +638,7 @@ class TestScreenshotDirectorySupport:
             video.write_text(f"fake video {i}")
 
         # Mock selector to raise KeyboardInterrupt (user cancellation)
-        with patch("ouro.commands.screenshot.select_many") as mock_selector:
+        with patch("swirrl.commands.screenshot.select_many") as mock_selector:
             mock_selector.side_effect = KeyboardInterrupt()
 
             result = runner.invoke(screenshot_command, [str(video_dir)])

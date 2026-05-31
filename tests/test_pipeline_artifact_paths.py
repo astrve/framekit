@@ -2,8 +2,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
-from ouro.commands import pipeline, pipeline_orchestrator, pipeline_steps
-from ouro.core.models.nfo import ReleaseNfoData
+from swirrl.commands import pipeline, pipeline_orchestrator, pipeline_steps
+from swirrl.core.models.nfo import ReleaseNfoData
 
 
 def test_pipeline_output_folder_defaults_to_release_dir(tmp_path: Path) -> None:

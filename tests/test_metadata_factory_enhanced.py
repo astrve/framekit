@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from ouro.modules.metadata.base import MetadataProvider
-from ouro.modules.metadata.chain import ProviderChain
-from ouro.modules.metadata.config import MetadataRuntimeConfig
-from ouro.modules.metadata.factory import (
+from swirrl.modules.metadata.base import MetadataProvider
+from swirrl.modules.metadata.chain import ProviderChain
+from swirrl.modules.metadata.config import MetadataRuntimeConfig
+from swirrl.modules.metadata.factory import (
     build_metadata_provider,
     build_provider_chain,
     get_available_providers,
@@ -227,8 +227,8 @@ def test_build_provider_chain_content_type_hints():
 def test_build_metadata_provider_from_env():
     """Test building provider with environment variables."""
     env = {
-        "OURO_TMDB_READ_ACCESS_TOKEN": "env_token",
-        "OURO_METADATA_LANGUAGE": "fr-FR",
+        "SWIRRL_TMDB_READ_ACCESS_TOKEN": "env_token",
+        "SWIRRL_METADATA_LANGUAGE": "fr-FR",
     }
 
     settings = {

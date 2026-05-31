@@ -1,4 +1,4 @@
-"""Property tests for :func:`ouro.modules.nfo.scanner.scan_nfo_folder`.
+"""Property tests for :func:`swirrl.modules.nfo.scanner.scan_nfo_folder`.
 
 Contract under test: given any folder structure (existing or empty), the
 scanner must:
@@ -16,7 +16,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ouro.modules.nfo.scanner import scan_nfo_folder
+from swirrl.modules.nfo.scanner import scan_nfo_folder
 
 pytestmark = pytest.mark.benchmark
 

@@ -1,4 +1,4 @@
-"""Tests for ouro.core.service.linux — Linux systemd user-service helpers."""
+"""Tests for swirrl.core.service.linux — Linux systemd user-service helpers."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 def _import_linux():
     """Import module under test."""
-    from ouro.core.service import linux
+    from swirrl.core.service import linux
 
     return linux
 
@@ -31,11 +31,11 @@ class TestLinuxOnly:
 
 
 class TestBuildUnit:
-    def test_build_exec_start_uses_ouro_binary_when_found(self):
+    def test_build_exec_start_uses_swirrl_binary_when_found(self):
         svc = _import_linux()
-        with patch("shutil.which", return_value="/usr/local/bin/ouro"):
+        with patch("shutil.which", return_value="/usr/local/bin/swirrl"):
             cmd = svc._build_exec_start("127.0.0.1", 8000)
-        assert cmd.startswith("/usr/local/bin/ouro serve")
+        assert cmd.startswith("/usr/local/bin/swirrl serve")
         assert "--host 127.0.0.1 --port 8000" in cmd
 
     def test_build_exec_start_falls_back_to_python_module(self):
@@ -44,16 +44,16 @@ class TestBuildUnit:
             sys, "executable", "/opt/python/bin/python3"
         ):
             cmd = svc._build_exec_start("127.0.0.1", 8000)
-        assert "/opt/python/bin/python3 -m ouro serve" in cmd
+        assert "/opt/python/bin/python3 -m swirrl serve" in cmd
 
     def test_build_unit_text_contains_systemd_sections(self):
         svc = _import_linux()
-        with patch("shutil.which", return_value="/usr/bin/ouro"):
+        with patch("shutil.which", return_value="/usr/bin/swirrl"):
             text = svc._build_unit_text("127.0.0.1", 8000)
         assert "[Unit]" in text
         assert "[Service]" in text
         assert "[Install]" in text
-        assert "ExecStart=/usr/bin/ouro serve --host 127.0.0.1 --port 8000" in text
+        assert "ExecStart=/usr/bin/swirrl serve --host 127.0.0.1 --port 8000" in text
 
 
 class TestInstallSystemdUser:
@@ -81,7 +81,7 @@ class TestInstallSystemdUser:
             ok, msg = svc.install_systemd_user("127.0.0.1", 8000, unit_dir=tmp_path)
         assert ok is True
         assert "Installed user unit" in msg
-        assert (tmp_path / "ouro.service").exists()
+        assert (tmp_path / "swirrl.service").exists()
         assert mock_run.call_count == 2
 
     def test_daemon_reload_failure(self, monkeypatch, tmp_path):
@@ -103,7 +103,7 @@ class TestUninstallSystemdUser:
             svc,
             "_run",
             side_effect=[
-                (False, "Unit ouro.service could not be found."),
+                (False, "Unit swirrl.service could not be found."),
                 (True, "ok"),
             ],
         ):

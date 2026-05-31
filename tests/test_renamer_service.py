@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ouro.core.models.renamer import RenamePlanItem
-from ouro.modules.renamer import service as renamer_service
+from swirrl.core.models.renamer import RenamePlanItem
+from swirrl.modules.renamer import service as renamer_service
 
 
 def test_renamer_service_reports_planned_collision_and_unchanged(monkeypatch, tmp_path):

@@ -1,4 +1,4 @@
-# Pre-commit hooks for Ouro
+# Pre-commit hooks for Swirrl
 # Install: pre-commit install
 # Run manually: pre-commit run --all-files
 # Update hooks: pre-commit autoupdate
@@ -114,14 +114,14 @@ repos:
         name: interrogate (docstring coverage >= 90)
         entry: >
           interrogate
-          src/ouro/core/models
-          src/ouro/core/security
-          src/ouro/core/path_validation.py
-          src/ouro/core/subprocess_safe.py
-          src/ouro/core/plugins.py
-          src/ouro/modules/metadata/providers
-          src/ouro/modules/upload/adapters
-          src/ouro/modules/upload/service.py
+          src/swirrl/core/models
+          src/swirrl/core/security
+          src/swirrl/core/path_validation.py
+          src/swirrl/core/subprocess_safe.py
+          src/swirrl/core/plugins.py
+          src/swirrl/modules/metadata/providers
+          src/swirrl/modules/upload/adapters
+          src/swirrl/modules/upload/service.py
           --fail-under 90
         language: system
         pass_filenames: false
@@ -150,7 +150,7 @@ exclude: |
     dist/.*|
     build/.*|
     site/.*|
-    src/ouro/templates/prez/html/generated/.*
+    src/swirrl/templates/prez/html/generated/.*
   )$
 
 # Minimum pre-commit version

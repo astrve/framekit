@@ -31,9 +31,9 @@ describe("HomePage dashboard", () => {
     expect(screen.getByText("Recent Results")).toBeInTheDocument();
   });
 
-  it("renders Quick Actions section heading", () => {
+  it("renders quick action links in hero", () => {
     render(<HomePage />);
-    expect(screen.getByText("Quick Actions")).toBeInTheDocument();
+    expect(screen.getByText("Diagnostics")).toBeInTheDocument();
   });
 
   it("does not show warnings banner when no data is loaded", () => {

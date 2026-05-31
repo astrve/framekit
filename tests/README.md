@@ -1,6 +1,6 @@
-# Ouro Test Suite
+# Swirrl Test Suite
 
-This directory contains the comprehensive test suite for Ouro, organized by test type and module.
+This directory contains the comprehensive test suite for Swirrl, organized by test type and module.
 
 ## 📁 Directory Structure
 
@@ -66,7 +66,7 @@ pytest tests/unit/modules/test_batch.py
 ### Run with Coverage
 ```bash
 # Generate coverage report
-pytest --cov=src/ouro --cov-report=html
+pytest --cov=src/swirrl --cov-report=html
 
 # View coverage in browser
 # Open htmlcov/index.html
@@ -163,13 +163,13 @@ Located in `tests/fixtures/`:
 ### Viewing Coverage
 ```bash
 # Generate HTML report
-pytest --cov=src/ouro --cov-report=html
+pytest --cov=src/swirrl --cov-report=html
 
 # Terminal report with missing lines
-pytest --cov=src/ouro --cov-report=term-missing
+pytest --cov=src/swirrl --cov-report=term-missing
 
 # JSON report for CI/CD
-pytest --cov=src/ouro --cov-report=json
+pytest --cov=src/swirrl --cov-report=json
 ```
 
 ## ✍️ Writing New Tests
@@ -193,7 +193,7 @@ def test_<what_is_being_tested>_<expected_behavior>():
 def test_settings_load_valid_file(tmp_path, mock_settings_data):
     """Test that settings load correctly from a valid YAML file."""
     # Arrange - Set up test data and conditions
-    settings_file = tmp_path / "ouro.yaml"
+    settings_file = tmp_path / "swirrl.yaml"
     settings_file.write_text(yaml.dump(mock_settings_data))
     
     # Act - Execute the code being tested
@@ -211,7 +211,7 @@ def test_settings_load_valid_file(tmp_path, mock_settings_data):
 def test_with_fixtures(isolated_env, mock_settings, tmp_path):
     """Test using multiple fixtures."""
     # Fixtures are automatically provided by pytest
-    assert "OURO_CACHE_DIR" in isolated_env
+    assert "SWIRRL_CACHE_DIR" in isolated_env
     assert mock_settings.get("general.ui_locale") == "en"
     assert tmp_path.exists()
 ```
@@ -290,7 +290,7 @@ async def test_async_function():
 @pytest.mark.unit
 def test_with_env_var(monkeypatch):
     """Test behavior with specific environment variable."""
-    monkeypatch.setenv("OURO_DEBUG", "true")
+    monkeypatch.setenv("SWIRRL_DEBUG", "true")
     
     result = function_that_checks_env()
     

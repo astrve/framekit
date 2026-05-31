@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV OURO_CONFIG_DIR=/var/lib/ouro/config
-ENV OURO_CACHE_DIR=/var/lib/ouro/cache
+ENV SWIRRL_CONFIG_DIR=/var/lib/swirrl/config
+ENV SWIRRL_CACHE_DIR=/var/lib/swirrl/cache
 
 WORKDIR /app
 
@@ -22,12 +22,12 @@ COPY src ./src
 RUN pip install --upgrade pip \
     && pip install .
 
-VOLUME ["/var/lib/ouro/config", "/var/lib/ouro/cache", "/media"]
+VOLUME ["/var/lib/swirrl/config", "/var/lib/swirrl/cache", "/media"]
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD curl -fsS http://127.0.0.1:8000/healthz || exit 1
 
-ENTRYPOINT ["ouro"]
+ENTRYPOINT ["swirrl"]
 CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`ouro.modules.upload.tracker_profiles`.
+"""Unit tests for :mod:`swirrl.modules.upload.tracker_profiles`.
 
 Covers the pre-configured tracker registry, URL → profile lookup, the
 merge-with-discovered logic, and the public listing helpers. All tests are
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from ouro.modules.upload.tracker_profiles import (
+from swirrl.modules.upload.tracker_profiles import (
     TRACKER_PROFILES,
     get_profile,
     get_tracker_info,

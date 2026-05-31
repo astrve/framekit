@@ -39,8 +39,11 @@ import { Toggle } from "@/components/ui/toggle";
 import {
   activateSettingsProfile,
   addTorrentAnnounce,
-  addWatchFolder,
   getServiceStatus,
+  getWatchRules,
+  addWatchRule,
+  patchWatchRule,
+  deleteWatchRule,
   getWatchServiceStatus,
   startWatchService,
   stopWatchService,
@@ -57,10 +60,8 @@ import {
   getTorrentAnnounces,
   getUploadTrackers,
   getVaultStatus,
-  getWatchFolders,
   patchSettings,
   removeTorrentAnnounce,
-  removeWatchFolder,
   renameAnnounce,
   selectTorrentAnnounce,
   getProviderToken,
@@ -264,7 +265,7 @@ function initDraft(settings: Record<string, unknown>): Draft {
     "upload.torrent_client": str(getS(settings, "upload.torrent_client"), ""),
     "upload.torrent_client_host": str(getS(settings, "upload.torrent_client_host"), "localhost"),
     "upload.torrent_client_port": num(getS(settings, "upload.torrent_client_port"), 8080),
-    "upload.torrent_client_category": str(getS(settings, "upload.torrent_client_category"), "ouro"),
+    "upload.torrent_client_category": str(getS(settings, "upload.torrent_client_category"), "swirrl"),
     "upload.torrent_client_username": str(getS(settings, "upload.torrent_client_username"), ""),
     "upload.torrent_client_tag": str(getS(settings, "upload.torrent_client_tag"), ""),
     // Seedbox
@@ -409,16 +410,21 @@ export function SettingsSetupPage() {
   const freeimageKeyQuery = useQuery({ queryKey: ["imghost-key-freeimage"], queryFn: () => getImageHostKey("freeimage") });
   const imgboxKeyQuery = useQuery({ queryKey: ["imghost-key-imgbox"], queryFn: () => getImageHostKey("imgbox") });
 
-  const watchFoldersQuery = useQuery({ queryKey: ["watch-folders"], queryFn: getWatchFolders });
+  const watchRulesQuery = useQuery({ queryKey: ["watch-rules"], queryFn: getWatchRules });
   const [newWatchPath, setNewWatchPath] = useState("");
   const [newWatchPreset, setNewWatchPreset] = useState("default");
-  const addWatchFolderMutation = useMutation({
-    mutationFn: ({ path, preset }: { path: string; preset: string }) => addWatchFolder(path, preset),
-    onSuccess: () => { void watchFoldersQuery.refetch(); setNewWatchPath(""); setNewWatchPreset("default"); },
+  const [newWatchKindRouting, setNewWatchKindRouting] = useState<"fixed" | "auto">("fixed");
+  const addWatchRuleMutation = useMutation({
+    mutationFn: (payload: { path: string; preset: string; kind_routing: string }) => addWatchRule(payload),
+    onSuccess: () => { void watchRulesQuery.refetch(); setNewWatchPath(""); setNewWatchPreset("default"); setNewWatchKindRouting("fixed"); },
   });
-  const removeWatchFolderMutation = useMutation({
-    mutationFn: (index: number) => removeWatchFolder(index),
-    onSuccess: () => void watchFoldersQuery.refetch(),
+  const deleteWatchRuleMutation = useMutation({
+    mutationFn: (ruleId: string) => deleteWatchRule(ruleId),
+    onSuccess: () => void watchRulesQuery.refetch(),
+  });
+  const patchWatchRuleMutation = useMutation({
+    mutationFn: ({ ruleId, payload }: { ruleId: string; payload: Parameters<typeof patchWatchRule>[1] }) => patchWatchRule(ruleId, payload),
+    onSuccess: () => void watchRulesQuery.refetch(),
   });
 
   const [watchJobId, setWatchJobId] = useState<string | null>(null);
@@ -583,6 +589,24 @@ export function SettingsSetupPage() {
             </Button>
           </div>
         </div>
+        {!bool(d["setup.completed"], false) && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/8 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Setup not complete</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Configure tools, trackers, and seedbox below, then mark setup complete.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={patchMutation.isPending}
+              onClick={() => patchMutation.mutate({ "setup.completed": true })}
+            >
+              Mark as complete
+            </Button>
+          </div>
+        )}
       </section>
 
       {/* Summary cards */}
@@ -748,7 +772,7 @@ export function SettingsSetupPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             <SelectField label="Language" value={str(d["general.locale"], "en")} onChange={(v) => set("general.locale", v)}
-              tooltip="Interface language for Ouro CLI output"
+              tooltip="Interface language for Swirrl CLI output"
               options={[{ value: "en", label: "English" }, { value: "fr", label: "French" }, { value: "es", label: "Spanish" }]} />
             <SelectField label="Log level" value={str(d["general.log_level"], "INFO")} onChange={(v) => set("general.log_level", v)}
               tooltip="Verbosity of process logs — DEBUG shows everything, ERROR shows only failures"
@@ -812,7 +836,7 @@ export function SettingsSetupPage() {
             <BoolField label="Compress old logs" checked={bool(d["logging.compress_old_logs"], true)} onChange={(v) => set("logging.compress_old_logs", v)}
               tooltip="Gzip-compress rotated log files to save disk space" />
             <BoolField label="Cleanup on startup" checked={bool(d["logging.cleanup_on_startup"], true)} onChange={(v) => set("logging.cleanup_on_startup", v)}
-              tooltip="Run log rotation/cleanup automatically when Ouro starts" />
+              tooltip="Run log rotation/cleanup automatically when Swirrl starts" />
           </div>
           <SaveBtn section="logging" keys={["logging.max_size_mb", "logging.max_backups", "logging.compress_old_logs", "logging.retention_days", "logging.cleanup_on_startup"]} />
         </CardContent>
@@ -966,10 +990,10 @@ export function SettingsSetupPage() {
               tooltip="Hostname or IP of the torrent client Web UI" placeholder="localhost" />
             <TextField label="Port" value={str(d["upload.torrent_client_port"])} onChange={(v) => set("upload.torrent_client_port", Number(v))}
               tooltip="Port of the torrent client Web UI" type="number" />
-            <TextField label="Category" value={str(d["upload.torrent_client_category"], "ouro")} onChange={(v) => set("upload.torrent_client_category", v)}
-              tooltip="Category/label applied to torrents added by Ouro (comma-separated for multiple)" placeholder="ouro, movies" />
+            <TextField label="Category" value={str(d["upload.torrent_client_category"], "swirrl")} onChange={(v) => set("upload.torrent_client_category", v)}
+              tooltip="Category/label applied to torrents added by Swirrl (comma-separated for multiple)" placeholder="swirrl, movies" />
             <TextField label="Tag" value={str(d["upload.torrent_client_tag"])} onChange={(v) => set("upload.torrent_client_tag", v)}
-              tooltip="Tag added to torrents in the client (e.g. 'ouro')" placeholder="ouro" />
+              tooltip="Tag added to torrents in the client (e.g. 'swirrl')" placeholder="swirrl" />
             <TextField label="Username" value={str(d["upload.torrent_client_username"])} onChange={(v) => set("upload.torrent_client_username", v)}
               tooltip="Username for the torrent client Web UI" placeholder="admin" />
             <div className="space-y-1">
@@ -1162,11 +1186,11 @@ export function SettingsSetupPage() {
             </div>
             {embeddedWatcherRunning ? (
               <p className="text-xs text-muted-foreground">
-                Watch is managed by the running service process. Start/stop is handled automatically — use <code className="font-mono">ouro serve</code> to control the service.
+                Watch is managed by the running service process. Start/stop is handled automatically — use <code className="font-mono">swirrl serve</code> to control the service.
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Web UI watch sessions are temporary — managed by the web server process, max 2 hours. For 24/7 watching use <code className="font-mono">ouro watch start</code> from the CLI or run <code className="font-mono">ouro serve</code> for a persistent service.
+                Web UI watch sessions are temporary — managed by the web server process, max 2 hours. For 24/7 watching use <code className="font-mono">swirrl watch start</code> from the CLI or run <code className="font-mono">swirrl serve</code> for a persistent service.
               </p>
             )}
             {startWatchMutation.error ? (
@@ -1210,47 +1234,64 @@ export function SettingsSetupPage() {
           <SaveBtn section="watch" keys={["watch.enabled", "watch.notifications.enabled", "watch.notifications.on_start", "watch.notifications.on_success", "watch.notifications.on_error", "watch.notifications.on_watch_started"]} />
 
           <div className="border-t border-border pt-3 space-y-3">
-            <p className="text-sm font-medium flex items-center gap-2"><FolderOpen className="h-4 w-4 text-primary" />Watch Folders</p>
-            {(watchFoldersQuery.data?.folders ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No folders configured. Add one below.</p>
+            <p className="text-sm font-medium flex items-center gap-2"><FolderOpen className="h-4 w-4 text-primary" />Automation Rules</p>
+            {(watchRulesQuery.data?.rules ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No rules configured. Add one below.</p>
             ) : (
               <div className="divide-y divide-border rounded-md border border-border">
-                {(watchFoldersQuery.data?.folders ?? []).map((folder, i) => (
-                  <div key={i} className="flex items-center gap-2 px-3 py-2">
-                    <span className="flex-1 min-w-0 font-mono text-xs break-all">{folder.path}</span>
-                    <Badge variant="secondary" className="shrink-0 text-xs">{folder.preset}</Badge>
-                    {folder.enabled ? null : <Badge variant="secondary" className="shrink-0 text-xs text-amber-600">disabled</Badge>}
-                    <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
-                      onClick={() => removeWatchFolderMutation.mutate(i)}
-                      disabled={removeWatchFolderMutation.isPending}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                {(watchRulesQuery.data?.rules ?? []).map((rule) => (
+                  <div key={rule.id} className="px-3 py-2 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 min-w-0 font-mono text-xs break-all">{rule.path}</span>
+                      <Badge variant="secondary" className="shrink-0 text-xs">{rule.kind_routing === "auto" ? "auto" : rule.preset}</Badge>
+                      {!rule.enabled && <Badge variant="secondary" className="shrink-0 text-xs text-warning">disabled</Badge>}
+                      <Toggle
+                        checked={rule.enabled}
+                        onChange={(v) => patchWatchRuleMutation.mutate({ ruleId: rule.id, payload: { enabled: v } })}
+                        disabled={patchWatchRuleMutation.isPending}
+                      />
+                      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => deleteWatchRuleMutation.mutate(rule.id)}
+                        disabled={deleteWatchRuleMutation.isPending}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-xs">
+                      <Toggle
+                        checked={rule.post_actions.seedbox_push ?? false}
+                        onChange={(v) => patchWatchRuleMutation.mutate({ ruleId: rule.id, payload: { post_actions: { ...rule.post_actions, seedbox_push: v } } })}
+                        label="Seedbox push"
+                        disabled={patchWatchRuleMutation.isPending}
+                      />
+                      <Toggle
+                        checked={rule.post_actions.tracker_upload ?? false}
+                        onChange={(v) => patchWatchRuleMutation.mutate({ ruleId: rule.id, payload: { post_actions: { ...rule.post_actions, tracker_upload: v } } })}
+                        label="Tracker upload"
+                        disabled={patchWatchRuleMutation.isPending}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
             )}
             <div className="flex flex-wrap gap-2">
-              <Input
-                className="flex-1 min-w-48 font-mono text-sm"
-                placeholder="/path/to/watch/folder"
-                value={newWatchPath}
-                onChange={(e) => setNewWatchPath(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && newWatchPath.trim()) addWatchFolderMutation.mutate({ path: newWatchPath.trim(), preset: newWatchPreset }); }}
-              />
-              <Input
-                className="w-32 text-sm"
-                placeholder="preset"
-                value={newWatchPreset}
-                onChange={(e) => setNewWatchPreset(e.target.value)}
-              />
+              <Input className="flex-1 min-w-48 font-mono text-sm" placeholder="/path/to/watch/folder"
+                value={newWatchPath} onChange={(e) => setNewWatchPath(e.target.value)} />
+              <Input className="w-32 text-sm" placeholder="preset"
+                value={newWatchPreset} onChange={(e) => setNewWatchPreset(e.target.value)} />
+              <select className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={newWatchKindRouting} onChange={(e) => setNewWatchKindRouting(e.target.value as "fixed" | "auto")}>
+                <option value="fixed">Fixed preset</option>
+                <option value="auto">Auto (kind)</option>
+              </select>
               <Button type="button" size="sm"
-                onClick={() => addWatchFolderMutation.mutate({ path: newWatchPath.trim(), preset: newWatchPreset })}
-                disabled={!newWatchPath.trim() || addWatchFolderMutation.isPending}>
+                onClick={() => addWatchRuleMutation.mutate({ path: newWatchPath.trim(), preset: newWatchPreset, kind_routing: newWatchKindRouting })}
+                disabled={!newWatchPath.trim() || addWatchRuleMutation.isPending}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />Add
               </Button>
             </div>
-            {addWatchFolderMutation.isError ? (
-              <p className="text-xs text-destructive">{String((addWatchFolderMutation.error as Error)?.message ?? "Failed")}</p>
+            {addWatchRuleMutation.isError ? (
+              <p className="text-xs text-destructive">{String((addWatchRuleMutation.error as Error)?.message ?? "Failed")}</p>
             ) : null}
           </div>
         </CardContent>

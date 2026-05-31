@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ouro.modules.torrent.payload import resolve_torrent_payload
+from swirrl.modules.torrent.payload import resolve_torrent_payload
 
 
 def test_torrent_resolver_single_file(tmp_path: Path) -> None:

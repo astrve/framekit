@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from ouro.core.models.metadata import MetadataCandidate
-from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData
-from ouro.modules.metadata.choices import MetadataChoiceStore, build_release_signature
+from swirrl.core.models.metadata import MetadataCandidate
+from swirrl.core.models.nfo import EpisodeNfoData, ReleaseNfoData
+from swirrl.modules.metadata.choices import MetadataChoiceStore, build_release_signature
 
 
 def test_build_release_signature_movie():

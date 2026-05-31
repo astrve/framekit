@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`ouro.core.settings.normalize`.
+"""Unit tests for :mod:`swirrl.core.settings.normalize`.
 
 Targets pure helpers (``normalize_ui_locale``, ``normalize_nfo_locale``,
 ``resolve_nfo_locale``, ``metadata_language_for_nfo_locale``,
@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from ouro.core.settings.normalize import (
+from swirrl.core.settings.normalize import (
     _as_bool,
     _as_int,
     _deep_merge,
@@ -286,7 +286,7 @@ def test_get_nested_returns_value() -> None:
 
 
 def test_get_nested_raises_on_missing() -> None:
-    from ouro.core.exceptions import SettingsError
+    from swirrl.core.exceptions import SettingsError
 
     data = {"a": {}}
     with pytest.raises(SettingsError):
@@ -294,7 +294,7 @@ def test_get_nested_raises_on_missing() -> None:
 
 
 def test_get_nested_raises_on_non_dict_segment() -> None:
-    from ouro.core.exceptions import SettingsError
+    from swirrl.core.exceptions import SettingsError
 
     with pytest.raises(SettingsError):
         _get_nested({"a": 42}, "a.b")
@@ -313,7 +313,7 @@ def test_set_nested_overrides_existing() -> None:
 
 
 def test_set_nested_raises_on_unknown_key() -> None:
-    from ouro.core.exceptions import SettingsError
+    from swirrl.core.exceptions import SettingsError
 
     data: dict[str, Any] = {}
     with pytest.raises(SettingsError):
@@ -321,7 +321,7 @@ def test_set_nested_raises_on_unknown_key() -> None:
 
 
 def test_split_key_path_rejects_empty() -> None:
-    from ouro.core.exceptions import SettingsError
+    from swirrl.core.exceptions import SettingsError
 
     with pytest.raises(SettingsError):
         _split_key_path("")
@@ -355,7 +355,7 @@ def test_normalize_settings_prez_invalid_values_fall_back() -> None:
 
 
 def test_validate_settings_rejects_invalid_shapes_and_values() -> None:
-    from ouro.core.exceptions import SettingsError
+    from swirrl.core.exceptions import SettingsError
 
     with pytest.raises(SettingsError):
         validate_settings({"general": []})

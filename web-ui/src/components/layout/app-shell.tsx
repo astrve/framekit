@@ -3,12 +3,11 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ActivitySquare,
   BookMarked,
-  ChevronDown,
   Clapperboard,
+  Film,
   FileCog,
   Info,
   KeyRound,
-  LayoutDashboard,
   Layers,
   LogOut,
   Moon,
@@ -28,7 +27,7 @@ import {
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 
-import { getSettingsProfiles } from "@/lib/api/endpoints";
+import { getSettingsProfiles, listModuleJobs } from "@/lib/api/endpoints";
 import { useAuth } from "@/lib/auth";
 
 import {
@@ -48,34 +47,53 @@ type NavItem = {
   adminOnly?: boolean;
 };
 
-type NavGroup = {
-  title: string;
-  items: NavItem[];
+type TopSection = {
+  id: string;
+  label: string;
+  href: string;
+  prefixes: string[];
+  sidebarItems: NavItem[];
 };
 
-const NAV_GROUPS: NavGroup[] = [
+const TOP_SECTIONS: TopSection[] = [
   {
-    title: "Run",
-    items: [
-      { to: "/", label: "Home", icon: LayoutDashboard },
+    id: "dashboard",
+    label: "Dashboard",
+    href: "/",
+    prefixes: ["/"],
+    sidebarItems: [],
+  },
+  {
+    id: "modules",
+    label: "Modules",
+    href: "/pipeline",
+    prefixes: ["/pipeline", "/batch", "/jobs", "/studios", "/rollback", "/releases", "/module/"],
+    sidebarItems: [
       { to: "/pipeline", label: "Pipeline", icon: Workflow },
       { to: "/batch", label: "Batch", icon: Layers },
       { to: "/jobs", label: "Jobs", icon: ActivitySquare },
-      { to: "/studios", label: "Modules", icon: Clapperboard },
+      { to: "/releases", label: "Releases", icon: Film },
+      { to: "/studios", label: "All Modules", icon: Clapperboard },
       { to: "/rollback", label: "Rollback", icon: RotateCcw },
     ],
   },
   {
-    title: "Transfer",
-    items: [
+    id: "transfer",
+    label: "Transfer",
+    href: "/upload",
+    prefixes: ["/upload", "/seedbox", "/intake"],
+    sidebarItems: [
       { to: "/upload", label: "Upload", icon: Upload },
       { to: "/seedbox", label: "Seedbox", icon: Server },
       { to: "/intake", label: "Intake", icon: KeyRound, adminOnly: true },
     ],
   },
   {
-    title: "Observe",
-    items: [
+    id: "observe",
+    label: "Observe",
+    href: "/events",
+    prefixes: ["/events", "/logs", "/doctor", "/cli"],
+    sidebarItems: [
       { to: "/events", label: "Events", icon: Signal },
       { to: "/logs", label: "Logs", icon: ScrollText },
       { to: "/doctor", label: "Diagnostics", icon: Stethoscope },
@@ -83,18 +101,24 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "Configure",
-    items: [
+    id: "settings",
+    label: "Settings",
+    href: "/settings-setup",
+    prefixes: ["/settings-setup", "/presets", "/aliases", "/webhooks", "/users"],
+    sidebarItems: [
       { to: "/settings-setup", label: "Settings", icon: Settings },
       { to: "/presets", label: "Presets", icon: FileCog },
       { to: "/aliases", label: "Aliases", icon: BookMarked },
+      { to: "/webhooks", label: "Webhooks", icon: Webhook, adminOnly: true },
+      { to: "/users", label: "Users", icon: ShieldCheck, adminOnly: true },
     ],
   },
   {
-    title: "System",
-    items: [
-      { to: "/webhooks", label: "Webhooks", icon: Webhook, adminOnly: true },
-      { to: "/users", label: "Users", icon: ShieldCheck, adminOnly: true },
+    id: "about",
+    label: "About",
+    href: "/about",
+    prefixes: ["/about"],
+    sidebarItems: [
       { to: "/about", label: "About", icon: Info },
     ],
   },
@@ -115,89 +139,97 @@ const SETTINGS_SECTIONS = [
   { id: "s-security", label: "Security" },
 ];
 
-function isActive(pathname: string, target: string): boolean {
-  if (target === "/") {
-    return pathname === "/";
-  }
-  return pathname === target || pathname.startsWith(`${target}/`);
-}
-
 function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function OuroLogo() {
-  return <img src="/logo.svg" alt="Ouro" className="h-5 w-5" />;
+function getActiveSection(pathname: string): TopSection | undefined {
+  if (pathname === "/") return TOP_SECTIONS.find((s) => s.id === "dashboard");
+  return TOP_SECTIONS.find(
+    (s) =>
+      s.id !== "dashboard" &&
+      s.prefixes.some(
+        (p) => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p),
+      ),
+  );
+}
+
+function isItemActive(pathname: string, to: string): boolean {
+  if (to === "/") return pathname === "/";
+  return pathname === to || pathname.startsWith(`${to}/`);
 }
 
 function SidebarNav({
   pathname,
   isAdmin,
+  activeJobCount,
 }: {
   pathname: string;
   isAdmin: boolean;
+  activeJobCount: number;
 }) {
-  const groups = useMemo(
-    () =>
-      NAV_GROUPS.map((group) => ({
-        ...group,
-        items: group.items.filter((item) => !item.adminOnly || isAdmin),
-      })).filter((group) => group.items.length > 0),
-    [isAdmin],
+  const activeSection = getActiveSection(pathname);
+  const sidebarItems = useMemo(
+    () => (activeSection?.sidebarItems ?? []).filter((item) => !item.adminOnly || isAdmin),
+    [activeSection, isAdmin],
   );
 
-  return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border/80 bg-card/65 backdrop-blur-sm">
-      <nav className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto px-3 py-5">
-        <div className="space-y-6">
-          {groups.map((group) => (
-            <div key={group.title} className="space-y-2">
-              <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                {group.title}
-              </p>
-              <div className="space-y-1">
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(pathname, item.to);
-                  return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      className={cn(
-                        "interactive-lift nav-item flex items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors",
-                        active
-                          ? "border-primary/30 bg-primary/10 text-foreground"
-                          : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-secondary/45 hover:text-foreground",
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+  if (!activeSection || sidebarItems.length === 0) return null;
 
-          {pathname === "/settings-setup" ? (
-            <div className="space-y-2 border-t border-border/70 pt-4">
-              <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Settings Sections
-              </p>
-              <div className="space-y-1">
-                {SETTINGS_SECTIONS.map((section) => (
-                  <button
-                    key={section.id}
-                    type="button"
-                    onClick={() => scrollToSection(section.id)}
-                    className="interactive-lift flex w-full items-center justify-between rounded-lg border border-transparent px-2.5 py-1.5 text-left text-sm text-muted-foreground hover:border-border/70 hover:bg-secondary/45 hover:text-foreground"
+  return (
+    <aside className="hidden lg:flex w-56 shrink-0 flex-col border-r border-border bg-card/60">
+      <nav className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto px-3 py-4">
+        <div className="space-y-0.5">
+          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">
+            {activeSection.label}
+          </p>
+          {sidebarItems.map((item) => {
+            const Icon = item.icon;
+            const active = isItemActive(pathname, item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{item.label}</span>
+                {item.to === "/jobs" && activeJobCount > 0 && (
+                  <span
+                    className={cn(
+                      "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
+                      active ? "bg-white/20 text-white" : "bg-primary/20 text-primary",
+                    )}
                   >
-                    {section.label}
-                  </button>
-                ))}
-              </div>
+                    {activeJobCount}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+
+          {pathname === "/settings-setup" && (
+            <div className="mt-5 space-y-1 border-t border-border/50 pt-4">
+              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">
+                Sections
+              </p>
+              {SETTINGS_SECTIONS.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => scrollToSection(section.id)}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors duration-150 hover:bg-secondary hover:text-foreground"
+                >
+                  {section.label}
+                </button>
+              ))}
             </div>
-          ) : null}
+          )}
         </div>
       </nav>
     </aside>
@@ -207,7 +239,12 @@ function SidebarNav({
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user: authUser, logout } = useAuth();
-  const [dark, setDark] = useState(() => localStorage.getItem("theme") === "dark");
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark") return true;
+    if (saved === "light") return false;
+    return true;
+  });
 
   const profilesQuery = useQuery({
     queryKey: ["settings-profiles-nav"],
@@ -217,9 +254,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     retry: false,
   });
 
+  const jobsNavQuery = useQuery({
+    queryKey: ["nav-jobs-count"],
+    queryFn: () => listModuleJobs(50),
+    refetchInterval: 5_000,
+    staleTime: 0,
+    enabled: pathname !== "/login",
+    retry: false,
+  });
+
   const activeProfile = profilesQuery.data?.active ?? null;
   const isAdmin = authUser?.role === "admin";
   const isLoginPage = pathname === "/login";
+  const activeJobCount = (jobsNavQuery.data?.jobs ?? []).filter(
+    (j) => j.status === "pending" || j.status === "running",
+  ).length;
+
+  const activeSection = getActiveSection(pathname);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -234,41 +285,63 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isLoginPage) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="swirrl-shell min-h-screen bg-background text-foreground">
         {children}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-lg">
-        <div className="flex h-14 items-center gap-2 px-3 lg:px-5">
-          <Link to="/" className="interactive-lift flex items-center gap-2 rounded-lg px-1 py-1 transition-opacity hover:opacity-85">
-            <div className="rounded-md border border-primary/35 bg-card p-1.5 shadow-sm">
-              <OuroLogo />
-            </div>
-            <img src="/logo-wordmark.svg" alt="Ouro" className="hidden sm:block h-4 w-auto" />
+    <div className="swirrl-shell min-h-screen text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/96 backdrop-blur-md">
+        <div className="flex h-14 items-center px-3 lg:px-5 gap-1">
+          {/* Logo */}
+          <Link
+            to="/"
+            className="interactive-lift mr-3 shrink-0 rounded-lg px-1 py-1 transition-opacity hover:opacity-80"
+          >
+            <img src="/logo-wordmark.svg" alt="Swirrl" className="h-8 w-auto" />
           </Link>
 
-          <div className="hidden md:flex items-center gap-1.5">
-            <Link to="/pipeline" className="interactive-lift rounded-md border border-border/70 bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/30 hover:bg-secondary">
-              Run Pipeline
-            </Link>
-            <Link to="/jobs" className="interactive-lift rounded-md border border-border/70 bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/30 hover:bg-secondary">
-              Open Jobs
-            </Link>
-            <Link to="/events" className="interactive-lift rounded-md border border-border/70 bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/30 hover:bg-secondary">
-              Service Events
-            </Link>
-          </div>
+          {/* Top nav — desktop */}
+          <nav className="hidden lg:flex items-center gap-0.5 flex-1">
+            {TOP_SECTIONS.map((section) => {
+              const isActive =
+                section.id === "dashboard"
+                  ? pathname === "/"
+                  : activeSection?.id === section.id;
+              return (
+                <Link
+                  key={section.id}
+                  to={section.href}
+                  className={cn(
+                    "relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150",
+                    isActive
+                      ? "text-foreground after:absolute after:inset-x-1 after:-bottom-[9px] after:h-[2px] after:rounded-full after:bg-primary"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {section.label}
+                  {section.id === "modules" && activeJobCount > 0 && (
+                    <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-primary/20 px-1 text-[10px] font-bold text-primary tabular-nums">
+                      {activeJobCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+            <span className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground/35 cursor-default select-none">
+              Docs
+            </span>
+          </nav>
 
+          {/* Right controls */}
           <div className="ml-auto flex items-center gap-2">
             {activeProfile ? (
               <Link
                 to="/settings-setup"
                 title="Active settings profile"
-                className="hidden md:inline-flex rounded-full border border-border bg-secondary/70 px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                className="hidden md:inline-flex rounded-full border border-border bg-secondary/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
               >
                 {activeProfile}
               </Link>
@@ -294,24 +367,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             ) : null}
 
+            {/* Mobile dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger className="interactive-lift inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm lg:hidden">
                 Menu
-                <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                {NAV_GROUPS.map((group, index) => {
-                  const items = group.items.filter((item) => !item.adminOnly || isAdmin);
-                  if (items.length === 0) return null;
+                {TOP_SECTIONS.map((section, index) => {
+                  const items = section.sidebarItems.filter(
+                    (item) => !item.adminOnly || isAdmin,
+                  );
                   return (
-                    <div key={group.title}>
+                    <div key={section.id}>
                       {index > 0 ? <DropdownMenuSeparator /> : null}
-                      <DropdownMenuLabel>{group.title}</DropdownMenuLabel>
-                      {items.map((item) => (
-                        <DropdownMenuItem key={item.to} asChild>
-                          <Link to={item.to}>{item.label}</Link>
+                      <DropdownMenuLabel>{section.label}</DropdownMenuLabel>
+                      {items.length > 0 ? (
+                        items.map((item) => (
+                          <DropdownMenuItem key={item.to} asChild>
+                            <Link to={item.to}>{item.label}</Link>
+                          </DropdownMenuItem>
+                        ))
+                      ) : (
+                        <DropdownMenuItem asChild>
+                          <Link to={section.href}>{section.label}</Link>
                         </DropdownMenuItem>
-                      ))}
+                      )}
                     </div>
                   );
                 })}
@@ -322,8 +402,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <div className="mx-auto flex max-w-[1640px]">
-        <SidebarNav pathname={pathname} isAdmin={isAdmin} />
-        <main className="w-full min-w-0 px-4 py-6 md:px-6 lg:px-8">
+        <SidebarNav pathname={pathname} isAdmin={isAdmin} activeJobCount={activeJobCount} />
+        <main className="w-full min-w-0 px-4 py-6 md:px-6 lg:px-8 ops-reveal">
           {children}
         </main>
       </div>

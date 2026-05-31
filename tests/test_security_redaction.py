@@ -4,7 +4,7 @@ Comprehensive tests for secret redaction in diagnostics.
 Tests redaction of sensitive keys and values in logs and diagnostics.
 """
 
-from ouro.core.diagnostics import (
+from swirrl.core.diagnostics import (
     SECRET_KEY_PARTS,
     SECRET_VALUE_PATTERNS,
     _is_sensitive_key,

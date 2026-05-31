@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from ouro.core import mediainfo
+from swirrl.core import mediainfo
 
 
 def test_media_file_info_from_cache_ignores_invalid_tracks(tmp_path: Path) -> None:

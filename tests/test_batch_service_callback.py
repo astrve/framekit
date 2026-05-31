@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ouro.modules.batch.models import BatchConfig, BatchItem, BatchStatus
-from ouro.modules.batch.service import (
+from swirrl.modules.batch.models import BatchConfig, BatchItem, BatchStatus
+from swirrl.modules.batch.service import (
     BatchService,
     _pipeline_accepts_result_callback,
     _pipeline_accepts_step_callback,

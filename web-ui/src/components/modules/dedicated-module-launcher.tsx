@@ -63,7 +63,7 @@ export function DedicatedModuleLauncher(props: {
     setArgsText(buildArgsFromState(cliCommand, initial));
   }, [cliCommand, moduleName]);
 
-  const previewCommand = useMemo(() => `ouro ${moduleName} ${argsText.trim()}`.trim(), [argsText, moduleName]);
+  const previewCommand = useMemo(() => `swirrl ${moduleName} ${argsText.trim()}`.trim(), [argsText, moduleName]);
   const runResult: RunModuleResult | null = runMutation.data ?? null;
 
   // Derive dry-run state from form values (commandValues) or raw args fallback

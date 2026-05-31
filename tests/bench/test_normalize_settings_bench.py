@@ -4,8 +4,8 @@ from copy import deepcopy
 
 import pytest
 
-from ouro.core.settings.normalize import normalize_settings
-from ouro.core.settings.schema import DEFAULT_SETTINGS
+from swirrl.core.settings.normalize import normalize_settings
+from swirrl.core.settings.schema import DEFAULT_SETTINGS
 
 pytestmark = pytest.mark.benchmark
 
@@ -22,6 +22,6 @@ def test_bench_normalize_settings_overridden(benchmark) -> None:
     payload["general"]["locale"] = "fr-FR"
     payload["metadata"]["language"] = "fr-FR"
     payload["cache"]["tmdb"]["ttl_days"] = 14
-    payload.setdefault("plugins", {})["allowed"] = ["ouro-plugin-anilist"]
+    payload.setdefault("plugins", {})["allowed"] = ["swirrl-plugin-anilist"]
     result = benchmark(normalize_settings, payload)
     assert result["general"]["locale"] == "fr"

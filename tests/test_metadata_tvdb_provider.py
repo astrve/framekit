@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ouro.core.models.metadata import MetadataCandidate, MetadataLookupRequest
-from ouro.modules.metadata.providers.tvdb import TVDBProvider
-from ouro.modules.metadata.rate_limiter import RateLimiter
+from swirrl.core.models.metadata import MetadataCandidate, MetadataLookupRequest
+from swirrl.modules.metadata.providers.tvdb import TVDBProvider
+from swirrl.modules.metadata.rate_limiter import RateLimiter
 
 
 def _mock_response(status_code: int = 200, data: dict | None = None) -> MagicMock:
@@ -90,9 +90,9 @@ class TestTVDBAuthentication:
         assert call_args[1]["json_body"]["apikey"] == "test_api_key"
 
     def test_authenticate_failure(self, tvdb_provider, mock_http_client):
-        """Test authentication failure raises OuroMetadataError."""
-        from ouro.core.exceptions import OuroMetadataError
-        from ouro.core.http import HttpAuthError
+        """Test authentication failure raises SwirrlMetadataError."""
+        from swirrl.core.exceptions import SwirrlMetadataError
+        from swirrl.core.http import HttpAuthError
 
         mock_http_client.post.side_effect = HttpAuthError(
             "Authentication failed",
@@ -100,7 +100,7 @@ class TestTVDBAuthentication:
             status_code=401,
         )
 
-        with pytest.raises(OuroMetadataError, match="authentication failed"):
+        with pytest.raises(SwirrlMetadataError, match="authentication failed"):
             tvdb_provider._authenticate()
 
     def test_authenticate_caches_token(self, tvdb_provider, mock_http_client):
@@ -325,7 +325,7 @@ class TestTVDBErrorHandling:
 
     def test_handle_401_reauthenticate(self, tvdb_provider, mock_http_client, mock_rate_limiter):
         """Test 401 error triggers re-authentication."""
-        from ouro.core.http import HttpAuthError
+        from swirrl.core.http import HttpAuthError
 
         tvdb_provider.token = "expired_token"
 
@@ -368,8 +368,8 @@ class TestTVDBErrorHandling:
 
     def test_handle_404_not_found(self, tvdb_provider, mock_http_client, mock_rate_limiter):
         """Test fetch_season raises on 404."""
-        from ouro.core.exceptions import OuroMetadataError
-        from ouro.core.http import HttpError
+        from swirrl.core.exceptions import SwirrlMetadataError
+        from swirrl.core.http import HttpError
 
         tvdb_provider.token = "test_token"
 
@@ -390,5 +390,5 @@ class TestTVDBErrorHandling:
             reasons=["test"],
         )
 
-        with pytest.raises(OuroMetadataError):
+        with pytest.raises(SwirrlMetadataError):
             tvdb_provider.fetch_season(candidate)

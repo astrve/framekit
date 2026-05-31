@@ -8,9 +8,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from ouro.core.models.media import MediaFileInfo, MediaTrack
-from ouro.core.tools import ToolRegistry
-from ouro.modules.cleanmkv import scanner
+from swirrl.core.models.media import MediaFileInfo, MediaTrack
+from swirrl.core.tools import ToolRegistry
+from swirrl.modules.cleanmkv import scanner
 
 
 class _Registry(ToolRegistry):

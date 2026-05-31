@@ -58,7 +58,7 @@ test("dedicated and wave pages render and run mocked commands", async ({ page })
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        settings_path: "C:/cfg/ouro.yaml",
+        settings_path: "C:/cfg/swirrl.yaml",
         config_dir: "C:/cfg",
         cache_dir: "C:/cache",
         settings: { general: { locale: "en" } },
@@ -71,7 +71,7 @@ test("dedicated and wave pages render and run mocked commands", async ({ page })
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        settings_path: "C:/cfg/ouro.yaml",
+        settings_path: "C:/cfg/swirrl.yaml",
         config_dir: "C:/cfg",
         cache_dir: "C:/cache",
         settings: { general: { locale: "en" }, seedbox: { max_concurrent_uploads: 3 } },
@@ -307,7 +307,7 @@ test("dedicated and wave pages render and run mocked commands", async ({ page })
       contentType: "application/json",
       body: JSON.stringify({
         ok: true,
-        argv: ["python", "-m", "ouro", body.module, ...body.args_text.split(" ").filter(Boolean)],
+        argv: ["python", "-m", "swirrl", body.module, ...body.args_text.split(" ").filter(Boolean)],
         returncode: 0,
         stdout: `ran ${body.module}`,
         stderr: "",

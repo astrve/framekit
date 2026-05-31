@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 echo.
 echo  ============================================
-echo   Ouro v2.0.0 - Windows Installer
+echo   Swirrl v2.0.0 - Windows Installer
 echo  ============================================
 echo.
 
@@ -41,22 +41,22 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
     echo [OK] Virtual environment exists.
 )
 
-:: ── Install Ouro ──────────────────────────────────────────────────────────
-echo [..] Installing Ouro...
+:: ── Install Swirrl ──────────────────────────────────────────────────────────
+echo [..] Installing Swirrl...
 "%VENV_DIR%\Scripts\pip.exe" install --upgrade pip >nul 2>&1
 "%VENV_DIR%\Scripts\pip.exe" install -e "%~dp0."
 if errorlevel 1 (
     echo [ERROR] Installation failed.
     goto :end_pause
 )
-echo [OK] Ouro installed.
+echo [OK] Swirrl installed.
 
 :: ── Verify ────────────────────────────────────────────────────────────────────
-"%VENV_DIR%\Scripts\ouro.exe" --version >nul 2>&1
+"%VENV_DIR%\Scripts\swirrl.exe" --version >nul 2>&1
 if errorlevel 1 (
-    echo [WARN] ouro binary not found in venv.
+    echo [WARN] swirrl binary not found in venv.
 ) else (
-    for /f "delims=" %%v in ('"%VENV_DIR%\Scripts\ouro.exe" --version 2^>^&1') do echo [OK] %%v
+    for /f "delims=" %%v in ('"%VENV_DIR%\Scripts\swirrl.exe" --version 2^>^&1') do echo [OK] %%v
 )
 
 :: ── Optional dependencies ─────────────────────────────────────────────────────
@@ -154,8 +154,8 @@ echo  ============================================
 echo   Installation complete!
 echo  ============================================
 echo.
-echo  Run Ouro:
-echo    %VENV_DIR%\Scripts\ouro.exe --help
+echo  Run Swirrl:
+echo    %VENV_DIR%\Scripts\swirrl.exe --help
 echo.
 echo  Add to PATH (run in PowerShell):
 echo    $env:PATH += ";%VENV_DIR%\Scripts"

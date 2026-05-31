@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from ouro.core.http import HttpResponse
-from ouro.modules.upload.adapters.custom_json_api_v1 import CustomJsonApiAdapter
-from ouro.modules.upload.models import TorrentFile, TorrentMetadata, TrackerConfig
+from swirrl.core.http import HttpResponse
+from swirrl.modules.upload.adapters.custom_json_api_v1 import CustomJsonApiAdapter
+from swirrl.modules.upload.models import TorrentFile, TorrentMetadata, TrackerConfig
 
 
 def _make_config() -> TrackerConfig:

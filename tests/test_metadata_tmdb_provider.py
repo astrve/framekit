@@ -6,11 +6,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ouro.core.http import HttpAuthError, HttpError
-from ouro.core.models.metadata import MetadataLookupRequest
-from ouro.modules.metadata.health import HealthMonitor, HealthStatus
-from ouro.modules.metadata.rate_limiter import RateLimiter
-from ouro.modules.metadata.tmdb_provider import TMDbProvider
+from swirrl.core.http import HttpAuthError, HttpError
+from swirrl.core.models.metadata import MetadataLookupRequest
+from swirrl.modules.metadata.health import HealthMonitor, HealthStatus
+from swirrl.modules.metadata.rate_limiter import RateLimiter
+from swirrl.modules.metadata.tmdb_provider import TMDbProvider
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def mock_health_monitor():
 @pytest.fixture
 def mock_cache_manager():
     """Create a mock cache manager that always misses."""
-    from ouro.core.cache import CacheManager
+    from swirrl.core.cache import CacheManager
 
     cache = MagicMock(spec=CacheManager)
     cache.get_tmdb_search.return_value = None
@@ -153,7 +153,7 @@ class TestTMDbRateLimiting:
 
     def test_rate_limiter_called_on_fetch(self, tmdb_provider, mock_rate_limiter, mock_http_client):
         """Test rate limiter is called when fetching metadata."""
-        from ouro.core.models.metadata import MetadataCandidate
+        from swirrl.core.models.metadata import MetadataCandidate
 
         mock_http_client.get_json.return_value = {
             "id": 12345,
@@ -370,7 +370,7 @@ class TestTMDbFetchMovie:
 
     def test_fetch_movie_success(self, tmdb_provider, mock_http_client):
         """Test successful movie fetch."""
-        from ouro.core.models.metadata import MetadataCandidate
+        from swirrl.core.models.metadata import MetadataCandidate
 
         # Mock movie details response
         mock_http_client.get_json.side_effect = [
@@ -422,7 +422,7 @@ class TestTMDbFetchEpisode:
 
     def test_fetch_episode_success(self, tmdb_provider, mock_http_client):
         """Test successful episode fetch."""
-        from ouro.core.models.metadata import MetadataCandidate
+        from swirrl.core.models.metadata import MetadataCandidate
 
         # Mock series details, episode details, and external IDs
         mock_http_client.get_json.side_effect = [
@@ -478,7 +478,7 @@ class TestTMDbFetchSeason:
 
     def test_fetch_season_success(self, tmdb_provider, mock_http_client):
         """Test successful season fetch."""
-        from ouro.core.models.metadata import MetadataCandidate
+        from swirrl.core.models.metadata import MetadataCandidate
 
         # Mock series details, season details, and external IDs
         mock_http_client.get_json.side_effect = [

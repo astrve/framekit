@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`ouro.modules.watch.notifier`.
+"""Unit tests for :mod:`swirrl.modules.watch.notifier`.
 
 The desktop-notifier subsystem is replaced with a fake collector so tests
 exercise the config-gating logic, message formatting, and error truncation
@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
-from ouro.modules.watch import notifier as notifier_module
-from ouro.modules.watch.models import NotificationConfig
-from ouro.modules.watch.notifier import WindowsNotifier
+from swirrl.modules.watch import notifier as notifier_module
+from swirrl.modules.watch.models import NotificationConfig
+from swirrl.modules.watch.notifier import WindowsNotifier
 
 
 @pytest.fixture

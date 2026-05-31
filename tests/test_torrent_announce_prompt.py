@@ -1,4 +1,4 @@
-"""Tests for the interactive announce-URL prompt used by ``ouro torrent``.
+"""Tests for the interactive announce-URL prompt used by ``swirrl torrent``.
 
 When no announce is configured (typical first-run state) the torrent
 command used to exit 1 with a one-line error. The current behaviour is to
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ouro.commands import torrent as torrent_module
+from swirrl.commands import torrent as torrent_module
 
 
 def test_non_tty_returns_empty_string(monkeypatch: pytest.MonkeyPatch) -> None:

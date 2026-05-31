@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from ouro.core.models.cleanmkv import MkvFileScan, TrackInfo
-from ouro.core.naming import sanitized_release_dir
-from ouro.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
+from swirrl.core.models.cleanmkv import MkvFileScan, TrackInfo
+from swirrl.core.naming import sanitized_release_dir
+from swirrl.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
 
 
 def test_sanitized_release_dir_helper() -> None:

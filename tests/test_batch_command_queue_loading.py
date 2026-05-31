@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ouro.commands import batch as batch_module
+from swirrl.commands import batch as batch_module
 
 
 def test_batch_command_uses_fresh_queue_for_explicit_path(monkeypatch, tmp_path) -> None:

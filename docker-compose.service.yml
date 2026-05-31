@@ -1,20 +1,20 @@
 services:
-  ouro:
+  swirrl:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ouro-service:local
+    image: swirrl-service:local
     environment:
-      OURO_CONFIG_DIR: /var/lib/ouro/config
-      OURO_CACHE_DIR: /var/lib/ouro/cache
+      SWIRRL_CONFIG_DIR: /var/lib/swirrl/config
+      SWIRRL_CACHE_DIR: /var/lib/swirrl/cache
     ports:
       - "8000:8000"
     volumes:
-      - ouro_config:/var/lib/ouro/config
-      - ouro_cache:/var/lib/ouro/cache
+      - swirrl_config:/var/lib/swirrl/config
+      - swirrl_cache:/var/lib/swirrl/cache
       - ./Workspace:/media
     restart: unless-stopped
 
 volumes:
-  ouro_config:
-  ouro_cache:
+  swirrl_config:
+  swirrl_cache:

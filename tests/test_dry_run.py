@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ouro.core.dry_run import (
+from swirrl.core.dry_run import (
     DryRunOperation,
     DryRunRecorder,
     dry_run_mode,

@@ -23,9 +23,9 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from ouro.core.path_validation import PathValidationError  # noqa: E402
-from ouro.core.tools import ToolRegistry  # noqa: E402
-from ouro.modules.extract.models import (  # noqa: E402
+from swirrl.core.path_validation import PathValidationError  # noqa: E402
+from swirrl.core.tools import ToolRegistry  # noqa: E402
+from swirrl.modules.extract.models import (  # noqa: E402
     VideoCodec,
     VideoExtractionOptions,
     VideoTrack,
@@ -140,7 +140,7 @@ class TestVideoExtractor:
     @pytest.fixture
     def video_extractor(self, mock_registry):
         """Create VideoExtractor instance."""
-        from ouro.modules.extract.video_extractor import VideoExtractor
+        from swirrl.modules.extract.video_extractor import VideoExtractor
 
         return VideoExtractor(mock_registry)
 
@@ -455,7 +455,7 @@ class TestVideoExtractionIntegration:
     @pytest.fixture
     def video_extractor(self, mock_registry):
         """Create VideoExtractor instance."""
-        from ouro.modules.extract.video_extractor import VideoExtractor
+        from swirrl.modules.extract.video_extractor import VideoExtractor
 
         return VideoExtractor(mock_registry)
 

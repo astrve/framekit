@@ -1,12 +1,12 @@
-# Contributing to Ouro
+# Contributing to Swirrl
 
-Thanks for considering a contribution. Ouro is a security-sensitive, headless-friendly CLI for media release preparation; the rules below exist to keep it that way.
+Thanks for considering a contribution. Swirrl is a security-sensitive, headless-friendly CLI for media release preparation; the rules below exist to keep it that way.
 
 ## TL;DR
 
 ```bash
 # 1. Fork + clone
-git clone https://github.com/<you>/ouro && cd ouro
+git clone https://github.com/<you>/swirrl && cd swirrl
 
 # 2. Install with dev extras (uv recommended)
 uv venv && uv pip install -e ".[dev]"
@@ -15,7 +15,7 @@ uv venv && uv pip install -e ".[dev]"
 pre-commit install
 
 # 4. Make a focused change, add tests, run the full suite
-pytest --cov=src/ouro --cov-report=term-missing
+pytest --cov=src/swirrl --cov-report=term-missing
 ruff check src tests && ruff format --check src tests
 pyright
 bandit -r src
@@ -33,7 +33,7 @@ pip-audit
   - `ffmpeg` + `ffprobe` (encoder, screenshot, extract)
   - `mediainfo` / `libmediainfo` (technical metadata)
 
-Run `ouro doctor` to verify your environment.
+Run `swirrl doctor` to verify your environment.
 
 ## Branching
 
@@ -85,7 +85,7 @@ A PR is mergeable when **all** of the following are green:
 - **Always** add a regression test alongside a bug fix. The test should fail without the fix and pass with it.
 - Prefer `pytest` fixtures over global state.
 - For subprocess and network code, use `respx` (httpx mocks) and `tmp_path` instead of real I/O.
-- Tests live in `tests/`. Mirror the source tree: `src/ouro/modules/foo.py` → `tests/test_foo.py`.
+- Tests live in `tests/`. Mirror the source tree: `src/swirrl/modules/foo.py` → `tests/test_foo.py`.
 - Security-sensitive paths (vault, keyring, redaction, template escape, subprocess, path validation) **must** have regression tests when modified.
 
 ## Code Style
@@ -99,11 +99,11 @@ A PR is mergeable when **all** of the following are green:
 
 ## Security Rules
 
-- Never log raw token, announce URL, password, or other secret material. Use `mask_secret()` from `ouro.modules.metadata.config`.
+- Never log raw token, announce URL, password, or other secret material. Use `mask_secret()` from `swirrl.modules.metadata.config`.
 - Never call subprocess with a partial executable path. Resolve via `shutil.which` or hard-code the absolute path.
 - Never set Jinja2 `autoescape=False` without a clear rationale in a comment.
 - Vault changes must include a migration test (`tests/test_settings_migration.py`).
-- New external HTTP calls must use the project `httpx` wrapper (`ouro.core.http`) so timeouts, retries, and TLS settings are uniform.
+- New external HTTP calls must use the project `httpx` wrapper (`swirrl.core.http`) so timeouts, retries, and TLS settings are uniform.
 
 Coordinate vulnerability fixes via [SECURITY.md](SECURITY.md) before opening a public PR.
 
@@ -111,8 +111,8 @@ Coordinate vulnerability fixes via [SECURITY.md](SECURITY.md) before opening a p
 
 - Every command must have a `--help` and a non-interactive path. Headless mode must not silently prompt.
 - Destructive operations (writes, renames, deletes, uploads) must respect `--dry-run` / `--preview` and confirm in interactive mode.
-- Localized strings go through `ouro.core.i18n.tr()` — never hard-code user-facing English.
-- Selector calls go through `ouro.ui.unified_selector` (the consolidation target). Don't add new ad-hoc Click prompts.
+- Localized strings go through `swirrl.core.i18n.tr()` — never hard-code user-facing English.
+- Selector calls go through `swirrl.ui.unified_selector` (the consolidation target). Don't add new ad-hoc Click prompts.
 
 ## Documentation
 

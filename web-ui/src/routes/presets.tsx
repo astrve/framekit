@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Input } from "@/components/ui/input";
+import { Toggle } from "@/components/ui/toggle";
 import { addTorrentAnnounce, createPreset, deleteAllPresets, deletePreset, getModulesResources, getProviderToken, getTmdbToken, removeTorrentAnnounce, renameAnnounce, selectTorrentAnnounce } from "@/lib/api/endpoints";
 
 function Section({
@@ -716,20 +717,18 @@ export function PresetsPage() {
 
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Enabled steps</p>
-                  <div className="flex flex-wrap gap-4">
+                  <div className="flex flex-wrap gap-3">
                     {["renamer", "cleanmkv", "metadata", "nfo", "torrent", "prez"].map((m) => (
-                      <label key={m} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="accent-primary"
-                          checked={pipelineCfg.modules.includes(m)}
-                          onChange={(e) => setPipelineCfg(c => ({
-                            ...c,
-                            modules: e.target.checked ? [...c.modules, m] : c.modules.filter(x => x !== m),
-                          }))}
-                        />
-                        <span className="capitalize">{m}</span>
-                      </label>
+                      <Toggle
+                        key={m}
+                        checked={pipelineCfg.modules.includes(m)}
+                        onChange={(v) => setPipelineCfg(c => ({
+                          ...c,
+                          modules: v ? [...c.modules, m] : c.modules.filter(x => x !== m),
+                        }))}
+                        label={m}
+                        className="capitalize"
+                      />
                     ))}
                   </div>
                 </div>
@@ -772,10 +771,7 @@ export function PresetsPage() {
                           <option value="both">both</option>
                         </select>
                       </label>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer pt-5">
-                        <input type="checkbox" className="accent-primary" checked={pipelineCfg.nfoAutoMeta} onChange={(e) => setPipelineCfg(c => ({ ...c, nfoAutoMeta: e.target.checked }))} />
-                        Auto metadata
-                      </label>
+                      <Toggle checked={pipelineCfg.nfoAutoMeta} onChange={(v) => setPipelineCfg(c => ({ ...c, nfoAutoMeta: v }))} label="Auto metadata" className="pt-5" />
                     </div>
                   </div>
                 )}
@@ -783,10 +779,7 @@ export function PresetsPage() {
                 {pipelineCfg.modules.includes("torrent") && (
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Torrent</p>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="checkbox" className="accent-primary" checked={pipelineCfg.torrentPrivate} onChange={(e) => setPipelineCfg(c => ({ ...c, torrentPrivate: e.target.checked }))} />
-                      Private torrent
-                    </label>
+                    <Toggle checked={pipelineCfg.torrentPrivate} onChange={(v) => setPipelineCfg(c => ({ ...c, torrentPrivate: v }))} label="Private torrent" />
                   </div>
                 )}
 
@@ -844,14 +837,8 @@ export function PresetsPage() {
                   </label>
                 </div>
                 <div className="flex gap-6 flex-wrap">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" className="accent-primary" checked={cleanmkvCfg.audioExplicit} onChange={(e) => setCleanmkvCfg(c => ({ ...c, audioExplicit: e.target.checked }))} />
-                    Audio default explicit
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" className="accent-primary" checked={cleanmkvCfg.subExplicit} onChange={(e) => setCleanmkvCfg(c => ({ ...c, subExplicit: e.target.checked }))} />
-                    Subtitle default explicit
-                  </label>
+                  <Toggle checked={cleanmkvCfg.audioExplicit} onChange={(v) => setCleanmkvCfg(c => ({ ...c, audioExplicit: v }))} label="Audio default explicit" />
+                  <Toggle checked={cleanmkvCfg.subExplicit} onChange={(v) => setCleanmkvCfg(c => ({ ...c, subExplicit: v }))} label="Subtitle default explicit" />
                 </div>
               </div>
             )}
@@ -895,14 +882,8 @@ export function PresetsPage() {
                       <option value="only">only</option>
                     </select>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer pt-5">
-                    <input type="checkbox" className="accent-primary" checked={prezCfg.showTmdb} onChange={(e) => setPrezCfg(c => ({ ...c, showTmdb: e.target.checked }))} />
-                    Show TMDB
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer pt-5">
-                    <input type="checkbox" className="accent-primary" checked={prezCfg.showMediainfo} onChange={(e) => setPrezCfg(c => ({ ...c, showMediainfo: e.target.checked }))} />
-                    Show MediaInfo
-                  </label>
+                  <Toggle checked={prezCfg.showTmdb} onChange={(v) => setPrezCfg(c => ({ ...c, showTmdb: v }))} label="Show TMDB" className="pt-5" />
+                  <Toggle checked={prezCfg.showMediainfo} onChange={(v) => setPrezCfg(c => ({ ...c, showMediainfo: v }))} label="Show MediaInfo" className="pt-5" />
                 </div>
               </div>
             )}

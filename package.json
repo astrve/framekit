@@ -1,7 +1,7 @@
 {
   "scripts": {
     "build:web-ui": "npm --prefix web-ui run build",
-    "sync:web-static": "node -e \"const fs=require('node:fs');const path=require('node:path');const src=path.resolve('web-ui/dist');const dest=path.resolve('src/ouro/web/static');fs.rmSync(dest,{recursive:true,force:true});fs.mkdirSync(dest,{recursive:true});fs.cpSync(src,dest,{recursive:true});\"",
+    "sync:web-static": "node -e \"const fs=require('node:fs');const path=require('node:path');const src=path.resolve('web-ui/dist');const dest=path.resolve('src/swirrl/web/static');fs.rmSync(dest,{recursive:true,force:true});fs.mkdirSync(dest,{recursive:true});fs.cpSync(src,dest,{recursive:true});\"",
     "build": "npm run build:web-ui && npm run sync:web-static",
     "dev": "npm --prefix web-ui run dev",
     "typecheck": "npm --prefix web-ui run typecheck"

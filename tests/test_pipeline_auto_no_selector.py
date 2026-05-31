@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def test_pipeline_auto_mode_skips_interactive_preset_selection(monkeypatch) -> None:
-    from ouro.commands import pipeline
+    from swirrl.commands import pipeline
 
     called = False
 

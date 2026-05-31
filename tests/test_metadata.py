@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from ouro.core.models.metadata import MetadataCandidate, MetadataLookupRequest
-from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData
-from ouro.modules.metadata.cache import MetadataCache
-from ouro.modules.metadata.matcher import build_lookup_request
+from swirrl.core.models.metadata import MetadataCandidate, MetadataLookupRequest
+from swirrl.core.models.nfo import EpisodeNfoData, ReleaseNfoData
+from swirrl.modules.metadata.cache import MetadataCache
+from swirrl.modules.metadata.matcher import build_lookup_request
 
 
 def test_build_lookup_request_movie():

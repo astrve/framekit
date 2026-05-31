@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 from click.testing import CliRunner
 
-from ouro.commands.main import cli
+from swirrl.commands.main import cli
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def test_top_level_help_succeeds(runner: CliRunner) -> None:
 
 def test_top_level_version_succeeds(runner: CliRunner) -> None:
     result = runner.invoke(cli, ["--version"])
-    # Click default formats "ouro, version X.Y.Z" — accept either form.
+    # Click default formats "swirrl, version X.Y.Z" — accept either form.
     assert result.exit_code == 0
 
 
@@ -170,7 +170,7 @@ def test_unknown_command_returns_nonzero(runner: CliRunner) -> None:
 
 
 def test_pipeline_rejects_nonexistent_path(runner: CliRunner, tmp_path) -> None:
-    """``ouro pipeline /missing/path`` must exit non-zero without traceback.
+    """``swirrl pipeline /missing/path`` must exit non-zero without traceback.
 
     Covers the regression of the public surface — exit code path is the
     contract observable by automation.

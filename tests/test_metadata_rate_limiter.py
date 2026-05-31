@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from ouro.modules.metadata.rate_limiter import RateLimit, RateLimiter
+from swirrl.modules.metadata.rate_limiter import RateLimit, RateLimiter
 
 
 def test_rate_limit_dataclass():

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from ouro.commands.browse import browse_command
+from swirrl.commands.browse import browse_command
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ class TestBrowseCommand:
         assert result.exit_code == 0
         assert "--filter" in result.output or "filter" in result.output.lower()
 
-    @patch("ouro.commands.browse.FileBrowserTUI")
+    @patch("swirrl.commands.browse.FileBrowserTUI")
     def test_non_tty_error(self, mock_tui_class, cli_runner, mock_file_system):
         """Test error when not running in TTY."""
         mock_tui = MagicMock()
@@ -81,7 +81,7 @@ class TestBrowseCommand:
         assert "PATH" in result.output or "path" in result.output.lower()
 
     @patch("sys.stdin.isatty")
-    @patch("ouro.commands.browse.FileBrowserTUI")
+    @patch("swirrl.commands.browse.FileBrowserTUI")
     def test_browse_with_filter(self, mock_tui_class, mock_isatty, cli_runner, mock_file_system):
         """Test browse with file filter."""
         mock_isatty.return_value = True
@@ -101,7 +101,7 @@ class TestBrowseCommand:
         assert config.filter_extensions == [".mkv"]
 
     @patch("sys.stdin.isatty")
-    @patch("ouro.commands.browse.FileBrowserTUI")
+    @patch("swirrl.commands.browse.FileBrowserTUI")
     def test_browse_multi_select(self, mock_tui_class, mock_isatty, cli_runner, mock_file_system):
         """Test browse with multi-select enabled."""
         mock_isatty.return_value = True
@@ -120,7 +120,7 @@ class TestBrowseCommand:
         assert config.multi_select is True
 
     @patch("sys.stdin.isatty")
-    @patch("ouro.commands.browse.FileBrowserTUI")
+    @patch("swirrl.commands.browse.FileBrowserTUI")
     def test_browse_output_format(self, mock_tui_class, mock_isatty, cli_runner, mock_file_system):
         """Test browse output format."""
         mock_isatty.return_value = True
@@ -138,7 +138,7 @@ class TestBrowseCommand:
         assert "file2.mp4" in result.output
 
     @patch("sys.stdin.isatty")
-    @patch("ouro.commands.browse.FileBrowserTUI")
+    @patch("swirrl.commands.browse.FileBrowserTUI")
     def test_browse_no_selection(self, mock_tui_class, mock_isatty, cli_runner, mock_file_system):
         """Test browse with no selection (cancelled)."""
         mock_isatty.return_value = True
@@ -152,7 +152,7 @@ class TestBrowseCommand:
         assert result.exit_code == 0
 
     @patch("sys.stdin.isatty")
-    @patch("ouro.commands.browse.FileBrowserTUI")
+    @patch("swirrl.commands.browse.FileBrowserTUI")
     def test_browse_directories_only(
         self, mock_tui_class, mock_isatty, cli_runner, mock_file_system
     ):
@@ -184,7 +184,7 @@ class TestBrowseCommand:
         )
 
     @patch("sys.stdin.isatty")
-    @patch("ouro.commands.browse.FileBrowserTUI")
+    @patch("swirrl.commands.browse.FileBrowserTUI")
     def test_browse_default_directory(self, mock_tui_class, mock_isatty, cli_runner):
         """Test browse uses current directory by default."""
         mock_isatty.return_value = True
@@ -203,7 +203,7 @@ class TestBrowseCommand:
         assert config.start_directory is not None
 
     @patch("sys.stdin.isatty")
-    @patch("ouro.commands.browse.FileBrowserTUI")
+    @patch("swirrl.commands.browse.FileBrowserTUI")
     def test_browse_multiple_filters(
         self, mock_tui_class, mock_isatty, cli_runner, mock_file_system
     ):

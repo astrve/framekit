@@ -1,4 +1,4 @@
-"""Regression tests for :class:`ouro.modules.nfo.template_selector.TemplateSelector`.
+"""Regression tests for :class:`swirrl.modules.nfo.template_selector.TemplateSelector`.
 
 Bug: ``run()`` used to build every entry with ``selected=False``, so the
 cursor always landed on the first option (``Default``). A user with
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from ouro.modules.nfo.template_selector import TemplateOption, TemplateSelector
+from swirrl.modules.nfo.template_selector import TemplateOption, TemplateSelector
 
 
 def _builtin_options() -> list[TemplateOption]:
@@ -40,7 +40,7 @@ def test_preferred_entry_is_marked_selected() -> None:
         return entries[1].value
 
     options = _builtin_options()
-    with patch("ouro.modules.nfo.template_selector.select_one", side_effect=_spy):
+    with patch("swirrl.modules.nfo.template_selector.select_one", side_effect=_spy):
         TemplateSelector(options, preferred_name="detailed").run()
 
     entries = captured["entries"]
@@ -57,7 +57,7 @@ def test_preferred_entry_label_is_annotated() -> None:
         return entries[0].value
 
     options = _builtin_options()
-    with patch("ouro.modules.nfo.template_selector.select_one", side_effect=_spy):
+    with patch("swirrl.modules.nfo.template_selector.select_one", side_effect=_spy):
         TemplateSelector(options, preferred_name="detailed").run()
 
     labels = [entry.label for entry in captured["entries"]]
@@ -75,7 +75,7 @@ def test_unknown_preferred_leaves_no_selection() -> None:
         return entries[0].value
 
     options = _builtin_options()
-    with patch("ouro.modules.nfo.template_selector.select_one", side_effect=_spy):
+    with patch("swirrl.modules.nfo.template_selector.select_one", side_effect=_spy):
         TemplateSelector(options, preferred_name="nonexistent").run()
 
     assert all(entry.selected is False for entry in captured["entries"])
@@ -91,7 +91,7 @@ def test_none_preferred_leaves_no_selection() -> None:
         return entries[0].value
 
     options = _builtin_options()
-    with patch("ouro.modules.nfo.template_selector.select_one", side_effect=_spy):
+    with patch("swirrl.modules.nfo.template_selector.select_one", side_effect=_spy):
         TemplateSelector(options, preferred_name=None).run()
 
     assert all(entry.selected is False for entry in captured["entries"])
@@ -105,7 +105,7 @@ def test_returned_option_template_name_matches_selection() -> None:
         return entries[1].value
 
     options = _builtin_options()
-    with patch("ouro.modules.nfo.template_selector.select_one", side_effect=_spy):
+    with patch("swirrl.modules.nfo.template_selector.select_one", side_effect=_spy):
         chosen = TemplateSelector(options, preferred_name="default").run()
 
     assert chosen is not None

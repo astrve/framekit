@@ -1,6 +1,6 @@
 """Tests for NFO logo tools - logo name utilities."""
 
-from ouro.modules.nfo.logo_tools import _slugify_logo_name
+from swirrl.modules.nfo.logo_tools import _slugify_logo_name
 
 
 def test_slugify_logo_name():

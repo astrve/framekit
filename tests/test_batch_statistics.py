@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ouro.modules.batch.models import BatchItem, BatchResult, BatchStatistics, BatchStatus
+from swirrl.modules.batch.models import BatchItem, BatchResult, BatchStatistics, BatchStatus
 
 
 def _item(name: str, status: BatchStatus) -> BatchItem:

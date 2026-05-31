@@ -1,4 +1,4 @@
-"""Performance benchmark suite for Ouro hot paths.
+"""Performance benchmark suite for Swirrl hot paths.
 
 The benchmarks here are intentionally scaffolded with synthetic inputs so
 they run inside the CI matrix without external media. Real-media
@@ -7,8 +7,8 @@ opt-in marker and are excluded from the default collection.
 
 Hot paths covered (S1 baseline, refined in S11):
 
-* ``ouro.core.mediainfo.probe_media_file`` — MediaInfo parsing.
-* ``ouro.core.settings.normalize.normalize_settings`` — config
+* ``swirrl.core.mediainfo.probe_media_file`` — MediaInfo parsing.
+* ``swirrl.core.settings.normalize.normalize_settings`` — config
   normalisation.
 * Pipeline cold start (Click ``--help`` rendering as a proxy for the
   import graph cost; real cold-start measured in S11 with an isolated

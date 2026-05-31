@@ -1,5 +1,5 @@
-from ouro.core.models.metadata import MetadataCandidate
-from ouro.modules.metadata.selector import MetadataCandidateSelector, choose_metadata_candidate
+from swirrl.core.models.metadata import MetadataCandidate
+from swirrl.modules.metadata.selector import MetadataCandidateSelector, choose_metadata_candidate
 
 
 def _candidate(
@@ -31,7 +31,7 @@ def test_choose_metadata_candidate_returns_selected(monkeypatch):
         assert len(entries) == 2
         return expected
 
-    monkeypatch.setattr("ouro.modules.metadata.selector.select_one", fake_select_one)
+    monkeypatch.setattr("swirrl.modules.metadata.selector.select_one", fake_select_one)
 
     result = choose_metadata_candidate([_candidate(1), expected])
 
@@ -48,7 +48,7 @@ def test_selector_marks_stored_choice_as_selected(monkeypatch):
         captured["entries"] = entries
         return saved
 
-    monkeypatch.setattr("ouro.modules.metadata.selector.select_one", fake_select_one)
+    monkeypatch.setattr("swirrl.modules.metadata.selector.select_one", fake_select_one)
 
     result = MetadataCandidateSelector([saved, normal], page_size=2).run()
 
@@ -62,7 +62,7 @@ def test_selector_returns_none_on_keyboard_interrupt(monkeypatch):
     def fake_select_one(**kwargs):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr("ouro.modules.metadata.selector.select_one", fake_select_one)
+    monkeypatch.setattr("swirrl.modules.metadata.selector.select_one", fake_select_one)
 
     result = MetadataCandidateSelector([_candidate(1)]).run()
 
@@ -75,7 +75,7 @@ def test_selector_open_current_callback_opens_browser(monkeypatch):
     def fake_open(url: str) -> None:
         opened.append(url)
 
-    monkeypatch.setattr("ouro.modules.metadata.selector.webbrowser.open", fake_open)
+    monkeypatch.setattr("swirrl.modules.metadata.selector.webbrowser.open", fake_open)
 
     candidate = _candidate(1, external_url="https://example.test/item")
 
@@ -84,7 +84,7 @@ def test_selector_open_current_callback_opens_browser(monkeypatch):
         on_open_current(candidate)
         return candidate
 
-    monkeypatch.setattr("ouro.modules.metadata.selector.select_one", fake_select_one)
+    monkeypatch.setattr("swirrl.modules.metadata.selector.select_one", fake_select_one)
 
     result = MetadataCandidateSelector([candidate]).run()
 

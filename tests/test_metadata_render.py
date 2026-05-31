@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from ouro.core.models.metadata import EpisodeMetadata, SeasonMetadata
-from ouro.core.models.nfo import EpisodeNfoData, ReleaseNfoData
-from ouro.modules.metadata.render import build_metadata_context
+from swirrl.core.models.metadata import EpisodeMetadata, SeasonMetadata
+from swirrl.core.models.nfo import EpisodeNfoData, ReleaseNfoData
+from swirrl.modules.metadata.render import build_metadata_context
 
 
 def test_build_metadata_context_filters_season_to_folder_episodes():

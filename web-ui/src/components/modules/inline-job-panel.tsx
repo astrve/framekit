@@ -1,13 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, LoaderCircle, OctagonX, RotateCcw, Square } from "lucide-react";
-import { useMemo } from "react";
+import { CheckCircle2, LoaderCircle, MessageSquare, OctagonX, RotateCcw, Square } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RunTimeline } from "@/components/modules/run-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cancelModuleJob, getModuleJob, rerunModuleJob } from "@/lib/api/endpoints";
-import type { ModuleJob } from "@/lib/api/schemas";
+import { cancelModuleJob, getJobCheckpoint, getModuleJob, respondJobCheckpoint, rerunModuleJob } from "@/lib/api/endpoints";
+import type { JobCheckpoint, ModuleJob } from "@/lib/api/schemas";
 import { cn } from "@/lib/utils";
 import { parseSubSteps, runTimeline } from "@/lib/progress";
 
@@ -182,6 +182,11 @@ export interface InlineJobPanelProps {
    * The parent should update its jobId state to the new job's ID.
    */
   onRerun?: (newJob: ModuleJob) => void;
+  /**
+   * Called once when the job transitions to "completed".
+   * Useful for auto-advancing a wizard step after a module finishes.
+   */
+  onComplete?: (job: ModuleJob) => void;
   className?: string;
 }
 
@@ -195,7 +200,7 @@ export interface InlineJobPanelProps {
  * from live stdout, a live output tail, and stderr/error on failure.
  *
  * Cancel and Rerun are inline actions.
- * The "Debug →" link navigates to the full job detail page (/modules/:jobId).
+ * The "Debug →" link navigates to the full job detail page (/jobs/$jobId).
  *
  * Renders nothing when jobId is null (no job started yet).
  *
@@ -212,6 +217,7 @@ export function InlineJobPanel({
   jobId,
   moduleName,
   onRerun,
+  onComplete,
   className,
 }: InlineJobPanelProps) {
   // ── polling query ────────────────────────────────────────────────────────
@@ -223,6 +229,40 @@ export function InlineJobPanel({
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "pending" || status === "running" ? 1500 : false;
+    },
+  });
+
+  const [checkpointPending, setCheckpointPending] = useState(false);
+
+  const completedFiredRef = useRef(false);
+  useEffect(() => { completedFiredRef.current = false; }, [jobId]);
+  useEffect(() => {
+    if (jobQuery.data?.status === "completed" && !completedFiredRef.current) {
+      completedFiredRef.current = true;
+      onComplete?.(jobQuery.data);
+    }
+  }, [jobQuery.data, onComplete]);
+
+  const checkpointQuery = useQuery({
+    queryKey: ["job-checkpoint", jobId],
+    queryFn: () => getJobCheckpoint(jobId as string),
+    enabled: jobId !== null,
+    refetchInterval: (query) => {
+      const jobStatus = jobQuery.data?.status;
+      if (jobStatus !== "running") return false;
+      const cp = query.state.data as JobCheckpoint | undefined;
+      return cp?.pending ? 800 : 1200;
+    },
+    staleTime: 0,
+  });
+
+  const checkpoint = checkpointQuery.data?.pending ? checkpointQuery.data : null;
+
+  const respondMutation = useMutation({
+    mutationFn: ({ idx }: { idx: number }) => respondJobCheckpoint(jobId as string, idx),
+    onSuccess: () => {
+      setCheckpointPending(false);
+      void checkpointQuery.refetch();
     },
   });
 
@@ -309,7 +349,7 @@ export function InlineJobPanel({
           <LoaderCircle className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
         )}
         {job?.status === "running" && (
-          <LoaderCircle className="h-4 w-4 animate-spin text-blue-500 shrink-0" />
+          <LoaderCircle className="h-4 w-4 animate-spin text-primary shrink-0" />
         )}
         {job?.status === "completed" && (
           <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -338,7 +378,7 @@ export function InlineJobPanel({
           </span>
         ) : null}
         {job?.next_retry_at ? (
-          <span className="text-xs text-blue-600 dark:text-blue-400">
+          <span className="text-xs text-primary">
             retry {new Date(job.next_retry_at).toLocaleTimeString()}
           </span>
         ) : null}
@@ -396,6 +436,89 @@ export function InlineJobPanel({
         <RunTimeline items={timelineItems} />
       </div>
 
+      {/* ── Checkpoint — step_confirm: Approve/Skip/Back/Abort per pipeline step ─ */}
+      {checkpoint?.type === "step_confirm" && (
+        <div className="mx-4 mb-3 rounded-xl border border-primary/40 bg-primary/8 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">{checkpoint.title ?? `Step: ${checkpoint.step}`}</p>
+              {checkpoint.summary && checkpoint.summary !== checkpoint.title && (
+                <p className="text-xs text-muted-foreground mt-0.5">{checkpoint.summary}</p>
+              )}
+            </div>
+            {checkpoint.step_index && checkpoint.step_total ? (
+              <Badge variant="secondary" className="ml-auto text-[10px] shrink-0">
+                Step {checkpoint.step_index}/{checkpoint.step_total}
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="ml-auto text-[10px] shrink-0">Waiting</Badge>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(checkpoint.options ?? [{ index: 0, label: "Approve", hint: "" }]).map((opt) => {
+              const lower = opt.label.toLowerCase();
+              const isApprove = lower === "approve";
+              const isAbort = lower === "abort";
+              return (
+                <button
+                  key={opt.index}
+                  type="button"
+                  title={opt.hint || undefined}
+                  disabled={respondMutation.isPending || checkpointPending}
+                  onClick={() => { setCheckpointPending(true); respondMutation.mutate({ idx: opt.index }); }}
+                  className={cn(
+                    "rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50",
+                    isApprove && "flex-1 border-primary/50 bg-primary/10 text-foreground hover:bg-primary/20",
+                    isAbort && "border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20",
+                    !isApprove && !isAbort && "border-border bg-card text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Checkpoint selector — select_one: pick from list of options ──── */}
+      {checkpoint && checkpoint.type !== "step_confirm" && (
+        <div className="mx-4 mb-3 rounded-xl border border-primary/40 bg-primary/8 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary shrink-0" />
+            <p className="text-sm font-semibold text-foreground">{checkpoint.title ?? "Select an option"}</p>
+            <Badge variant="secondary" className="ml-auto text-[10px]">Waiting</Badge>
+          </div>
+          <div className="space-y-1.5">
+            {(checkpoint.options ?? []).map((opt) => {
+              const isDefault = opt.index === (checkpoint.default_index ?? 0);
+              return (
+                <button
+                  key={opt.index}
+                  type="button"
+                  disabled={respondMutation.isPending || checkpointPending}
+                  onClick={() => {
+                    setCheckpointPending(true);
+                    respondMutation.mutate({ idx: opt.index });
+                  }}
+                  className={cn(
+                    "w-full rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                    isDefault
+                      ? "border-primary/50 bg-primary/10 text-foreground hover:bg-primary/20"
+                      : "border-border bg-card text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                  )}
+                >
+                  <span className="font-medium">{opt.label}</span>
+                  {opt.hint && <span className="ml-2 text-xs text-muted-foreground">· {opt.hint}</span>}
+                  {isDefault && <span className="ml-2 text-[10px] text-primary">default</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Sub-steps — only shown when parseSubSteps finds matches ─────── */}
       {subSteps.length > 0 && (
         <div className="px-4 pb-3 space-y-1.5">
@@ -414,7 +537,7 @@ export function InlineJobPanel({
                     ? "text-emerald-500"
                     : step.status === "failed"
                       ? "text-destructive"
-                      : "text-blue-500",
+                      : "text-primary",
                 )}
               >
                 {step.status === "done" ? "✓" : step.status === "failed" ? "✗" : "●"}

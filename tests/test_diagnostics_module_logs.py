@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ouro.core.diagnostics import (
+from swirrl.core.diagnostics import (
     configure_diagnostics,
     get_module_log_file,
     log_event,
@@ -9,17 +9,17 @@ from ouro.core.diagnostics import (
 
 
 def test_log_event_writes_per_module_session_log(tmp_path, monkeypatch) -> None:
-    from ouro.core import paths
+    from swirrl.core import paths
 
     workspace = tmp_path / "workspace"
     cache_dir = tmp_path / "cache"
     config_dir = tmp_path / "config"
     workspace.mkdir()
     monkeypatch.chdir(workspace)
-    monkeypatch.delenv("OURO_CONFIG", raising=False)
+    monkeypatch.delenv("SWIRRL_CONFIG", raising=False)
     monkeypatch.setattr(paths, "user_cache_dir", lambda *_args: str(cache_dir))
     monkeypatch.setattr(paths, "user_config_dir", lambda *_args: str(config_dir))
-    configure_diagnostics(log_file=cache_dir / "ouro.log")
+    configure_diagnostics(log_file=cache_dir / "swirrl.log")
 
     try:
         log_event("INFO", "hello module log", module="prez", release="demo")

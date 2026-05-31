@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from ouro.core.models.cleanmkv import RemuxPlan
-from ouro.core.tools import ToolRegistry
-from ouro.modules.cleanmkv import remuxer
+from swirrl.core.models.cleanmkv import RemuxPlan
+from swirrl.core.tools import ToolRegistry
+from swirrl.modules.cleanmkv import remuxer
 
 
 class _Registry(ToolRegistry):

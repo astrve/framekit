@@ -13,7 +13,7 @@ from jinja2.sandbox import SandboxedEnvironment, SecurityError
 
 
 def _render_sandboxed(template_content: str, context: dict) -> str:
-    """Render template using same sandbox config as Ouro NFO renderer."""
+    """Render template using same sandbox config as Swirrl NFO renderer."""
     from jinja2 import BaseLoader, StrictUndefined
 
     env = SandboxedEnvironment(
@@ -32,7 +32,7 @@ class TestJinja2TemplateSandboxing:
 
     def test_render_uses_sandboxed_environment(self):
         """Test that rendering uses SandboxedEnvironment."""
-        from ouro.modules.nfo.templates import render_template
+        from swirrl.modules.nfo.templates import render_template
 
         # Verify the function exists and module imports cleanly
         assert callable(render_template)
@@ -115,7 +115,7 @@ class TestTemplateInputValidation:
 
     def test_template_path_traversal_blocked(self):
         """Test that path traversal in template names is blocked."""
-        from ouro.modules.nfo.templates import resolve_template_path
+        from swirrl.modules.nfo.templates import resolve_template_path
 
         with pytest.raises((FileNotFoundError, ValueError, OSError)):
             resolve_template_path("../../etc/passwd")

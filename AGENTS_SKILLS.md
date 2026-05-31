@@ -1,4 +1,4 @@
-# Ouro — Available Agents & Skills
+# Swirrl — Available Agents & Skills
 
 Use these agents and skills only when they are available in the current Claude Code environment.
 

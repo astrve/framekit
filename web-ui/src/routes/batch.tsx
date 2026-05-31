@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, Play } from "lucide-react";
-import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { Badge } from "@/components/ui/badge";
@@ -44,14 +44,20 @@ export function BatchPage() {
   const [announce, setAnnounce] = useState("");
   const [enabledModules, setEnabledModules] = useState<string[]>(["renamer", "cleanmkv", "metadata", "nfo", "torrent", "prez"]);
   const [autoMode, setAutoMode] = useState(true);
-  const [manualMode, setManualMode] = useState(false);
-  const [dashboard, setDashboard] = useState(false);
-  const [dryRun, setDryRun] = useState(true);
+  const [dryRun, setDryRun] = useState(false);
+  const [interactive, setInteractive] = useState(false);
   const [confirmDestructive, setConfirmDestructive] = useState(true);
   const [asyncRun, setAsyncRun] = useState(true);
   const [copied, setCopied] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const presets = resourcesQuery.data?.pipeline_presets ?? [];
+    if (!pipelinePreset && presets.length > 0) {
+      setPipelinePreset(presets[0]?.name ?? "");
+    }
+  }, [pipelinePreset, resourcesQuery.data?.pipeline_presets]);
 
   const runMutation = useMutation({ mutationFn: runModule });
   const createJobMutation = useMutation({
@@ -69,15 +75,6 @@ export function BatchPage() {
     if (autoMode) {
       args.push("--auto");
     }
-    if (manualMode) {
-      args.push("--manual");
-    }
-    if (dashboard) {
-      args.push("--dashboard");
-    }
-    if (dryRun) {
-      args.push("--dry-run");
-    }
     if (pipelinePreset.trim()) {
       args.push("--pipeline-preset", quoteArg(pipelinePreset));
     }
@@ -90,13 +87,16 @@ export function BatchPage() {
     if (announce.trim()) {
       args.push("--announce", quoteArg(announce));
     }
-    for (const moduleName of enabledModules) {
-      args.push("--modules", moduleName);
+    if (enabledModules.length > 0) {
+      args.push("--modules", enabledModules.join(","));
+    }
+    if (dryRun) {
+      args.push("--dry-run");
     }
     return args.join(" ").trim();
-  }, [announce, autoMode, dashboard, dryRun, enabledModules, locale, manualMode, parentPath, pipelinePreset, prezPreset]);
+  }, [announce, autoMode, dryRun, enabledModules, locale, parentPath, pipelinePreset, prezPreset]);
 
-  const previewCommand = useMemo(() => `ouro batch ${argsText}`.trim(), [argsText]);
+  const previewCommand = useMemo(() => `swirrl batch ${argsText}`.trim(), [argsText]);
 
   function toggleModule(moduleName: string, checked: boolean) {
     if (checked) {
@@ -111,6 +111,10 @@ export function BatchPage() {
       setLocalError("Parent Path Required.");
       return;
     }
+    if (!pipelinePreset.trim()) {
+      setLocalError("Workflow Profile Required for Web Batch.");
+      return;
+    }
     setLocalError(null);
     const payload = {
       module: "batch",
@@ -118,6 +122,7 @@ export function BatchPage() {
       dry_run: dryRun,
       auto_yes: false,
       confirm_destructive: confirmDestructive,
+      checkpoint_enabled: interactive,
     };
     if (asyncRun) {
       createJobMutation.mutate(payload);
@@ -127,19 +132,21 @@ export function BatchPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-border bg-card p-5">
+    <div className="space-y-6 workflow-shell ops-reveal">
+      <section className="workflow-stage rounded-lg border border-border bg-card p-5">
         <h1 className="text-2xl font-semibold tracking-tight">Batch Processing</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Run the full pipeline across an entire folder of releases.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Run the full pipeline across an entire folder with queue visibility in the same page.
+        </p>
       </section>
 
-      <Card>
+      <Card className="workflow-stage">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Play className="h-4 w-4 text-primary" />
             Configure Batch
           </CardTitle>
-          <CardDescription>Set your options — no command-line knowledge needed.</CardDescription>
+          <CardDescription>Step 1 — Context and parameters.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
@@ -150,7 +157,7 @@ export function BatchPage() {
             <label className="space-y-1 text-sm">
               Workflow profile
               <select className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm" value={pipelinePreset} onChange={(event) => setPipelinePreset(event.target.value)}>
-                <option value="">— Default —</option>
+                <option value="">— Required for Web batch —</option>
                 {(resourcesQuery.data?.pipeline_presets ?? []).map((item) => (
                   <option key={item.name} value={item.name}>{item.name}</option>
                 ))}
@@ -200,6 +207,14 @@ export function BatchPage() {
             </div>
           </div>
 
+          <div className="rounded-md border border-primary/35 bg-primary/10 p-4">
+            <p className="text-sm font-medium text-foreground">Long-run operations</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Large batches and encode-heavy profiles may run for a long time. Keep this page open
+              to follow active jobs and output.
+            </p>
+          </div>
+
           {(resourcesQuery.data?.banner_previews ?? []).length > 0 ? (
             <div className="rounded-md border border-border p-4">
               <p className="mb-2 text-sm font-medium">Banner assets</p>
@@ -213,17 +228,20 @@ export function BatchPage() {
             </div>
           ) : null}
 
+          <div className="rounded-md border border-border p-4">
+            <p className="text-sm font-medium">Web execution mode</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Batch jobs run in autonomous mode (<code className="font-mono">--auto</code>) in Web UI.
+              Terminal-only prompts (<code className="font-mono">--manual</code>, dashboard TTY) are not available in background jobs.
+            </p>
+          </div>
+
           <div className="flex flex-wrap gap-4">
-            {([
-              [autoMode, setAutoMode, "Automatic mode"],
-              [manualMode, setManualMode, "Manual confirmation"],
-              [dashboard, setDashboard, "Show live dashboard"],
-              [dryRun, setDryRun, "Simulation (no file writes)"],
-              [confirmDestructive, setConfirmDestructive, "Allow file changes"],
-              [asyncRun, setAsyncRun, "Run in background"],
-            ] as Array<[boolean, Dispatch<SetStateAction<boolean>>, string]>).map(([checked, setter, label]) => (
-              <Toggle key={label} checked={checked} onChange={setter} label={label} />
-            ))}
+            <Toggle checked={autoMode} onChange={setAutoMode} label="Auto mode (headless)" />
+            <Toggle checked={dryRun} onChange={setDryRun} label="Dry run (preview only)" />
+            <Toggle checked={interactive} onChange={setInteractive} label="Interactive (step checkpoints)" />
+            <Toggle checked={confirmDestructive} onChange={setConfirmDestructive} label="Allow file changes" />
+            <Toggle checked={asyncRun} onChange={setAsyncRun} label="Run in background" />
           </div>
 
           <details className="rounded-md border border-border">
@@ -258,15 +276,18 @@ export function BatchPage() {
       </Card>
 
       {asyncRun && jobId !== null ? (
-        <InlineJobPanel
-          jobId={jobId}
-          moduleName="batch"
-          onRerun={(newJob: ModuleJob) => setJobId(newJob.id)}
-        />
+        <section className="workflow-stage">
+          <h2 className="mb-2 text-sm font-semibold">Execution</h2>
+          <InlineJobPanel
+            jobId={jobId}
+            moduleName="batch"
+            onRerun={(newJob: ModuleJob) => setJobId(newJob.id)}
+          />
+        </section>
       ) : null}
 
       {!asyncRun && result ? (
-        <Card>
+        <Card className="workflow-stage">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Badge variant={result.ok ? "success" : "danger"}>{result.ok ? "Completed" : "Failed"}</Badge>

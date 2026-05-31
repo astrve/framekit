@@ -64,7 +64,7 @@ test("final core paths: settings save, seedbox manage, upload toggle, pipeline a
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        settings_path: "C:/cfg/ouro.yaml",
+        settings_path: "C:/cfg/swirrl.yaml",
         config_dir: "C:/cfg",
         cache_dir: "C:/cache",
         settings: { general: { locale: "en" }, seedbox: { max_concurrent_uploads: 3 } },
@@ -77,7 +77,7 @@ test("final core paths: settings save, seedbox manage, upload toggle, pipeline a
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        settings_path: "C:/cfg/ouro.yaml",
+        settings_path: "C:/cfg/swirrl.yaml",
         config_dir: "C:/cfg",
         cache_dir: "C:/cache",
         settings: { general: { locale: "en" }, seedbox: { max_concurrent_uploads: 5 } },
@@ -228,7 +228,7 @@ test("final core paths: settings save, seedbox manage, upload toggle, pipeline a
       contentType: "application/json",
       body: JSON.stringify({
         ok: true,
-        argv: ["python", "-m", "ouro", body.module],
+        argv: ["python", "-m", "swirrl", body.module],
         returncode: 0,
         stdout: `ran ${body.module}`,
         stderr: "",
@@ -366,7 +366,7 @@ test("final core paths: settings save, seedbox manage, upload toggle, pipeline a
 
   await page.goto("/settings-setup");
   await page.getByRole("button", { name: "Save" }).first().click();
-  await expect(page.getByText("C:/cfg/ouro.yaml")).toBeVisible();
+  await expect(page.getByText("C:/cfg/swirrl.yaml")).toBeVisible();
 
   await page.goto("/seedbox");
   await page.getByLabel("Profile name").fill("edge-seed");

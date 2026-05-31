@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`ouro.modules.watch.handler`.
+"""Unit tests for :mod:`swirrl.modules.watch.handler`.
 
 Covers event routing (``on_created`` / ``on_modified`` / ``on_moved``), the
 failed-file relocation helper, status snapshot, log-event truncation and
@@ -14,15 +14,15 @@ from typing import Any
 
 import pytest
 
-from ouro.modules.watch.handler import FileHandler
-from ouro.modules.watch.models import (
+from swirrl.modules.watch.handler import FileHandler
+from swirrl.modules.watch.models import (
     ErrorHandlingConfig,
     NotificationConfig,
     ValidationConfig,
     WatchConfig,
 )
-from ouro.modules.watch.notifier import WindowsNotifier
-from ouro.modules.watch.validator import FileValidator
+from swirrl.modules.watch.notifier import WindowsNotifier
+from swirrl.modules.watch.validator import FileValidator
 
 
 @pytest.fixture

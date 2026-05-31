@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ouro.commands import cleanmkv as cleanmkv_command_module
-from ouro.core.models.cleanmkv import CleanPreset
-from ouro.core.reporting import OperationReport
-from ouro.core.settings import SettingsStore
+from swirrl.commands import cleanmkv as cleanmkv_command_module
+from swirrl.core.models.cleanmkv import CleanPreset
+from swirrl.core.reporting import OperationReport
+from swirrl.core.settings import SettingsStore
 
 
 class _StoreFactory:

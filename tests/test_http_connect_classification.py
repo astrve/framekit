@@ -15,7 +15,7 @@ from unittest.mock import Mock
 import httpx
 import pytest
 
-from ouro.core.http import (
+from swirrl.core.http import (
     HttpCertificateError,
     HttpClient,
     HttpClientConfig,

@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from ouro.core.languages import (
+from swirrl.core.languages import (
     language_filter_short_label,
     match_language_filter,
     normalize_language,
 )
-from ouro.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
-from ouro.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
-from ouro.modules.cleanmkv.presets import (
+from swirrl.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
+from swirrl.modules.cleanmkv.planner import build_remux_plan, get_builtin_preset
+from swirrl.modules.cleanmkv.presets import (
     load_named_external_preset,
     load_preset_file,
     preset_from_dict,

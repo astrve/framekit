@@ -1,5 +1,5 @@
 /**
- * Auth context for Ouro web UI.
+ * Auth context for Swirrl web UI.
  * Stores JWT token in localStorage. Disabled when server has no users.
  */
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
@@ -7,7 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { getAuthMe } from "@/lib/api/endpoints";
 import type { AuthUser } from "@/lib/api/schemas";
 
-const TOKEN_KEY = "ouro_token";
+const TOKEN_KEY = "swirrl_token";
 
 interface AuthContextValue {
   token: string | null;
@@ -55,8 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(null);
       setUser(null);
     };
-    window.addEventListener("ouro:unauthorized", handleUnauthorized);
-    return () => window.removeEventListener("ouro:unauthorized", handleUnauthorized);
+    window.addEventListener("swirrl:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("swirrl:unauthorized", handleUnauthorized);
   }, []);
 
   const login = useCallback((newToken: string, newUser: AuthUser) => {

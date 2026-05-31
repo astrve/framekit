@@ -46,11 +46,11 @@ build-pyinstaller/
 site/
 _build/
 
-# Framekit local state
-framekit.yaml
-.framekit_batch_queue.json
-.framekit_watch.pid
-.framekit_watch.lock
+# Swirrl local state
+swirrl.yaml
+.swirrl_batch_queue.json
+.swirrl_watch.pid
+.swirrl_watch.lock
 *.enc.backup
 *.enc.bak
 settings.json
@@ -100,5 +100,5 @@ desktop.ini
 
 #dev web-ui
 
-Branding Framekit/
+Branding Swirrl/
 node_modules/

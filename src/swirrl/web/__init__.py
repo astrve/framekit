@@ -1,0 +1,2 @@
+"""Swirrl web application package."""
+

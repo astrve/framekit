@@ -9,12 +9,12 @@ export function RunTimeline(props: {
           key={item.label}
           className={`rounded-md border p-3 text-sm ${
             item.failed
-              ? "border-rose-300 bg-rose-50 text-rose-800"
+              ? "border-destructive/40 bg-destructive/10 text-destructive"
               : item.done
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                ? "border-success/40 bg-success/10 text-success"
                 : item.active
-                  ? "border-blue-300 bg-blue-50 text-blue-800"
-                  : "border-border bg-background"
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground"
           }`}
         >
           {item.label}

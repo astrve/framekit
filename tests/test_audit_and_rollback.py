@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ouro.core import audit_log
-from ouro.core.runs.ledger import new_run_id, record_move
-from ouro.core.runs.rollback import rollback_run
+from swirrl.core import audit_log
+from swirrl.core.runs.ledger import new_run_id, record_move
+from swirrl.core.runs.rollback import rollback_run
 
 
 def test_audit_log_append_read_purge(tmp_path: Path, monkeypatch) -> None:
@@ -25,7 +25,7 @@ def test_audit_log_append_read_purge(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_rollback_run_reverts_recorded_move(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("ouro.core.runs.ledger.get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr("swirrl.core.runs.ledger.get_config_dir", lambda: tmp_path)
 
     src = tmp_path / "video.mkv"
     dst = tmp_path / "video.renamed.mkv"

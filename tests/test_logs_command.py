@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 
-from ouro.commands.logs import logs_command
+from swirrl.commands.logs import logs_command
 
 
 def test_logs_view_filters_level(tmp_path) -> None:
-    log_file = tmp_path / "ouro.log"
+    log_file = tmp_path / "swirrl.log"
     log_file.write_text(
         "\n".join(
             [
@@ -29,7 +29,7 @@ def test_logs_view_filters_level(tmp_path) -> None:
 
 
 def test_logs_analyze_prints_counts(tmp_path) -> None:
-    log_file = tmp_path / "ouro.log"
+    log_file = tmp_path / "swirrl.log"
     log_file.write_text(
         "\n".join(
             [
@@ -51,8 +51,8 @@ def test_logs_analyze_prints_counts(tmp_path) -> None:
 
 
 def test_logs_clear_all_truncates_current_file(tmp_path) -> None:
-    log_file = tmp_path / "ouro.log"
-    rotated = tmp_path / "ouro.log.1"
+    log_file = tmp_path / "swirrl.log"
+    rotated = tmp_path / "swirrl.log.1"
     log_file.write_text("line\n", encoding="utf-8")
     rotated.write_text("old\n", encoding="utf-8")
 
@@ -67,13 +67,13 @@ def test_logs_clear_all_truncates_current_file(tmp_path) -> None:
 
 
 def test_logs_rotate_creates_timestamped_copy(tmp_path) -> None:
-    log_file = tmp_path / "ouro.log"
+    log_file = tmp_path / "swirrl.log"
     log_file.write_text("hello\n", encoding="utf-8")
 
     runner = CliRunner()
     result = runner.invoke(logs_command, ["rotate", "--path", str(log_file)])
     assert result.exit_code == 0
-    rotated_files = list(tmp_path.glob("ouro.log.*"))
+    rotated_files = list(tmp_path.glob("swirrl.log.*"))
     assert rotated_files
     assert log_file.read_text(encoding="utf-8") == ""
 
@@ -89,13 +89,13 @@ def test_logs_view_rejects_unsupported_path(tmp_path) -> None:
 
 
 def test_logs_rotate_requires_primary_log_file(tmp_path) -> None:
-    rotated = tmp_path / "ouro.log.1"
+    rotated = tmp_path / "swirrl.log.1"
     rotated.write_text("line\n", encoding="utf-8")
 
     runner = CliRunner()
     result = runner.invoke(logs_command, ["rotate", "--path", str(rotated)])
     assert result.exit_code != 0
-    assert "primary ouro.log" in result.output
+    assert "primary swirrl.log" in result.output
 
 
 def test_logs_view_accepts_module_session_log_path(tmp_path) -> None:

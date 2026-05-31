@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ouro.commands.nfo import _open_folder
+from swirrl.commands.nfo import _open_folder
 
 
 class TestNFOCommandInjection:
@@ -27,7 +27,7 @@ class TestNFOCommandInjection:
 
         with (
             patch("sys.platform", "darwin"),
-            patch("ouro.commands.nfo.popen_safe") as mock_popen,
+            patch("swirrl.commands.nfo.popen_safe") as mock_popen,
         ):
             _open_folder(malicious_file)
             mock_popen.assert_called_once()
@@ -45,7 +45,7 @@ class TestNFOCommandInjection:
 
         with (
             patch("sys.platform", "linux"),
-            patch("ouro.commands.nfo.popen_safe") as mock_popen,
+            patch("swirrl.commands.nfo.popen_safe") as mock_popen,
         ):
             _open_folder(malicious_file)
             mock_popen.assert_called_once()
@@ -80,7 +80,7 @@ class TestNFOCommandInjection:
                 _open_folder(test_file)
                 mock_startfile.assert_called_once()
         else:
-            with patch("ouro.commands.nfo.popen_safe") as mock_popen:
+            with patch("swirrl.commands.nfo.popen_safe") as mock_popen:
                 _open_folder(test_file)
                 mock_popen.assert_called_once()
                 call_args = mock_popen.call_args[0][0]
@@ -127,7 +127,7 @@ class TestNFOCommandInjection:
                         # os.startfile is safe with special chars
                         mock_startfile.assert_called_once()
                 else:
-                    with patch("ouro.commands.nfo.popen_safe") as mock_popen:
+                    with patch("swirrl.commands.nfo.popen_safe") as mock_popen:
                         _open_folder(special_file)
                         mock_popen.assert_called_once()
             except OSError:
@@ -157,7 +157,7 @@ class TestNFOCommandInjection:
         test_file = tmp_path / "test.nfo"
         test_file.write_text("test")
 
-        with patch("ouro.commands.nfo.validate_directory_path") as mock_validate:
+        with patch("swirrl.commands.nfo.validate_directory_path") as mock_validate:
             mock_validate.return_value = test_file.parent
 
             if platform.system() == "Windows":
@@ -166,7 +166,7 @@ class TestNFOCommandInjection:
                     assert mock_validate.called
                     assert mock_open.called
             else:
-                with patch("ouro.commands.nfo.popen_safe") as mock_popen:
+                with patch("swirrl.commands.nfo.popen_safe") as mock_popen:
                     _open_folder(test_file)
                     assert mock_validate.called
                     assert mock_popen.called
@@ -181,7 +181,7 @@ class TestSubprocessArgumentSafety:
         test_file = tmp_path / "test.nfo"
         test_file.write_text("test")
 
-        with patch("ouro.commands.nfo.popen_safe") as mock_popen:
+        with patch("swirrl.commands.nfo.popen_safe") as mock_popen:
             _open_folder(test_file)
 
             call_args = mock_popen.call_args
@@ -197,7 +197,7 @@ class TestSubprocessArgumentSafety:
         test_file.write_text("test")
 
         with (
-            patch("ouro.commands.nfo.popen_safe") as mock_popen,
+            patch("swirrl.commands.nfo.popen_safe") as mock_popen,
             patch("sys.platform", "linux"),
         ):
             _open_folder(test_file)

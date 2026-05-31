@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  Film,
   HardDriveDownload,
   Layers,
   LoaderCircle,
@@ -21,12 +22,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   getDoctorPayload,
   getServiceStatus,
+  getSettingsSummary,
   getSeedboxList,
   getUploadHistory,
   getUploadState,
   getUploadTrackers,
   getVaultStatus,
   listModuleJobs,
+  listReleases,
 } from "@/lib/api/endpoints";
 import type { ModuleJob } from "@/lib/api/schemas";
 import { cn } from "@/lib/utils";
@@ -93,6 +96,15 @@ function isToday(dateStr: string | null | undefined): boolean {
   return new Date(dateStr).toDateString() === new Date().toDateString();
 }
 
+function getOriginLink(moduleName: string, jobId: string) {
+  const cls = "shrink-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline";
+  if (moduleName === "pipeline") return <Link to="/pipeline" className={cls}>↗</Link>;
+  if (moduleName === "batch") return <Link to="/batch" className={cls}>↗</Link>;
+  if (moduleName === "upload") return <Link to="/upload" className={cls}>↗</Link>;
+  if (moduleName === "seedbox") return <Link to="/seedbox" className={cls}>↗</Link>;
+  return <Link to="/jobs/$jobId" params={{ jobId }} className={cls}>→</Link>;
+}
+
 // ── quick actions config ─────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
@@ -146,6 +158,19 @@ export function HomePage() {
     staleTime: 60_000,
   });
 
+  const releasesQuery = useQuery({
+    queryKey: ["dashboard-releases"],
+    queryFn: () => listReleases(5),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+
+  const settingsQuery = useQuery({
+    queryKey: ["dashboard-settings"],
+    queryFn: getSettingsSummary,
+    staleTime: 120_000,
+  });
+
   const serviceQuery = useQuery({
     queryKey: ["dashboard-service"],
     queryFn: getServiceStatus,
@@ -196,6 +221,11 @@ export function HomePage() {
     if (uploadStateQuery.isError) {
       warnings.push({ msg: "Upload service unavailable", to: "/upload" });
     }
+    const setupSettings = settingsQuery.data?.settings as Record<string, unknown> | undefined;
+    const setupCompleted = setupSettings?.["setup"]?.["completed" as never] ?? setupSettings?.["setup.completed"];
+    if (settingsQuery.data && !setupCompleted) {
+      warnings.push({ msg: "Setup not complete — configure tools, trackers, and seedbox", to: "/settings-setup" });
+    }
 
     return { errCount, warnCount, okCount, uploadEnabled, warnings };
   }, [
@@ -205,6 +235,7 @@ export function HomePage() {
     trackersQuery.data,
     vaultQuery.data,
     vaultQuery.isError,
+    settingsQuery.data,
   ]);
 
   // ── jobs-derived state (updates every 3s) ───────────────────────────────
@@ -244,60 +275,32 @@ export function HomePage() {
   // ── render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <img src="/logo-wordmark.svg" alt="Ouro" className="h-5 w-auto" />
-            <p className="text-sm text-muted-foreground">Self-hosted media workflow automation</p>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Operator console · Run, monitor, recover
-            </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Link
-                to="/pipeline"
-                className="interactive-lift rounded-md border border-border bg-secondary/55 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/35"
-              >
-                Run Pipeline
-              </Link>
-              <Link
-                to="/jobs"
-                className="interactive-lift rounded-md border border-border bg-secondary/55 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/35"
-              >
-                Open Jobs
-              </Link>
-              <Link
-                to="/events"
-                className="interactive-lift rounded-md border border-border bg-secondary/55 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/35"
-              >
-                Service Events
-              </Link>
-            </div>
+    <div className="space-y-6 ops-reveal">
+      <section className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Self-hosted media workflow automation</p>
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">Active</span>
+            <span className="font-bold tabular-nums">{activeJobs.length}</span>
           </div>
-          <div className="grid min-w-[230px] gap-2 rounded-xl border border-border bg-secondary/30 p-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Active jobs</span>
-              <span className="font-semibold tabular-nums">{activeJobs.length}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Service</span>
-              <Badge variant={serviceState === "running" ? "success" : "secondary"}>
-                {serviceState === "running" ? "running" : serviceState}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Today</span>
-              <span className="font-semibold tabular-nums">
-                {completedToday + failedToday}
-              </span>
-            </div>
+          <div className="h-4 w-px bg-border" />
+          <Badge variant={serviceState === "running" ? "success" : "secondary"}>
+            {serviceState === "running" ? "running" : serviceState}
+          </Badge>
+          <div className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">Today</span>
+            <span className="font-bold tabular-nums">{completedToday + failedToday}</span>
           </div>
         </div>
       </section>
 
       {/* ── Warnings banner ──────────────────────────────────────────────── */}
       {warnings.length > 0 && (
-        <div className="rounded-xl border border-accent/50 bg-accent/10 px-4 py-3 space-y-2">
+        <div className="surface-enter rounded-xl border border-accent/50 bg-accent/10 px-4 py-3 space-y-2">
           <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-accent">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             Attention required
@@ -317,9 +320,9 @@ export function HomePage() {
       )}
 
       {/* ── Active operations ────────────────────────────────────────────── */}
-      <section>
+      <section className="surface-enter">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <h2 className="flex items-center gap-2 text-base font-semibold">
             <Activity className="h-4 w-4 text-muted-foreground" />
             Active Operations
             {activeJobs.length > 0 && (
@@ -370,17 +373,13 @@ export function HomePage() {
                   <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
                     {formatDuration(job.started_at, null)}
                   </span>
-                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                  <Badge
+                    variant={job.status === "running" ? "info" : "warning"}
+                    className="shrink-0 text-[10px]"
+                  >
                     {job.status}
                   </Badge>
-                  {/* TODO H3/H4: link to originating page for pipeline/batch/upload/seedbox */}
-                  <Link
-                    to="/jobs/$jobId"
-                    params={{ jobId: job.id }}
-                    className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                  >
-                    →
-                  </Link>
+                  {getOriginLink(getJobModule(job), job.id)}
                 </div>
               ))}
             </div>
@@ -389,7 +388,7 @@ export function HomePage() {
       </section>
 
       {/* ── Stat cards ───────────────────────────────────────────────────── */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="surface-enter grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {/* System Health */}
         <Card
           className={cn(
@@ -425,12 +424,12 @@ export function HomePage() {
                   </span>
                 )}
                 {warnCount > 0 && (
-                  <span className="text-sm font-semibold text-accent">
+                  <span className="text-sm font-semibold text-warning">
                     {warnCount} warning{warnCount > 1 ? "s" : ""}
                   </span>
                 )}
                 {errCount === 0 && warnCount === 0 && (
-                  <span className="text-sm font-semibold text-accent">
+                  <span className="text-sm font-semibold text-success">
                     All checks OK
                   </span>
                 )}
@@ -516,7 +515,7 @@ export function HomePage() {
         <Card
           className={cn(
             "border-border/60",
-            serviceQuery.data?.status === "running" && "border-accent/40",
+            serviceQuery.data?.status === "running" && "border-success/40",
           )}
         >
           <CardHeader className="px-4 pb-2 pt-4">
@@ -548,7 +547,7 @@ export function HomePage() {
               <div className="space-y-1.5">
                 <Badge variant="secondary">Stopped</Badge>
                 <p className="text-xs text-muted-foreground">
-                  Run <code className="font-mono">ouro serve</code>
+                  Run <code className="font-mono">swirrl serve</code>
                 </p>
               </div>
             )}
@@ -595,9 +594,9 @@ export function HomePage() {
       </section>
 
       {/* ── Recent results ───────────────────────────────────────────────── */}
-      <section>
+      <section className="surface-enter">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Recent Results</h2>
+          <h2 className="text-base font-semibold">Recent Results</h2>
           <Link
             to="/jobs"
             className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
@@ -639,7 +638,12 @@ export function HomePage() {
                   return (
                     <tr
                       key={job.id}
-                      className="group transition-colors hover:bg-secondary/40"
+                      className={cn(
+                        "group border-l-2 transition-colors hover:bg-secondary/40",
+                        job.status === "completed" ? "border-l-success" :
+                        job.status === "failed" ? "border-l-destructive" :
+                        "border-l-transparent",
+                      )}
                     >
                       {/* Module + path */}
                       <td className="px-4 py-2.5 max-w-[10rem] lg:max-w-[14rem]">
@@ -656,8 +660,8 @@ export function HomePage() {
                       <td className="px-4 py-2.5">
                         {job.status === "completed" ? (
                           <div className="flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-accent" />
-                            <span className="text-xs text-accent">done</span>
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+                            <span className="text-xs text-success">done</span>
                           </div>
                         ) : job.status === "failed" ? (
                           <div>
@@ -708,20 +712,69 @@ export function HomePage() {
         </div>
       </section>
 
+      {/* ── Recent releases ──────────────────────────────────────────────── */}
+      <section className="surface-enter">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold">Recent Releases</h2>
+          <Link to="/releases" className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+            View all →
+          </Link>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {releasesQuery.isLoading ? (
+            <p className="px-4 py-3 text-sm text-muted-foreground">Loading…</p>
+          ) : (releasesQuery.data?.releases ?? []).length === 0 ? (
+            <p className="px-4 py-3 text-sm text-muted-foreground">No releases yet. Run a pipeline job to start tracking.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <tbody>
+                {(releasesQuery.data?.releases ?? []).map((release) => (
+                  <tr key={release.id} className="border-b border-border/50 last:border-b-0">
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <Film className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <Link to="/releases" className="font-mono text-xs hover:underline truncate max-w-[18rem]">
+                          {release.folder_name}
+                        </Link>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Badge
+                        variant={
+                          release.status === "done" || release.status === "uploaded" ? "success" :
+                          release.status === "failed" ? "danger" :
+                          release.status === "processing" ? "warning" :
+                          "secondary"
+                        }
+                      >
+                        {release.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground text-right">
+                      {formatAge(release.updated_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
       {/* ── Quick actions ────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold">Quick Launch</h2>
+      <section className="surface-enter">
+        <h2 className="mb-3 text-base font-semibold">Quick Launch</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
           {QUICK_ACTIONS.map(({ icon: Icon, label, to }) => (
             <Link
               key={to}
               to={to}
-              className="interactive-lift flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-4 text-center transition-colors hover:border-primary/30 hover:bg-secondary/40"
+              className="group flex flex-col items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-5 text-center transition-all duration-150 hover:border-primary/60 hover:bg-secondary"
             >
-              <div className="rounded-lg border border-primary/20 bg-primary/10 p-2">
-                <Icon className="h-4 w-4 text-primary" />
+              <div className="rounded-lg bg-primary/15 p-2.5 transition-colors group-hover:bg-primary/25">
+                <Icon className="h-5 w-5 text-primary" />
               </div>
-              <span className="text-xs font-medium">{label}</span>
+              <span className="text-xs font-semibold">{label}</span>
             </Link>
           ))}
         </div>

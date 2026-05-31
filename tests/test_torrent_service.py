@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ouro.modules.torrent.service import TorrentBuildOptions, TorrentService, _auto_piece_length
+from swirrl.modules.torrent.service import TorrentBuildOptions, TorrentService, _auto_piece_length
 
 
 def test_torrent_service_dry_run_reports_output_without_writing(tmp_path):
@@ -78,7 +78,7 @@ def test_auto_piece_length_uses_tracker_thresholds():
 
 
 def test_torrent_announce_url_validation():
-    from ouro.modules.torrent.service import is_valid_announce_url
+    from swirrl.modules.torrent.service import is_valid_announce_url
 
     assert is_valid_announce_url("https://tracker.example/announce")
     assert is_valid_announce_url("udp://tracker.example:6969/announce")
@@ -87,7 +87,7 @@ def test_torrent_announce_url_validation():
 
 
 def test_torrent_payload_auto_ignores_sidecars(tmp_path):
-    from ouro.modules.torrent.payload import resolve_torrent_payload
+    from swirrl.modules.torrent.payload import resolve_torrent_payload
 
     (tmp_path / "Movie.2024.1080p.mkv").write_bytes(b"a")
     (tmp_path / "Movie.2024.1080p.nfo").write_text("nfo")
@@ -113,7 +113,7 @@ def test_torrent_payload_auto_detects_release_subfolder(tmp_path):
     (payload_dir / "Show.S01E02.mkv").write_bytes(b"b")
     (release / "Show.S01.nfo").write_text("nfo")
 
-    from ouro.modules.torrent.payload import resolve_torrent_payload
+    from swirrl.modules.torrent.payload import resolve_torrent_payload
 
     payload, warning = resolve_torrent_payload(release, content_mode="auto")
 
@@ -124,7 +124,7 @@ def test_torrent_payload_auto_detects_release_subfolder(tmp_path):
 
 
 def test_torrent_payload_auto_refuses_multiple_root_groups(tmp_path):
-    from ouro.modules.torrent.payload import resolve_torrent_payload
+    from swirrl.modules.torrent.payload import resolve_torrent_payload
 
     (tmp_path / "Movie.A.2024.mkv").write_bytes(b"a")
     (tmp_path / "Movie.B.2023.mkv").write_bytes(b"b")

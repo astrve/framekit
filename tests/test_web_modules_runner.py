@@ -9,24 +9,34 @@ from uuid import uuid4
 
 import pytest
 
-import ouro.web.modules as web_modules
-from ouro.web.modules import (
+import swirrl.web.modules as web_modules
+from swirrl.web.modules import (
     ModuleJob,
     RunModuleRequest,
     RunModuleResponse,
+    add_workflow_artifact,
     cancel_module_job,
+    cancel_workflow_session,
+    cancel_workflow_step,
+    create_workflow_session,
     enqueue_module_job,
+    execute_workflow_step,
     get_module_job,
+    get_workflow_session_detail,
+    list_workflow_artifacts,
+    list_workflow_sessions,
     rerun_module_job,
     run_module_command,
+    skip_workflow_step,
+    upsert_workflow_step_decisions,
 )
 
 
 def test_run_module_command_parses_json_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "ouro.web.modules.run_safe",
+        "swirrl.web.modules.run_safe",
         lambda *args, **kwargs: subprocess.CompletedProcess(
-            args=["python", "-m", "ouro", "doctor", "--json"],
+            args=["python", "-m", "swirrl", "doctor", "--json"],
             returncode=0,
             stdout='{"checks":[{"status":"ok"}]}',
             stderr="",
@@ -64,10 +74,10 @@ def test_run_module_command_blocks_destructive_without_confirmation() -> None:
 
 def test_enqueue_module_job_completes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "ouro.web.modules._run_module_command_cancellable",
+        "swirrl.web.modules._run_module_command_cancellable",
         lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=True,
-            argv=["python", "-m", "ouro", "doctor", "--json"],
+            argv=["python", "-m", "swirrl", "doctor", "--json"],
             returncode=0,
             stdout='{"checks":[]}',
             stderr="",
@@ -109,7 +119,7 @@ def test_cancel_module_job_marks_cancelled(monkeypatch: pytest.MonkeyPatch) -> N
             if cancel_event.is_set():
                 return RunModuleResponse(
                     ok=False,
-                    argv=["python", "-m", "ouro", "inspect"],
+                    argv=["python", "-m", "swirrl", "inspect"],
                     returncode=130,
                     stdout="",
                     stderr="Cancelled by user.",
@@ -117,13 +127,13 @@ def test_cancel_module_job_marks_cancelled(monkeypatch: pytest.MonkeyPatch) -> N
             time.sleep(0.01)
         return RunModuleResponse(
             ok=True,
-            argv=["python", "-m", "ouro", "inspect"],
+            argv=["python", "-m", "swirrl", "inspect"],
             returncode=0,
             stdout="done",
             stderr="",
         )
 
-    monkeypatch.setattr("ouro.web.modules._run_module_command_cancellable", fake_runner)
+    monkeypatch.setattr("swirrl.web.modules._run_module_command_cancellable", fake_runner)
 
     job = enqueue_module_job(
         RunModuleRequest(
@@ -151,10 +161,10 @@ def test_cancel_module_job_marks_cancelled(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_rerun_module_job_creates_new_job(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "ouro.web.modules._run_module_command_cancellable",
+        "swirrl.web.modules._run_module_command_cancellable",
         lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=True,
-            argv=["python", "-m", "ouro", "inspect"],
+            argv=["python", "-m", "swirrl", "inspect"],
             returncode=0,
             stdout="ok",
             stderr="",
@@ -332,7 +342,7 @@ def test_execute_job_timeout_requeues_same_job_id(
         "_run_module_command_cancellable",
         lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=False,
-            argv=["python", "-m", "ouro", "inspect"],
+            argv=["python", "-m", "swirrl", "inspect"],
             returncode=124,
             stdout="",
             stderr="Timed out after 5s.",
@@ -372,7 +382,7 @@ def test_execute_job_timeout_on_unsafe_apply_mode_fails(
         "_run_module_command_cancellable",
         lambda _request, *, job_id, cancel_event, on_output=None: RunModuleResponse(
             ok=False,
-            argv=["python", "-m", "ouro", "renamer"],
+            argv=["python", "-m", "swirrl", "renamer"],
             returncode=124,
             stdout="",
             stderr="Timed out after 5s.",
@@ -498,3 +508,250 @@ def test_jobs_db_additive_migration_from_legacy_schema(
     assert "paused" in columns
     assert "idx_web_module_jobs_claim" in indexes
     assert "idx_web_module_jobs_pending_unpaused" in indexes
+
+
+def test_workflow_tables_and_indexes_created(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _setup_isolated_jobs_db(monkeypatch, tmp_path)
+    with web_modules._db_connect() as conn:
+        sessions_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(workflow_sessions)").fetchall()
+        }
+        executions_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(workflow_executions)").fetchall()
+        }
+        sessions_indexes = {
+            row["name"] for row in conn.execute("PRAGMA index_list(workflow_sessions)").fetchall()
+        }
+        executions_indexes = {
+            row["name"] for row in conn.execute("PRAGMA index_list(workflow_executions)").fetchall()
+        }
+    assert "status" in sessions_columns
+    assert "stop_on_error" in sessions_columns
+    assert "input_json" in executions_columns
+    assert "command_preview" in executions_columns
+    assert "idx_workflow_sessions_status_updated" in sessions_indexes
+    assert "idx_workflow_executions_job_id" in executions_indexes
+
+
+def _make_release_dir(tmp_path, name: str = "Release.One") -> str:
+    release_dir = tmp_path / name
+    release_dir.mkdir(parents=True, exist_ok=True)
+    return str(release_dir)
+
+
+def _fake_pending_job(job_id: str, request: RunModuleRequest) -> ModuleJob:
+    return ModuleJob(
+        id=job_id,
+        status="pending",
+        created_at=datetime.now(UTC).isoformat(),
+        request=request,
+        attempts=0,
+        max_attempts=1,
+        retryable=False,
+    )
+
+
+def test_workflow_session_create_and_list(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _setup_isolated_jobs_db(monkeypatch, tmp_path)
+    path = _make_release_dir(tmp_path)
+    detail = create_workflow_session(path=path, modules=["renamer", "nfo"])
+
+    assert detail["session"]["status"] == "draft"
+    assert detail["session"]["stop_on_error"] is True
+    assert detail["steps"][0]["step_key"] == "renamer"
+    assert detail["steps"][0]["state"] == "ready"
+    assert detail["steps"][1]["state"] == "locked"
+
+    listed = list_workflow_sessions(limit=10)
+    assert any(item["id"] == detail["session"]["id"] for item in listed)
+
+
+def test_workflow_decisions_upsert_revision(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _setup_isolated_jobs_db(monkeypatch, tmp_path)
+    detail = create_workflow_session(path=_make_release_dir(tmp_path), modules=["renamer"])
+    session_id = detail["session"]["id"]
+
+    upsert_workflow_step_decisions(session_id, "renamer", {"remove_terms": ["x"]}, source="user")
+    updated = upsert_workflow_step_decisions(session_id, "renamer", {"remove_terms": ["x", "y"]}, source="user")
+
+    decision = updated["decisions"][0]
+    assert decision["decision_key"] == "remove_terms"
+    assert decision["revision"] == 2
+    assert decision["value"] == ["x", "y"]
+
+
+def test_workflow_execute_creates_execution_with_job_link(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _setup_isolated_jobs_db(monkeypatch, tmp_path)
+    detail = create_workflow_session(path=_make_release_dir(tmp_path), modules=["renamer"])
+    session_id = detail["session"]["id"]
+    captured: dict[str, str] = {}
+
+    def _enqueue(request: RunModuleRequest, *, origin=None, category=None, priority=0):  # noqa: ANN001
+        captured["origin"] = str(origin)
+        captured["module"] = request.module
+        captured["args_text"] = request.args_text
+        return _fake_pending_job("job-workflow-1", request)
+
+    monkeypatch.setattr(web_modules, "enqueue_module_job", _enqueue)
+
+    executed = execute_workflow_step(
+        session_id,
+        "renamer",
+        input_payload={"remove_terms": ["sample"]},
+        dry_run=True,
+        confirm_destructive=True,
+    )
+
+    execution = executed["executions"][0]
+    assert execution["job_id"] == "job-workflow-1"
+    assert execution["status"] == "queued"
+    assert execution["input"] == {"remove_terms": ["sample"]}
+    assert captured["origin"].startswith(f"workflow:{session_id}:renamer:")
+    assert captured["module"] == "renamer"
+
+
+def test_workflow_sync_failed_step_blocks_session(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _setup_isolated_jobs_db(monkeypatch, tmp_path)
+    detail = create_workflow_session(path=_make_release_dir(tmp_path), modules=["renamer", "nfo"])
+    session_id = detail["session"]["id"]
+
+    monkeypatch.setattr(
+        web_modules,
+        "enqueue_module_job",
+        lambda request, *, origin=None, category=None, priority=0: _fake_pending_job("job-fail-1", request),
+    )
+    execute_workflow_step(session_id, "renamer", dry_run=True, confirm_destructive=True)
+
+    failed_job = ModuleJob(
+        id="job-fail-1",
+        status="failed",
+        created_at=datetime.now(UTC).isoformat(),
+        started_at=datetime.now(UTC).isoformat(),
+        finished_at=datetime.now(UTC).isoformat(),
+        request=RunModuleRequest(
+            module="renamer",
+            args_text="C:/demo",
+            dry_run=True,
+            auto_yes=False,
+            confirm_destructive=True,
+        ),
+        result=RunModuleResponse(
+            ok=False,
+            argv=["python", "-m", "swirrl", "renamer"],
+            returncode=1,
+            stdout="",
+            stderr="failed",
+        ),
+        error="Command failed",
+        last_failure_kind="exit_nonzero",
+    )
+    monkeypatch.setattr(web_modules, "get_module_job", lambda job_id: failed_job if job_id == "job-fail-1" else None)
+
+    web_modules.sync_workflow_session_jobs(session_id)
+    synced = get_workflow_session_detail(session_id, sync_jobs=False)
+
+    assert synced["session"]["status"] == "blocked"
+    assert synced["steps"][0]["state"] == "failed"
+    assert synced["steps"][1]["state"] == "locked"
+    assert synced["executions"][0]["status"] == "failed"
+
+
+def test_workflow_stop_on_error_false_keeps_session_non_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    _setup_isolated_jobs_db(monkeypatch, tmp_path)
+    detail = create_workflow_session(
+        path=_make_release_dir(tmp_path),
+        modules=["renamer", "nfo"],
+        stop_on_error=False,
+    )
+    session_id = detail["session"]["id"]
+
+    monkeypatch.setattr(
+        web_modules,
+        "enqueue_module_job",
+        lambda request, *, origin=None, category=None, priority=0: _fake_pending_job("job-fail-2", request),
+    )
+    execute_workflow_step(session_id, "renamer", dry_run=True, confirm_destructive=True)
+
+    failed_job = ModuleJob(
+        id="job-fail-2",
+        status="failed",
+        created_at=datetime.now(UTC).isoformat(),
+        started_at=datetime.now(UTC).isoformat(),
+        finished_at=datetime.now(UTC).isoformat(),
+        request=RunModuleRequest(
+            module="renamer",
+            args_text="C:/demo",
+            dry_run=True,
+            auto_yes=False,
+            confirm_destructive=True,
+        ),
+        result=RunModuleResponse(
+            ok=False,
+            argv=["python", "-m", "swirrl", "renamer"],
+            returncode=1,
+            stdout="",
+            stderr="failed",
+        ),
+        error="Command failed",
+        last_failure_kind="exit_nonzero",
+    )
+    monkeypatch.setattr(web_modules, "get_module_job", lambda job_id: failed_job if job_id == "job-fail-2" else None)
+    web_modules.sync_workflow_session_jobs(session_id)
+    synced = get_workflow_session_detail(session_id, sync_jobs=False)
+
+    assert synced["session"]["status"] not in {"completed", "cancelled", "failed"}
+    assert synced["steps"][1]["state"] == "locked"
+    with pytest.raises(RuntimeError):
+        execute_workflow_step(session_id, "nfo", dry_run=True, confirm_destructive=True)
+
+
+def test_workflow_cancel_step_and_session(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _setup_isolated_jobs_db(monkeypatch, tmp_path)
+    detail = create_workflow_session(path=_make_release_dir(tmp_path), modules=["renamer", "nfo"])
+    session_id = detail["session"]["id"]
+
+    monkeypatch.setattr(
+        web_modules,
+        "enqueue_module_job",
+        lambda request, *, origin=None, category=None, priority=0: _fake_pending_job("job-cancel-1", request),
+    )
+    execute_workflow_step(session_id, "renamer", dry_run=True, confirm_destructive=True)
+
+    cancelled_ids: list[str] = []
+    monkeypatch.setattr(
+        web_modules,
+        "cancel_module_job",
+        lambda job_id: cancelled_ids.append(job_id) or None,
+    )
+    step_cancelled = cancel_workflow_step(session_id, "renamer")
+    assert "job-cancel-1" in cancelled_ids
+    assert step_cancelled["session"]["status"] == "blocked"
+    assert step_cancelled["steps"][0]["state"] == "cancelled"
+
+    session_cancelled = cancel_workflow_session(session_id)
+    assert session_cancelled["session"]["status"] == "cancelled"
+
+
+def test_workflow_skip_and_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _setup_isolated_jobs_db(monkeypatch, tmp_path)
+    detail = create_workflow_session(path=_make_release_dir(tmp_path), modules=["renamer", "nfo"])
+    session_id = detail["session"]["id"]
+
+    skipped = skip_workflow_step(session_id, "renamer")
+    assert skipped["steps"][0]["state"] == "skipped"
+    assert skipped["steps"][1]["state"] == "ready"
+
+    with_artifact = add_workflow_artifact(
+        session_id,
+        kind="log",
+        path="C:/logs/renamer.log",
+        exists=True,
+        metadata={"size": 123},
+        step_key="renamer",
+    )
+    assert len(with_artifact["artifacts"]) == 1
+    artifacts = list_workflow_artifacts(session_id)
+    assert artifacts[0]["kind"] == "log"

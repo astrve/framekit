@@ -4,7 +4,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from ouro.commands.main import cli
+from swirrl.commands.main import cli
 
 
 def test_pipeline_auto_mode_headless_smoke(tmp_path: Path) -> None:

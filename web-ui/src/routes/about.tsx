@@ -21,7 +21,7 @@ export function AboutPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Info className="h-4 w-4 text-primary" />
-            Ouro
+            Swirrl
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -29,7 +29,7 @@ export function AboutPage() {
             <tbody className="divide-y divide-border">
               <tr>
                 <td className="py-2 pr-6 text-muted-foreground font-medium w-40">Application</td>
-                <td className="py-2 font-semibold">Ouro</td>
+                <td className="py-2 font-semibold">Swirrl</td>
               </tr>
               <tr>
                 <td className="py-2 pr-6 text-muted-foreground font-medium">Version</td>
@@ -67,7 +67,7 @@ export function AboutPage() {
           <CardTitle className="text-sm font-semibold">License</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-1">
-          <p>Ouro is proprietary software.</p>
+          <p>Swirrl is proprietary software.</p>
           <p>Unauthorized distribution or modification is prohibited.</p>
         </CardContent>
       </Card>

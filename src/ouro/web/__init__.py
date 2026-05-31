@@ -1,2 +1,0 @@
-"""Ouro web application package."""
-

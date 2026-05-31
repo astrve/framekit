@@ -4,7 +4,7 @@ import json
 from threading import Thread
 from time import sleep
 
-from ouro.core.service.events import (
+from swirrl.core.service.events import (
     emit_service_event,
     list_service_events_recent,
     wait_for_service_events,
@@ -50,7 +50,7 @@ def test_wait_for_service_events_returns_new_events() -> None:
 
 
 def test_service_events_persisted_history_and_fallback(monkeypatch, tmp_path) -> None:
-    import ouro.core.service.events as service_events
+    import swirrl.core.service.events as service_events
 
     history_path = tmp_path / "events.ndjson"
     monkeypatch.setattr(service_events, "_service_events_path", lambda: history_path)

@@ -12,7 +12,7 @@ Do not publish working exploit details before a fix is available.
 
 ## Secret Handling
 
-Ouro must not require secrets in committed files.
+Swirrl must not require secrets in committed files.
 
 Sensitive values belong in the encrypted vault or environment variables:
 
@@ -22,7 +22,7 @@ Sensitive values belong in the encrypted vault or environment variables:
 - torrent client credentials
 - image host API keys
 
-`ouro.yaml` is intentionally ignored because it may contain local secrets when vault storage is disabled.
+`swirrl.yaml` is intentionally ignored because it may contain local secrets when vault storage is disabled.
 
 ## Local Checks
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ouro.modules.nfo.logo_registry import NfoLogoRecord, NfoLogoRegistry
+from swirrl.modules.nfo.logo_registry import NfoLogoRecord, NfoLogoRegistry
 
 
 def test_logo_registry_roundtrip(tmp_path: Path):

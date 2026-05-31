@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ouro.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
-from ouro.modules.cleanmkv.planner import build_remux_plan
-from ouro.modules.cleanmkv.tracks import track_reference_key, track_reference_label
+from swirrl.core.models.cleanmkv import CleanPreset, MkvFileScan, TrackInfo
+from swirrl.modules.cleanmkv.planner import build_remux_plan
+from swirrl.modules.cleanmkv.tracks import track_reference_key, track_reference_label
 
 
 def _audio(

@@ -42,7 +42,7 @@ test("home and doctor screens render with mocked API", async ({ page }) => {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        name: "ouro",
+        name: "swirrl",
         version: "2.0.0",
         python_version: "3.12.0",
       }),

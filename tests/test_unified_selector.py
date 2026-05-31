@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`ouro.ui.unified_selector` (ADR-0004).
+"""Unit tests for :mod:`swirrl.ui.unified_selector` (ADR-0004).
 
 Covers:
 
@@ -22,9 +22,9 @@ from typing import Any
 
 import pytest
 
-from ouro.core.exceptions import HeadlessAmbiguityError
-from ouro.ui import unified_selector as us_module
-from ouro.ui.unified_selector import (
+from swirrl.core.exceptions import HeadlessAmbiguityError
+from swirrl.ui import unified_selector as us_module
+from swirrl.ui.unified_selector import (
     SelectionItem,
     SelectionResult,
     UnifiedSelector,
@@ -335,3 +335,96 @@ def test_unified_selector_requires_keyword_args() -> None:
         # Positional invocation must fail; the contract is keyword-only so
         # call sites cannot drift into ambiguous ordering across selectors.
         UnifiedSelector("Pick", [SelectionItem(value="a", label="A")])  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# File-based checkpoint mechanism (Phase 5b)
+# ---------------------------------------------------------------------------
+
+
+def test_file_checkpoint_select_returns_chosen_value(tmp_path: Path) -> None:
+    """_file_checkpoint_select writes pending.json and returns value from response.json."""
+    import json
+    import threading
+    import time
+
+    from swirrl.ui.unified_selector import SelectorOption, _file_checkpoint_select
+
+    chk_dir = tmp_path / "chk"
+    chk_dir.mkdir()
+
+    options = [
+        SelectorOption(value="alpha", label="Alpha", hint="first"),
+        SelectorOption(value="beta", label="Beta", hint="second"),
+        SelectorOption(value="gamma", label="Gamma", hint="third"),
+    ]
+
+    result: list[object] = []
+
+    def _call() -> None:
+        val = _file_checkpoint_select("Pick one", options, chk_dir)
+        result.append(val)
+
+    t = threading.Thread(target=_call, daemon=True)
+    t.start()
+
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if (chk_dir / "pending.json").exists():
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail("pending.json never written")
+
+    pending = json.loads((chk_dir / "pending.json").read_text())
+    assert pending["type"] == "select_one"
+    assert pending["title"] == "Pick one"
+    assert len(pending["options"]) == 3
+    assert pending["options"][1]["label"] == "Beta"
+
+    # Simulate web UI selecting index 1
+    (chk_dir / "response.json").write_text(json.dumps({"selection_index": 1}))
+
+    t.join(timeout=5.0)
+    assert result == ["beta"]
+
+
+def test_select_one_uses_checkpoint_when_env_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """select_one() routes through file checkpoint when SWIRRL_JOB_CHECKPOINT_DIR is set."""
+    import json
+    import threading
+    import time
+
+    from swirrl.ui.unified_selector import SelectorOption, select_one
+
+    chk_dir = tmp_path / "envchk"
+    chk_dir.mkdir()
+    monkeypatch.setenv("SWIRRL_JOB_CHECKPOINT_DIR", str(chk_dir))
+
+    options = [
+        SelectorOption(value="first", label="First", hint=""),
+        SelectorOption(value="second", label="Second", hint=""),
+    ]
+    result: list[object] = []
+
+    def _call() -> None:
+        # stdin is not a tty in pytest → headless path → checkpoint intercept
+        val = select_one(title="Choose", entries=options)
+        result.append(val)
+
+    t = threading.Thread(target=_call, daemon=True)
+    t.start()
+
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if (chk_dir / "pending.json").exists():
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail("pending.json not created by select_one")
+
+    (chk_dir / "response.json").write_text(json.dumps({"selection_index": 0}))
+    t.join(timeout=5.0)
+    assert result == ["first"]

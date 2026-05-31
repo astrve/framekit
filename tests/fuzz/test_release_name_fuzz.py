@@ -1,4 +1,4 @@
-"""Property-based tests for :func:`ouro.core.naming.release_name_from_mkv_paths`.
+"""Property-based tests for :func:`swirrl.core.naming.release_name_from_mkv_paths`.
 
 Contract under test:
 
@@ -17,7 +17,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ouro.core.naming import release_name_from_mkv_paths
+from swirrl.core.naming import release_name_from_mkv_paths
 
 pytestmark = pytest.mark.benchmark  # treat as opt-in slow tests too
 

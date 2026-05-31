@@ -11,6 +11,7 @@ import {
   listModuleJobs,
 } from "@/lib/api/endpoints";
 import type { ModuleJob } from "@/lib/api/schemas";
+import { Toggle } from "@/components/ui/toggle";
 
 const POLL_INTERVAL = 2000;
 const LIVE_FEED_LIMIT = 10;
@@ -52,7 +53,7 @@ function StatusPill({ status }: { status: ModuleJob["status"] }) {
 
 function JobEntry({ job }: { job: ModuleJob }) {
   const req = job.request as { module?: string; args_text?: string } | undefined;
-  const cmd = `$ ouro ${req?.module ?? ""}${req?.args_text ? " " + req.args_text : ""}`.trim();
+  const cmd = `$ swirrl ${req?.module ?? ""}${req?.args_text ? " " + req.args_text : ""}`.trim();
   const stdout = job.live_stdout ?? job.result?.stdout ?? "";
   const stderr = job.live_stderr ?? job.result?.stderr ?? "";
 
@@ -243,7 +244,7 @@ export function CliPage() {
               letterSpacing: "0.06em",
             }}
           >
-            ouro — cli
+            swirrl — cli
           </span>
           {feedJobs.length > 0 && !isRunning ? (
             <button
@@ -395,24 +396,8 @@ export function CliPage() {
 
           {/* Toggles row */}
           <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: CREAM_MUTED, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={dryRun}
-                onChange={(e) => setDryRun(e.target.checked)}
-                style={{ accentColor: CREAM_PROMPT }}
-              />
-              Dry-run
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: CREAM_MUTED, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={allowDestructive}
-                onChange={(e) => setAllowDestructive(e.target.checked)}
-                style={{ accentColor: CREAM_PROMPT }}
-              />
-              Allow file changes
-            </label>
+            <Toggle checked={dryRun} onChange={setDryRun} label="Dry-run" />
+            <Toggle checked={allowDestructive} onChange={setAllowDestructive} label="Allow file changes" />
             {createJob.isError && (
               <span style={{ fontSize: 11, color: "#b04040" }}>
                 Error: {String(createJob.error)}

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
-const TOKEN_KEY = "ouro_token";
+const TOKEN_KEY = "swirrl_token";
 
 export class ApiError extends Error {
   public readonly status: number;
@@ -16,7 +16,7 @@ export class ApiError extends Error {
 }
 
 export function resolveApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_OURO_API_BASE_URL;
+  const configured = import.meta.env.VITE_SWIRRL_API_BASE_URL;
   if (typeof configured === "string" && configured.trim().length > 0) {
     return configured.trimEnd().replace(/\/+$/, "");
   }
@@ -48,7 +48,7 @@ export async function fetchValidated<TSchema extends z.ZodTypeAny>(
       const body = await response.text();
       if (response.status === 401 && !path.startsWith("/api/v1/auth/")) {
         localStorage.removeItem(TOKEN_KEY);
-        window.dispatchEvent(new CustomEvent("ouro:unauthorized"));
+        window.dispatchEvent(new CustomEvent("swirrl:unauthorized"));
       }
       throw new ApiError(`API request failed for ${path}`, response.status, body);
     }

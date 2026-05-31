@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`ouro.core.subprocess_safe`.
+"""Unit tests for :mod:`swirrl.core.subprocess_safe`.
 
 These tests cover the safety contract documented in ADR-0006: full-path
 resolution, mandatory timeout, secret redaction, and the typed error
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from ouro.core import subprocess_safe
-from ouro.core.subprocess_safe import (
+from swirrl.core import subprocess_safe
+from swirrl.core.subprocess_safe import (
     MissingToolError,
     SafeSubprocessError,
     _redact_argv,

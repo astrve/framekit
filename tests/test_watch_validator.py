@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`ouro.modules.watch.validator`.
+"""Unit tests for :mod:`swirrl.modules.watch.validator`.
 
 The validator exposes pure functions plus one ``is_stable`` method that
 polls ``Path.stat().st_size``. We monkeypatch :func:`time.sleep` to keep
@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from ouro.modules.watch import validator as validator_module
-from ouro.modules.watch.models import ValidationConfig
-from ouro.modules.watch.validator import FileValidator
+from swirrl.modules.watch import validator as validator_module
+from swirrl.modules.watch.models import ValidationConfig
+from swirrl.modules.watch.validator import FileValidator
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/client";
-import { createIntakeSource, deleteIntakeSource, getAuthStatus, listIntakeSources } from "@/lib/api/endpoints";
+import { createIntakeSource, deleteIntakeSource, getAuthStatus, listIntakeSources, submitIntakeRelease } from "@/lib/api/endpoints";
 import { useAuth } from "@/lib/auth";
 import type { IntakeSource } from "@/lib/api/schemas";
 
@@ -81,6 +81,18 @@ export function IntakePage() {
       void qc.invalidateQueries({ queryKey: ["intake-sources"] });
       setConfirmDelete((current) => (current === sourceId ? null : current));
     },
+  });
+
+  const [testSource, setTestSource] = useState("");
+  const [testPath, setTestPath] = useState("");
+  const [testPreset, setTestPreset] = useState("");
+  const submitMutation = useMutation({
+    mutationFn: () =>
+      submitIntakeRelease({
+        source: testSource,
+        path: testPath.trim(),
+        preset: testPreset.trim() ? testPreset.trim() : null,
+      }),
   });
 
   const createError = useMemo(() => {
@@ -229,6 +241,71 @@ export function IntakePage() {
             disabled={!newName.trim() || !newSourceId.trim() || createMutation.isPending}
           >
             Create source
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Plus className="h-4 w-4 text-primary" />
+            Test submit a release
+          </CardTitle>
+          <CardDescription>
+            Manually trigger the intake pipeline for a path under an allowed root — same flow downloaders use.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Source</label>
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                value={testSource}
+                onChange={(e) => setTestSource(e.target.value)}
+              >
+                <option value="">— Select source —</option>
+                {sources.map((source) => (
+                  <option key={source.source_id} value={source.source_id}>{source.source_id}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Release path</label>
+              <Input value={testPath} onChange={(e) => setTestPath(e.target.value)} placeholder="/media/incoming/My.Release" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Preset (optional)</label>
+              <Input value={testPreset} onChange={(e) => setTestPreset(e.target.value)} placeholder="override preset" />
+            </div>
+          </div>
+          {submitMutation.isError ? (
+            <p className="text-xs text-destructive">{extractApiMessage(submitMutation.error)}</p>
+          ) : null}
+          {submitMutation.data ? (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs space-y-1">
+              <p>
+                <Badge variant={submitMutation.data.accepted ? "success" : "warning"}>
+                  {submitMutation.data.accepted ? "Accepted" : "Rejected"}
+                </Badge>
+                {submitMutation.data.dedup_hit ? <span className="ml-2 text-muted-foreground">dedup hit</span> : null}
+              </p>
+              {submitMutation.data.job_id ? (
+                <p>
+                  Job:{" "}
+                  <Link to="/jobs/$jobId" params={{ jobId: submitMutation.data.job_id }} className="text-primary hover:underline font-mono">
+                    {submitMutation.data.job_id}
+                  </Link>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <Button
+            size="sm"
+            onClick={() => submitMutation.mutate()}
+            disabled={!testSource.trim() || !testPath.trim() || submitMutation.isPending}
+          >
+            {submitMutation.isPending ? "Submitting…" : "Submit release"}
           </Button>
         </CardContent>
       </Card>

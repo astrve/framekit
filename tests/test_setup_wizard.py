@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from ouro.commands.setup import (
+from swirrl.commands.setup import (
     SetupCancelled,
     _choose_interface_language,
     _choose_metadata_language,
@@ -32,8 +32,8 @@ class TestSetupWizardNavigation:
         with pytest.raises(SetupCancelled):
             raise SetupCancelled()
 
-    @patch("ouro.commands.setup.choose_yes_no")
-    @patch("ouro.commands.setup.print_module_banner")
+    @patch("swirrl.commands.setup.choose_yes_no")
+    @patch("swirrl.commands.setup.print_module_banner")
     def test_wizard_cancellation_at_start(
         self, mock_banner: Mock, mock_choose: Mock, temp_settings_store
     ):
@@ -45,8 +45,8 @@ class TestSetupWizardNavigation:
         assert result == 0  # Should exit gracefully
         mock_banner.assert_called_once_with("Setup")
 
-    @patch("ouro.commands.setup.choose_yes_no")
-    @patch("ouro.commands.setup.print_module_banner")
+    @patch("swirrl.commands.setup.choose_yes_no")
+    @patch("swirrl.commands.setup.print_module_banner")
     def test_wizard_skip_all_steps(self, mock_banner: Mock, mock_choose: Mock, temp_settings_store):
         """Skip every optional step and save at the end.
 
@@ -67,8 +67,8 @@ class TestSetupWizardNavigation:
 class TestInterfaceLanguageSelection:
     """Test interface language selection."""
 
-    @patch("ouro.commands.setup.choose_option")
-    @patch("ouro.commands.setup.set_locale")
+    @patch("swirrl.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.set_locale")
     def test_choose_interface_language_english(self, mock_set_locale: Mock, mock_choose: Mock):
         """Test selecting English as interface language."""
         mock_choose.return_value = "en"
@@ -78,8 +78,8 @@ class TestInterfaceLanguageSelection:
         assert result == "en"
         mock_set_locale.assert_called_once_with("en")
 
-    @patch("ouro.commands.setup.choose_option")
-    @patch("ouro.commands.setup.set_locale")
+    @patch("swirrl.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.set_locale")
     def test_choose_interface_language_french(self, mock_set_locale: Mock, mock_choose: Mock):
         """Test selecting French as interface language."""
         mock_choose.return_value = "fr"
@@ -89,7 +89,7 @@ class TestInterfaceLanguageSelection:
         assert result == "fr"
         mock_set_locale.assert_called_once_with("fr")
 
-    @patch("ouro.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.choose_option")
     def test_choose_interface_language_cancelled(self, mock_choose: Mock):
         """Test cancelling interface language selection."""
         mock_choose.return_value = None
@@ -101,7 +101,7 @@ class TestInterfaceLanguageSelection:
 class TestMetadataLanguageSelection:
     """Test metadata language selection."""
 
-    @patch("ouro.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.choose_option")
     def test_choose_metadata_language_standard(self, mock_choose: Mock):
         """Test selecting a standard metadata language."""
         mock_choose.return_value = "en-US"
@@ -110,7 +110,7 @@ class TestMetadataLanguageSelection:
 
         assert result == "en-US"
 
-    @patch("ouro.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.choose_option")
     def test_choose_metadata_language_cancelled(self, mock_choose: Mock):
         """Test cancelling metadata language selection."""
         mock_choose.return_value = None
@@ -118,8 +118,8 @@ class TestMetadataLanguageSelection:
         with pytest.raises(SetupCancelled):
             _choose_metadata_language("en-US")
 
-    @patch("ouro.commands.setup.console")
-    @patch("ouro.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.console")
+    @patch("swirrl.commands.setup.choose_option")
     def test_choose_metadata_language_custom(self, mock_choose: Mock, mock_console: Mock):
         """Test selecting custom metadata language."""
         mock_choose.side_effect = ["custom", "de-DE"]
@@ -129,7 +129,7 @@ class TestMetadataLanguageSelection:
 
         assert result == "de-DE"
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_custom_language_valid(self, mock_console: Mock):
         """Test prompting for valid custom language."""
         mock_console.input.return_value = "ja-JP"
@@ -138,7 +138,7 @@ class TestMetadataLanguageSelection:
 
         assert result == "ja-JP"
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_custom_language_quit(self, mock_console: Mock):
         """Test quitting custom language prompt."""
         mock_console.input.return_value = "quit"
@@ -146,7 +146,7 @@ class TestMetadataLanguageSelection:
         with pytest.raises(SetupCancelled):
             _prompt_custom_language("en-US")
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_custom_language_back(self, mock_console: Mock):
         """Test going back from custom language prompt."""
         mock_console.input.return_value = "back"
@@ -155,8 +155,8 @@ class TestMetadataLanguageSelection:
 
         assert result is None
 
-    @patch("ouro.commands.setup.console")
-    @patch("ouro.commands.setup.print_error")
+    @patch("swirrl.commands.setup.console")
+    @patch("swirrl.commands.setup.print_error")
     def test_prompt_custom_language_invalid_format(self, mock_error: Mock, mock_console: Mock):
         """Test invalid locale format handling."""
         mock_console.input.side_effect = ["invalid!", "en-US"]
@@ -170,7 +170,7 @@ class TestMetadataLanguageSelection:
 class TestWorkspacePathSelection:
     """Test workspace path selection."""
 
-    @patch("ouro.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.choose_option")
     def test_choose_workspace_path_appdata(self, mock_choose: Mock, tmp_path: Path):
         """Test selecting AppData workspace path."""
         mock_choose.return_value = "appdata"
@@ -181,7 +181,7 @@ class TestWorkspacePathSelection:
 
         assert result == str(appdata_path)
 
-    @patch("ouro.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.choose_option")
     def test_choose_workspace_path_project(self, mock_choose: Mock, tmp_path: Path):
         """Test selecting project workspace path."""
         mock_choose.return_value = "project"
@@ -192,8 +192,8 @@ class TestWorkspacePathSelection:
 
         assert result == str(project_path)
 
-    @patch("ouro.commands.setup.console")
-    @patch("ouro.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.console")
+    @patch("swirrl.commands.setup.choose_option")
     def test_choose_workspace_path_custom(
         self, mock_choose: Mock, mock_console: Mock, tmp_path: Path
     ):
@@ -208,7 +208,7 @@ class TestWorkspacePathSelection:
 
         assert result == custom_path
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_custom_path_valid(self, mock_console: Mock):
         """Test prompting for valid custom path."""
         mock_console.input.return_value = r"E:\Releases\NFO"
@@ -217,7 +217,7 @@ class TestWorkspacePathSelection:
 
         assert result == r"E:\Releases\NFO"
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_custom_path_with_quotes(self, mock_console: Mock):
         """Test custom path with quotes stripped."""
         mock_console.input.return_value = r'"E:\My Folder\NFO"'
@@ -226,7 +226,7 @@ class TestWorkspacePathSelection:
 
         assert result == r"E:\My Folder\NFO"
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_custom_path_quit(self, mock_console: Mock):
         """Test quitting custom path prompt."""
         mock_console.input.return_value = "quit"
@@ -234,7 +234,7 @@ class TestWorkspacePathSelection:
         with pytest.raises(SetupCancelled):
             _prompt_custom_path("NFO", "")
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_custom_path_back(self, mock_console: Mock):
         """Test going back from custom path prompt."""
         mock_console.input.return_value = "back"
@@ -247,9 +247,9 @@ class TestWorkspacePathSelection:
 class TestSettingsStorageSelection:
     """Test settings storage path selection."""
 
-    @patch("ouro.commands.setup.console")
-    @patch("ouro.commands.setup.choose_option")
-    @patch("ouro.commands.setup.choose_yes_no")
+    @patch("swirrl.commands.setup.console")
+    @patch("swirrl.commands.setup.choose_option")
+    @patch("swirrl.commands.setup.choose_yes_no")
     def test_run_storage_step_custom_folder(
         self,
         mock_yes_no: Mock,
@@ -259,7 +259,7 @@ class TestSettingsStorageSelection:
         monkeypatch,
     ):
         """Custom storage folder persists a global settings path."""
-        from ouro.core import paths
+        from swirrl.core import paths
 
         workspace = tmp_path / "workspace"
         config_dir = tmp_path / "config"
@@ -267,7 +267,7 @@ class TestSettingsStorageSelection:
         custom_dir = tmp_path / "portable-config"
         workspace.mkdir()
         monkeypatch.chdir(workspace)
-        monkeypatch.delenv("OURO_CONFIG", raising=False)
+        monkeypatch.delenv("SWIRRL_CONFIG", raising=False)
         monkeypatch.setattr(paths, "user_config_dir", lambda *_args: str(config_dir))
         monkeypatch.setattr(paths, "user_cache_dir", lambda *_args: str(cache_dir))
         mock_yes_no.return_value = True
@@ -276,7 +276,7 @@ class TestSettingsStorageSelection:
 
         store = _run_storage_step()
 
-        expected = custom_dir / "ouro.yaml"
+        expected = custom_dir / "swirrl.yaml"
         assert store.path == expected
         assert (config_dir / "settings-path.txt").read_text(encoding="utf-8") == str(
             expected.resolve()
@@ -286,9 +286,9 @@ class TestSettingsStorageSelection:
 class TestTMDbTokenPrompt:
     """Test TMDb token prompting."""
 
-    @patch("ouro.commands.setup.console")
-    @patch("ouro.commands.setup.normalize_secret_input")
-    @patch("ouro.commands.setup.looks_like_tmdb_read_access_token")
+    @patch("swirrl.commands.setup.console")
+    @patch("swirrl.commands.setup.normalize_secret_input")
+    @patch("swirrl.commands.setup.looks_like_tmdb_read_access_token")
     def test_prompt_tmdb_token_valid(
         self, mock_looks_like: Mock, mock_normalize: Mock, mock_console: Mock
     ):
@@ -302,7 +302,7 @@ class TestTMDbTokenPrompt:
 
         assert result == token
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_tmdb_token_quit(self, mock_console: Mock):
         """Test quitting TMDb token prompt."""
         mock_console.input.return_value = "quit"
@@ -310,7 +310,7 @@ class TestTMDbTokenPrompt:
         with pytest.raises(SetupCancelled):
             _prompt_tmdb_token("")
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_tmdb_token_back(self, mock_console: Mock):
         """Test going back from TMDb token prompt."""
         mock_console.input.return_value = "back"
@@ -319,7 +319,7 @@ class TestTMDbTokenPrompt:
 
         assert result is None
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_tmdb_token_skip_with_existing(self, mock_console: Mock):
         """Test skipping token prompt when token exists."""
         existing_token = "existing_token"
@@ -329,7 +329,7 @@ class TestTMDbTokenPrompt:
 
         assert result == existing_token
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_tmdb_token_skip_without_existing(self, mock_console: Mock):
         """Test skipping token prompt without existing token."""
         mock_console.input.return_value = "skip"
@@ -338,7 +338,7 @@ class TestTMDbTokenPrompt:
 
         assert result == ""
 
-    @patch("ouro.commands.setup.console")
+    @patch("swirrl.commands.setup.console")
     def test_prompt_tmdb_token_clear(self, mock_console: Mock):
         """Test clearing existing token."""
         mock_console.input.return_value = "clear"
@@ -347,10 +347,10 @@ class TestTMDbTokenPrompt:
 
         assert result == ""
 
-    @patch("ouro.commands.setup.console")
-    @patch("ouro.commands.setup.normalize_secret_input")
-    @patch("ouro.commands.setup.looks_like_tmdb_read_access_token")
-    @patch("ouro.commands.setup.print_error")
+    @patch("swirrl.commands.setup.console")
+    @patch("swirrl.commands.setup.normalize_secret_input")
+    @patch("swirrl.commands.setup.looks_like_tmdb_read_access_token")
+    @patch("swirrl.commands.setup.print_error")
     def test_prompt_tmdb_token_non_token_rejected(
         self,
         mock_error: Mock,
@@ -374,9 +374,9 @@ class TestTMDbTokenPrompt:
 class TestWizardIntegration:
     """Test full wizard integration scenarios."""
 
-    @patch("ouro.commands.setup.choose_yes_no")
-    @patch("ouro.commands.setup.print_module_banner")
-    @patch("ouro.commands.setup._ensure_default_folders_exist")
+    @patch("swirrl.commands.setup.choose_yes_no")
+    @patch("swirrl.commands.setup.print_module_banner")
+    @patch("swirrl.commands.setup._ensure_default_folders_exist")
     def test_wizard_minimal_configuration(
         self, mock_ensure: Mock, mock_banner: Mock, mock_choose: Mock, temp_settings_store
     ):
@@ -389,8 +389,8 @@ class TestWizardIntegration:
         assert result == 0
         mock_ensure.assert_called_once()
 
-    @patch("ouro.commands.setup.choose_yes_no")
-    @patch("ouro.commands.setup.print_module_banner")
+    @patch("swirrl.commands.setup.choose_yes_no")
+    @patch("swirrl.commands.setup.print_module_banner")
     def test_wizard_decline_save(self, mock_banner: Mock, mock_choose: Mock, temp_settings_store):
         """Test declining to save configuration."""
         mock_choose.side_effect = [False] * 10

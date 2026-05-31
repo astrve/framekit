@@ -41,7 +41,23 @@ import {
   ServiceStatusSchema,
   SettingsProfilesSchema,
   RunsListSchema,
+  ReleasesListSchema,
+  ReleaseSchema,
+  ReleaseOperationsListSchema,
+  WorkflowArtifactsListSchema,
+  WorkflowSessionDetailSchema,
+  WorkflowSessionsListSchema,
+  WatchRulesListSchema,
   type RunsList,
+  type Release,
+  type ReleasesList,
+  type ReleaseOperationsList,
+  type WorkflowArtifactsList,
+  type WorkflowSessionDetail,
+  type WorkflowSessionsList,
+  type WatchRulesList,
+  type WatchRulePostActions,
+  type WatchRulePresetsByKind,
   type AliasList,
   type AuthLoginResponse,
   type AuthStatus,
@@ -79,6 +95,12 @@ import {
   type WatchServiceStop,
   type ServiceStatus,
   type SettingsProfiles,
+  PipelinePlanSchema,
+  type PipelinePlan,
+  PipelineInspectSchema,
+  type PipelineInspect,
+  JobCheckpointSchema,
+  type JobCheckpoint,
   IntakeSourceListSchema,
   IntakeReleaseResponseSchema,
   ServiceEventSchema,
@@ -118,6 +140,43 @@ export async function getModulesPresets(): Promise<ModulesPresets> {
 
 export async function getModulesResources(): Promise<ModulesResources> {
   return fetchValidated("/api/v1/modules/resources", ModulesResourcesSchema);
+}
+
+export async function getJobCheckpoint(jobId: string): Promise<JobCheckpoint> {
+  return fetchValidated(`/api/v1/jobs/${jobId}/checkpoint`, JobCheckpointSchema);
+}
+
+export async function respondJobCheckpoint(jobId: string, selectionIndex: number): Promise<void> {
+  await fetch(`${resolveApiBaseUrl()}/api/v1/jobs/${jobId}/checkpoint/respond`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ selection_index: selectionIndex }),
+  });
+}
+
+export async function getPipelineInspect(payload: {
+  path: string;
+  remove_terms: string[];
+  nfo_locale: string;
+}): Promise<PipelineInspect> {
+  return fetchValidated("/api/v1/pipeline/inspect", PipelineInspectSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getPipelinePlan(payload: {
+  path: string;
+  modules: string[];
+  remove_terms: string[];
+  nfo_locale: string;
+}): Promise<PipelinePlan> {
+  return fetchValidated("/api/v1/pipeline/plan", PipelinePlanSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getSettingsSummary(): Promise<SettingsSummary> {
@@ -175,6 +234,20 @@ export async function getUploadTrackerInfo(name: string): Promise<UploadTrackerI
   return fetchValidated(`/api/v1/upload/tracker/${encodeURIComponent(name)}`, UploadTrackerInfoSchema);
 }
 
+export async function setUploadTrackerEnabled(name: string, enabled: boolean): Promise<UploadTrackers> {
+  return fetchValidated(`/api/v1/upload/tracker/${encodeURIComponent(name)}/enabled`, UploadTrackersSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export async function removeUploadTracker(name: string): Promise<UploadTrackers> {
+  return fetchValidated(`/api/v1/upload/tracker/${encodeURIComponent(name)}`, UploadTrackersSchema, {
+    method: "DELETE",
+  });
+}
+
 export async function getUploadState(): Promise<UploadState> {
   return fetchValidated("/api/v1/upload/state", UploadStateSchema);
 }
@@ -225,6 +298,7 @@ export async function createModuleJob(payload: {
   dry_run: boolean;
   auto_yes: boolean;
   confirm_destructive: boolean;
+  checkpoint_enabled?: boolean;
 }): Promise<ModuleJob> {
   return fetchValidated(
     "/api/v1/modules/jobs",
@@ -799,7 +873,7 @@ export async function streamServiceEvents(params: {
   onEvent: (event: ServiceEvent) => void;
   lastEventId?: string | null;
 }): Promise<void> {
-  const token = localStorage.getItem("ouro_token");
+  const token = localStorage.getItem("swirrl_token");
   const headers: Record<string, string> = {
     Accept: "text/event-stream",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -815,8 +889,8 @@ export async function streamServiceEvents(params: {
   if (!response.ok) {
     const body = await response.text();
     if (response.status === 401) {
-      localStorage.removeItem("ouro_token");
-      window.dispatchEvent(new CustomEvent("ouro:unauthorized"));
+      localStorage.removeItem("swirrl_token");
+      window.dispatchEvent(new CustomEvent("swirrl:unauthorized"));
     }
     throw new ApiError("API request failed for /api/v1/events/stream", response.status, body);
   }
@@ -848,4 +922,184 @@ export async function streamServiceEvents(params: {
       }
     }
   }
+}
+
+export async function getWatchRules(): Promise<WatchRulesList> {
+  return fetchValidated("/api/v1/watch/rules", WatchRulesListSchema);
+}
+
+export async function addWatchRule(payload: {
+  path: string;
+  preset?: string;
+  enabled?: boolean;
+  pattern?: string;
+  kind_routing?: string;
+  presets_by_kind?: Partial<WatchRulePresetsByKind>;
+  post_actions?: Partial<WatchRulePostActions>;
+}): Promise<WatchRulesList> {
+  return fetchValidated("/api/v1/watch/rules", WatchRulesListSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function patchWatchRule(ruleId: string, payload: {
+  path?: string;
+  preset?: string;
+  enabled?: boolean;
+  pattern?: string;
+  kind_routing?: string;
+  presets_by_kind?: Partial<WatchRulePresetsByKind>;
+  post_actions?: Partial<WatchRulePostActions>;
+}): Promise<WatchRulesList> {
+  return fetchValidated(`/api/v1/watch/rules/${ruleId}`, WatchRulesListSchema, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteWatchRule(ruleId: string): Promise<WatchRulesList> {
+  return fetchValidated(`/api/v1/watch/rules/${ruleId}`, WatchRulesListSchema, {
+    method: "DELETE",
+  });
+}
+
+export async function listReleases(limit = 20): Promise<ReleasesList> {
+  return fetchValidated(`/api/v1/releases?limit=${limit}`, ReleasesListSchema);
+}
+
+export async function getRelease(releaseId: string): Promise<Release> {
+  return fetchValidated(`/api/v1/releases/${releaseId}`, ReleaseSchema);
+}
+
+export async function getReleaseOperations(releaseId: string): Promise<ReleaseOperationsList> {
+  return fetchValidated(`/api/v1/releases/${releaseId}/operations`, ReleaseOperationsListSchema);
+}
+
+export async function createWorkflowSession(payload: {
+  release_id?: string | null;
+  path?: string | null;
+  modules?: string[] | null;
+  mode?: "interactive" | "auto" | "batch_interactive" | "batch_auto";
+  stop_on_error?: boolean;
+  context?: Record<string, unknown>;
+  created_by?: string | null;
+}): Promise<WorkflowSessionDetail> {
+  return fetchValidated("/api/v1/workflow/sessions", WorkflowSessionDetailSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listWorkflowSessions(params?: {
+  release_id?: string;
+  status?: string;
+  limit?: number;
+}): Promise<WorkflowSessionsList> {
+  const query = new URLSearchParams();
+  if (params?.release_id) query.set("release_id", params.release_id);
+  if (params?.status) query.set("status", params.status);
+  if (params?.limit) query.set("limit", String(params.limit));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return fetchValidated(`/api/v1/workflow/sessions${suffix}`, WorkflowSessionsListSchema);
+}
+
+export async function getWorkflowSession(sessionId: string): Promise<WorkflowSessionDetail> {
+  return fetchValidated(`/api/v1/workflow/sessions/${sessionId}`, WorkflowSessionDetailSchema);
+}
+
+export async function upsertWorkflowStepDecisions(
+  sessionId: string,
+  stepKey: string,
+  payload: {
+    decisions: Record<string, unknown>;
+    source?: string;
+  },
+): Promise<WorkflowSessionDetail> {
+  return fetchValidated(
+    `/api/v1/workflow/sessions/${sessionId}/steps/${stepKey}/decisions`,
+    WorkflowSessionDetailSchema,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function executeWorkflowStep(
+  sessionId: string,
+  stepKey: string,
+  payload?: {
+    input?: Record<string, unknown>;
+    args_text?: string;
+    command_preview?: string | null;
+    module?: string | null;
+    dry_run?: boolean;
+    auto_yes?: boolean;
+    confirm_destructive?: boolean;
+  },
+): Promise<WorkflowSessionDetail> {
+  return fetchValidated(
+    `/api/v1/workflow/sessions/${sessionId}/steps/${stepKey}/execute`,
+    WorkflowSessionDetailSchema,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+  );
+}
+
+export async function skipWorkflowStep(sessionId: string, stepKey: string): Promise<WorkflowSessionDetail> {
+  return fetchValidated(
+    `/api/v1/workflow/sessions/${sessionId}/steps/${stepKey}/skip`,
+    WorkflowSessionDetailSchema,
+    { method: "POST" },
+  );
+}
+
+export async function cancelWorkflowStep(sessionId: string, stepKey: string): Promise<WorkflowSessionDetail> {
+  return fetchValidated(
+    `/api/v1/workflow/sessions/${sessionId}/steps/${stepKey}/cancel`,
+    WorkflowSessionDetailSchema,
+    { method: "POST" },
+  );
+}
+
+export async function cancelWorkflowSession(sessionId: string): Promise<WorkflowSessionDetail> {
+  return fetchValidated(
+    `/api/v1/workflow/sessions/${sessionId}/cancel`,
+    WorkflowSessionDetailSchema,
+    { method: "POST" },
+  );
+}
+
+export async function addWorkflowArtifact(
+  sessionId: string,
+  payload: {
+    kind: string;
+    path: string;
+    exists?: boolean;
+    metadata?: Record<string, unknown>;
+    step_key?: string | null;
+    execution_id?: string | null;
+  },
+): Promise<WorkflowSessionDetail> {
+  return fetchValidated(
+    `/api/v1/workflow/sessions/${sessionId}/artifacts`,
+    WorkflowSessionDetailSchema,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function getWorkflowArtifacts(sessionId: string): Promise<WorkflowArtifactsList> {
+  return fetchValidated(`/api/v1/workflow/sessions/${sessionId}/artifacts`, WorkflowArtifactsListSchema);
 }

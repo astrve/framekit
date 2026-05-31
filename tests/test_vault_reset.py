@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from ouro.core.security.encryption import EncryptionManager
-from ouro.core.security.keyring import KeyStorage
-from ouro.core.security.vault import SecureVault, VaultKeyMismatchError
+from swirrl.core.security.encryption import EncryptionManager
+from swirrl.core.security.keyring import KeyStorage
+from swirrl.core.security.vault import SecureVault, VaultKeyMismatchError
 
 
 def _fresh_vault(tmp_path: Path) -> tuple[SecureVault, Path, KeyStorage]:
@@ -73,8 +73,8 @@ def test_reset_when_no_vault_returns_none(tmp_path: Path) -> None:
 
 def test_settings_helper_detects_mismatch_through_chain() -> None:
     """``_is_vault_mismatch`` follows ``__cause__`` / ``__context__``."""
-    from ouro.commands.settings import _is_vault_mismatch
-    from ouro.core.exceptions import SettingsError
+    from swirrl.commands.settings import _is_vault_mismatch
+    from swirrl.core.exceptions import SettingsError
 
     leaf = VaultKeyMismatchError("decryption failed")
     middle: Exception
@@ -94,6 +94,6 @@ def test_settings_helper_detects_mismatch_through_chain() -> None:
 
 def test_settings_helper_returns_false_for_unrelated_error() -> None:
     """Unrelated exceptions do not trigger the reset-vault hint."""
-    from ouro.commands.settings import _is_vault_mismatch
+    from swirrl.commands.settings import _is_vault_mismatch
 
     assert _is_vault_mismatch(ValueError("nope")) is False

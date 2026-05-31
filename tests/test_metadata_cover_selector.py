@@ -1,4 +1,4 @@
-from ouro.modules.metadata.cover_selector import choose_cover
+from swirrl.modules.metadata.cover_selector import choose_cover
 
 
 def test_choose_cover_returns_none_for_empty_list():

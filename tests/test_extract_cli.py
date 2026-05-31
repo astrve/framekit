@@ -24,7 +24,7 @@ src_path = Path(__file__).parent.parent / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from ouro.core.reporting import OperationReport  # noqa: E402
+from swirrl.core.reporting import OperationReport  # noqa: E402
 
 
 class TestExtractCLI:
@@ -55,7 +55,7 @@ class TestExtractCLI:
 
     def test_extract_command_group_exists(self, runner):
         """Test that extract command group exists."""
-        from ouro.commands.extract import extract_command
+        from swirrl.commands.extract import extract_command
 
         result = runner.invoke(extract_command, ["--help"])
         assert result.exit_code == 0
@@ -63,7 +63,7 @@ class TestExtractCLI:
 
     def test_extract_subtitle_command_exists(self, runner):
         """Test that subtitle subcommand exists."""
-        from ouro.commands.extract import extract_command
+        from swirrl.commands.extract import extract_command
 
         result = runner.invoke(extract_command, ["subtitle", "--help"])
         assert result.exit_code == 0
@@ -71,7 +71,7 @@ class TestExtractCLI:
 
     def test_extract_audio_command_exists(self, runner):
         """Test that audio subcommand exists."""
-        from ouro.commands.extract import extract_command
+        from swirrl.commands.extract import extract_command
 
         result = runner.invoke(extract_command, ["audio", "--help"])
         assert result.exit_code == 0
@@ -79,7 +79,7 @@ class TestExtractCLI:
 
     def test_extract_video_command_exists(self, runner):
         """Test that video subcommand exists."""
-        from ouro.commands.extract import extract_command
+        from swirrl.commands.extract import extract_command
 
         result = runner.invoke(extract_command, ["video", "--help"])
         assert result.exit_code == 0
@@ -87,7 +87,7 @@ class TestExtractCLI:
 
     def test_extract_video_short_help_flag(self, runner):
         """`-h` must resolve to help, not to `--height`."""
-        from ouro.commands.extract import extract_command
+        from swirrl.commands.extract import extract_command
 
         result = runner.invoke(extract_command, ["video", "-h"])
         assert result.exit_code == 0
@@ -95,13 +95,13 @@ class TestExtractCLI:
 
     def test_extract_subtitle_single_file(self, runner, mock_service, tmp_path):
         """Test extracting subtitle from single file."""
-        from ouro.commands.extract import extract_subtitle_command
+        from swirrl.commands.extract import extract_subtitle_command
 
         # Create test file
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_subtitle_command,
                 [str(test_file), "--format", "srt"],
@@ -112,12 +112,12 @@ class TestExtractCLI:
 
     def test_extract_subtitle_with_language_filter(self, runner, mock_service, tmp_path):
         """Test extracting subtitle with language filter."""
-        from ouro.commands.extract import extract_subtitle_command
+        from swirrl.commands.extract import extract_subtitle_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_subtitle_command,
                 [str(test_file), "--language", "eng", "--format", "srt"],
@@ -131,14 +131,14 @@ class TestExtractCLI:
 
     def test_extract_subtitle_batch(self, runner, mock_service, tmp_path):
         """Test batch subtitle extraction."""
-        from ouro.commands.extract import extract_subtitle_command
+        from swirrl.commands.extract import extract_subtitle_command
 
         # Create multiple test files
         test_files = [tmp_path / f"test{i}.mkv" for i in range(3)]
         for f in test_files:
             f.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_subtitle_command,
                 [str(f) for f in test_files] + ["--format", "srt"],
@@ -152,12 +152,12 @@ class TestExtractCLI:
 
     def test_extract_audio_single_file(self, runner, mock_service, tmp_path):
         """Test extracting audio from single file."""
-        from ouro.commands.extract import extract_audio_command
+        from swirrl.commands.extract import extract_audio_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_audio_command,
                 [str(test_file), "--format", "aac"],
@@ -168,12 +168,12 @@ class TestExtractCLI:
 
     def test_extract_audio_with_bitrate(self, runner, mock_service, tmp_path):
         """Test extracting audio with bitrate option."""
-        from ouro.commands.extract import extract_audio_command
+        from swirrl.commands.extract import extract_audio_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_audio_command,
                 [str(test_file), "--format", "mp3", "--bitrate", "320k"],
@@ -186,12 +186,12 @@ class TestExtractCLI:
 
     def test_extract_audio_with_normalization(self, runner, mock_service, tmp_path):
         """Test extracting audio with normalization."""
-        from ouro.commands.extract import extract_audio_command
+        from swirrl.commands.extract import extract_audio_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_audio_command,
                 [str(test_file), "--normalize"],
@@ -204,12 +204,12 @@ class TestExtractCLI:
 
     def test_extract_video_single_file(self, runner, mock_service, tmp_path):
         """Test extracting video from single file."""
-        from ouro.commands.extract import extract_video_command
+        from swirrl.commands.extract import extract_video_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_video_command,
                 [str(test_file), "--codec", "h264"],
@@ -220,12 +220,12 @@ class TestExtractCLI:
 
     def test_extract_video_with_crf(self, runner, mock_service, tmp_path):
         """Test extracting video with CRF quality setting."""
-        from ouro.commands.extract import extract_video_command
+        from swirrl.commands.extract import extract_video_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_video_command,
                 [str(test_file), "--codec", "h265", "--crf", "28"],
@@ -238,12 +238,12 @@ class TestExtractCLI:
 
     def test_extract_video_with_resolution(self, runner, mock_service, tmp_path):
         """Test extracting video with resolution change."""
-        from ouro.commands.extract import extract_video_command
+        from swirrl.commands.extract import extract_video_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_video_command,
                 [str(test_file), "--width", "1920", "--height", "1080"],
@@ -257,14 +257,14 @@ class TestExtractCLI:
 
     def test_extract_with_output_directory(self, runner, mock_service, tmp_path):
         """Test extraction with custom output directory."""
-        from ouro.commands.extract import extract_subtitle_command
+        from swirrl.commands.extract import extract_subtitle_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
         output_dir = tmp_path / "extracted"
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_subtitle_command,
                 [str(test_file), "--output", str(output_dir), "--format", "srt"],
@@ -277,9 +277,9 @@ class TestExtractCLI:
 
     def test_extract_nonexistent_file(self, runner, mock_service):
         """Test handling of nonexistent file."""
-        from ouro.commands.extract import extract_subtitle_command
+        from swirrl.commands.extract import extract_subtitle_command
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_subtitle_command,
                 ["/nonexistent/file.mkv", "--format", "srt"],
@@ -290,12 +290,12 @@ class TestExtractCLI:
 
     def test_extract_all_flag(self, runner, mock_service, tmp_path):
         """Test --all flag to extract all tracks."""
-        from ouro.commands.extract import extract_subtitle_command
+        from swirrl.commands.extract import extract_subtitle_command
 
         test_file = tmp_path / "test.mkv"
         test_file.touch()
 
-        with patch("ouro.commands.extract.ExtractionService", return_value=mock_service):
+        with patch("swirrl.commands.extract.ExtractionService", return_value=mock_service):
             result = runner.invoke(
                 extract_subtitle_command,
                 [str(test_file), "--all"],
@@ -308,7 +308,7 @@ class TestExtractCLI:
 
     def test_format_choices_validation(self, runner):
         """Test that format choices are validated."""
-        from ouro.commands.extract import extract_subtitle_command
+        from swirrl.commands.extract import extract_subtitle_command
 
         result = runner.invoke(
             extract_subtitle_command,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ouro.core.models.metadata import EpisodeMetadata, MetadataCandidate, SeasonMetadata
-from ouro.modules.metadata.providers.tvdb_models import (
+from swirrl.core.models.metadata import EpisodeMetadata, MetadataCandidate, SeasonMetadata
+from swirrl.modules.metadata.providers.tvdb_models import (
     TVDBArtwork,
     TVDBEpisode,
     TVDBSearchResult,

@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
-from ouro.core.http import (
+from swirrl.core.http import (
     HttpAuthError,
     HttpClient,
     HttpClientConfig,

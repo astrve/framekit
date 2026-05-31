@@ -1,4 +1,4 @@
-"""Property tests for :meth:`ouro.modules.extract.audio_extractor.AudioExtractor.validate_bitrate`.
+"""Property tests for :meth:`swirrl.modules.extract.audio_extractor.AudioExtractor.validate_bitrate`.
 
 Parser contract:
 
@@ -13,7 +13,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ouro.modules.extract.audio_extractor import AudioExtractor
+from swirrl.modules.extract.audio_extractor import AudioExtractor
 
 pytestmark = pytest.mark.benchmark
 

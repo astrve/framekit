@@ -1,0 +1,1 @@
+"""Bundled Swirrl locale catalogs."""

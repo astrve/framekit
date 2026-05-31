@@ -1,7 +1,7 @@
-site_name: Ouro
-site_url: https://astrve.github.io/ouro/
-repo_url: https://github.com/astrve/ouro
-repo_name: astrve/ouro
+site_name: Swirrl
+site_url: https://astrve.github.io/swirrl/
+repo_url: https://github.com/astrve/swirrl
+repo_name: astrve/swirrl
 
 theme:
   name: material

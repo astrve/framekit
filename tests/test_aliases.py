@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from ouro.core.aliases import (
+from swirrl.core.aliases import (
     AliasDefinition,
     AliasError,
     AliasManager,
     CircularReferenceError,
     InvalidAliasNameError,
 )
-from ouro.core.settings import SettingsStore
+from swirrl.core.settings import SettingsStore
 
 
 class TestAliasDefinition:
@@ -55,7 +55,7 @@ class TestAliasManager:
 
     def test_manager_initialization(self, tmp_path):
         """Test manager initialization with settings."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -64,7 +64,7 @@ class TestAliasManager:
 
     def test_list_all_aliases(self, tmp_path):
         """Test listing all aliases."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -75,7 +75,7 @@ class TestAliasManager:
 
     def test_list_user_aliases_only(self, tmp_path):
         """Test listing only user-defined aliases."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -88,7 +88,7 @@ class TestAliasManager:
 
     def test_list_builtin_aliases_only(self, tmp_path):
         """Test listing only builtin aliases."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -97,7 +97,7 @@ class TestAliasManager:
 
     def test_get_alias(self, tmp_path):
         """Test getting a specific alias."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -109,7 +109,7 @@ class TestAliasManager:
 
     def test_get_nonexistent_alias(self, tmp_path):
         """Test getting a nonexistent alias returns None."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -118,7 +118,7 @@ class TestAliasManager:
 
     def test_add_user_alias(self, tmp_path):
         """Test adding a user alias."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -133,7 +133,7 @@ class TestAliasManager:
 
     def test_add_alias_with_invalid_name(self, tmp_path):
         """Test adding an alias with invalid name raises error."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -145,7 +145,7 @@ class TestAliasManager:
 
     def test_add_alias_conflicts_with_builtin_command(self, tmp_path):
         """Test adding an alias that conflicts with builtin command."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -155,7 +155,7 @@ class TestAliasManager:
 
     def test_remove_user_alias(self, tmp_path):
         """Test removing a user alias."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -167,7 +167,7 @@ class TestAliasManager:
 
     def test_remove_builtin_alias_hides_it_persistently(self, tmp_path):
         """Test removing a builtin alias hides it from future loads."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -182,7 +182,7 @@ class TestAliasManager:
 
     def test_enable_removed_builtin_alias_restores_it(self, tmp_path):
         """Test enabling a removed builtin alias restores defaults."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -195,7 +195,7 @@ class TestAliasManager:
 
     def test_enable_alias(self, tmp_path):
         """Test enabling a disabled alias."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -211,7 +211,7 @@ class TestAliasManager:
 
     def test_disable_alias(self, tmp_path):
         """Test disabling an alias."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -223,7 +223,7 @@ class TestAliasManager:
 
     def test_resolve_simple_alias(self, tmp_path):
         """Test resolving a simple alias without parameters."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -233,7 +233,7 @@ class TestAliasManager:
 
     def test_resolve_alias_with_positional_params(self, tmp_path):
         """Test resolving alias with positional parameter substitution."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -248,7 +248,7 @@ class TestAliasManager:
 
     def test_resolve_alias_with_multiple_params(self, tmp_path):
         """Test resolving alias with multiple parameters."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -263,7 +263,7 @@ class TestAliasManager:
 
     def test_resolve_disabled_alias_raises_error(self, tmp_path):
         """Test resolving a disabled alias raises error."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -275,7 +275,7 @@ class TestAliasManager:
 
     def test_resolve_nonexistent_alias_raises_error(self, tmp_path):
         """Test resolving nonexistent alias raises error."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -284,7 +284,7 @@ class TestAliasManager:
 
     def test_circular_reference_detection(self, tmp_path):
         """Test circular reference detection."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -297,7 +297,7 @@ class TestAliasManager:
 
     def test_max_chain_depth_detection(self, tmp_path):
         """Test max chain depth detection."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -322,7 +322,7 @@ class TestAliasManager:
 
     def test_alias_chaining(self, tmp_path):
         """Test alias chaining (alias pointing to another alias)."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -335,7 +335,7 @@ class TestAliasManager:
 
     def test_parameter_substitution_with_missing_params(self, tmp_path):
         """Test parameter substitution with missing parameters."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -347,7 +347,7 @@ class TestAliasManager:
 
     def test_validate_alias_name(self, tmp_path):
         """Test alias name validation."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -364,7 +364,7 @@ class TestAliasManager:
 
     def test_conflict_detection_with_builtin_commands(self, tmp_path):
         """Test conflict detection with built-in commands."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -377,7 +377,7 @@ class TestAliasManager:
 
     def test_settings_persistence(self, tmp_path):
         """Test that aliases are persisted to settings."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -398,7 +398,7 @@ class TestAliasResolutionResult:
 
     def test_resolution_result_structure(self, tmp_path):
         """Test resolution result structure."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 
@@ -413,7 +413,7 @@ class TestAliasResolutionResult:
 
     def test_resolution_chain_tracking(self, tmp_path):
         """Test that resolution tracks the alias chain."""
-        settings_file = tmp_path / "ouro.yaml"
+        settings_file = tmp_path / "swirrl.yaml"
         store = SettingsStore(settings_file)
         manager = AliasManager(store)
 

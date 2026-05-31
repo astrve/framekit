@@ -1,6 +1,6 @@
-# Ouro Web UI
+# Swirrl Web UI
 
-Frontend SPA for local Ouro dashboard.
+Frontend SPA for local Swirrl dashboard.
 
 ## Stack
 
@@ -22,7 +22,7 @@ Frontend SPA for local Ouro dashboard.
 - Job cancellation from UI
 - Job history persisted in backend SQLite cache
 - Job list controls: limit, status filter, search, load-more
-- Dedicated job detail page (`/modules/:jobId`) with timeline + command copy
+- Dedicated job detail page (`/jobs/:jobId`) with timeline + command copy
 - Guided launchers for pipeline and batch argument building
 - Dedicated Settings/Setup page (`/settings-setup`)
 - Dedicated Seedbox core page (`/seedbox`)
@@ -51,5 +51,5 @@ Default API base URL: `http://127.0.0.1:8000`.
 Override:
 
 ```bash
-VITE_OURO_API_BASE_URL=http://127.0.0.1:9000
+VITE_SWIRRL_API_BASE_URL=http://127.0.0.1:9000
 ```

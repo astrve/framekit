@@ -1,106 +1,25 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Clock3, RotateCcw, Square } from "lucide-react";
+import { Clock3, Pause, Play, Square } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { InlineJobPanel } from "@/components/modules/inline-job-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { RunTimeline } from "@/components/modules/run-timeline";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/client";
 import {
   cancelModuleJob,
   clearModuleJobs,
-  getModuleJob,
   listModuleJobs,
-  rerunModuleJob,
+  pauseQueueJob,
+  resumeQueueJob,
 } from "@/lib/api/endpoints";
 import type { ModuleJob } from "@/lib/api/schemas";
-import { runTimeline } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 
 type JobStatusFilter = "all" | "pending" | "running" | "completed" | "failed" | "cancelled";
-
-function objectPayload(payload: unknown): Record<string, unknown> | null {
-  if (!payload || Array.isArray(payload) || typeof payload !== "object") {
-    return null;
-  }
-  return payload as Record<string, unknown>;
-}
-
-function renderStructuredPayload(payload: unknown) {
-  const obj = objectPayload(payload);
-  if (!obj) {
-    return null;
-  }
-
-  const checksRaw = obj["checks"];
-  const checks =
-    Array.isArray(checksRaw) && checksRaw.every((item) => typeof item === "object" && item !== null)
-      ? (checksRaw as Array<Record<string, unknown>>)
-      : [];
-
-  if (checks.length > 0) {
-    const ok = checks.filter((item) => item["status"] === "ok").length;
-    const warn = checks.filter((item) => item["status"] === "warn").length;
-    const err = checks.filter((item) => item["status"] === "err").length;
-    return (
-      <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="success">ok: {ok}</Badge>
-          <Badge variant="warning">warn: {warn}</Badge>
-          <Badge variant="danger">err: {err}</Badge>
-        </div>
-        <div className="space-y-2">
-          {checks.slice(0, 25).map((item, index) => (
-            <div
-              key={`${String(item["section"])}-${String(item["name"])}-${index}`}
-              className="grid gap-2 rounded-md border border-border p-3 md:grid-cols-[140px_1fr_auto]"
-            >
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                {String(item["section"] ?? "-")}
-              </p>
-              <p className="text-sm">
-                {String(item["name"] ?? "-")}: {String(item["detail"] ?? "-")}
-              </p>
-              <Badge
-                variant={
-                  item["status"] === "ok"
-                    ? "success"
-                    : item["status"] === "warn"
-                      ? "warning"
-                      : "danger"
-                }
-              >
-                {String(item["status"] ?? "unknown")}
-              </Badge>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      {Object.entries(obj)
-        .slice(0, 12)
-        .map(([key, value]) => (
-          <div key={key} className="rounded-md border border-border p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{key}</p>
-            <p className="mt-1 text-sm">
-              {typeof value === "string" ? value : JSON.stringify(value)}
-            </p>
-          </div>
-        ))}
-    </div>
-  );
-}
-
-function resultFromJob(job: ModuleJob | null | undefined) {
-  return job?.result ?? null;
-}
 
 function mutationErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -125,6 +44,7 @@ function mutationErrorMessage(error: unknown): string {
 export function ModulesPage() {
   const navigate = useNavigate();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [selectedModule, setSelectedModule] = useState<string>("pipeline");
   const [jobsLimit, setJobsLimit] = useState(20);
   const [statusFilter, setStatusFilter] = useState<JobStatusFilter>("all");
   const [searchText, setSearchText] = useState("");
@@ -138,49 +58,24 @@ export function ModulesPage() {
 
   const cancelJobMutation = useMutation({
     mutationFn: cancelModuleJob,
-    onSuccess: (job) => {
-      setSelectedJobId(job.id);
-      void jobStatusQuery.refetch();
-      void jobsQuery.refetch();
-    },
+    onSuccess: () => void jobsQuery.refetch(),
   });
-  const rerunJobMutation = useMutation({
-    mutationFn: rerunModuleJob,
-    onSuccess: (job) => {
-      setSelectedJobId(job.id);
-      void jobStatusQuery.refetch();
-      void jobsQuery.refetch();
-    },
+  const pauseJobMutation = useMutation({
+    mutationFn: pauseQueueJob,
+    onSuccess: () => void jobsQuery.refetch(),
+  });
+  const resumeJobMutation = useMutation({
+    mutationFn: resumeQueueJob,
+    onSuccess: () => void jobsQuery.refetch(),
   });
   const clearJobsMutation = useMutation({
     mutationFn: clearModuleJobs,
     onSuccess: () => {
       setConfirmClear(false);
       setSelectedJobId(null);
-      void jobStatusQuery.refetch();
       void jobsQuery.refetch();
     },
   });
-
-  const activeJobId = selectedJobId;
-  const jobStatusQuery = useQuery({
-    queryKey: ["module-job-status", activeJobId],
-    queryFn: () => getModuleJob(activeJobId as string),
-    enabled: Boolean(activeJobId),
-    refetchInterval: (query) => {
-      const status = (query.state.data as ModuleJob | undefined)?.status;
-      if (status === "pending" || status === "running") {
-        return 1500;
-      }
-      return false;
-    },
-  });
-
-  const selectedResult = resultFromJob(jobStatusQuery.data);
-  const structuredResult =
-    selectedResult?.parsed_kind === "json"
-      ? renderStructuredPayload(selectedResult.parsed_payload)
-      : null;
 
   const filteredJobs = useMemo(() => {
     const list = jobsQuery.data?.jobs ?? [];
@@ -201,7 +96,7 @@ export function ModulesPage() {
     });
   }, [jobsQuery.data?.jobs, searchText, statusFilter]);
 
-  const mutationError = cancelJobMutation.error ?? rerunJobMutation.error ?? clearJobsMutation.error;
+  const mutationError = cancelJobMutation.error ?? clearJobsMutation.error;
 
   return (
     <div className="space-y-6">
@@ -335,7 +230,7 @@ export function ModulesPage() {
                         <button
                           type="button"
                           className="text-left font-mono text-xs text-muted-foreground hover:text-foreground"
-                          onClick={() => { setSelectedJobId(job.id); }}
+                          onClick={() => { setSelectedJobId(job.id); setSelectedModule(String(job.request["module"] ?? "pipeline")); }}
                         >
                           {job.id}
                         </button>
@@ -381,14 +276,53 @@ export function ModulesPage() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => { void navigate({ to: "/jobs/$jobId", params: { jobId: job.id } }); }}
-                        >
-                          Details
-                        </Button>
+                        <div className="flex justify-end gap-1.5">
+                          {job.status === "pending" && (
+                            job.paused ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                title="Resume queued job"
+                                disabled={resumeJobMutation.isPending && resumeJobMutation.variables === job.id}
+                                onClick={(e) => { e.stopPropagation(); void resumeJobMutation.mutateAsync(job.id); }}
+                              >
+                                <Play className="h-3 w-3" />
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                title="Pause queued job (before it runs)"
+                                disabled={pauseJobMutation.isPending && pauseJobMutation.variables === job.id}
+                                onClick={(e) => { e.stopPropagation(); void pauseJobMutation.mutateAsync(job.id); }}
+                              >
+                                <Pause className="h-3 w-3" />
+                              </Button>
+                            )
+                          )}
+                          {(job.status === "pending" || job.status === "running") && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-destructive hover:text-destructive"
+                              disabled={cancelJobMutation.isPending && cancelJobMutation.variables === job.id}
+                              onClick={(e) => { e.stopPropagation(); void cancelJobMutation.mutateAsync(job.id); }}
+                            >
+                              <Square className="h-3 w-3" />
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { void navigate({ to: "/jobs/$jobId", params: { jobId: job.id } }); }}
+                          >
+                            Details
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -408,102 +342,15 @@ export function ModulesPage() {
         </CardContent>
       </Card>
 
-      {activeJobId ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Job</CardTitle>
-            <CardDescription>{activeJobId}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <RunTimeline items={runTimeline(jobStatusQuery.data)} />
-            <Badge
-              variant={
-                jobStatusQuery.data?.status === "completed"
-                  ? "success"
-                  : jobStatusQuery.data?.status === "failed" ||
-                      jobStatusQuery.data?.status === "cancelled"
-                    ? "danger"
-                    : "secondary"
-              }
-            >
-              {jobStatusQuery.data?.status ?? "pending"}
-            </Badge>
-            {jobStatusQuery.data ? (
-              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground font-mono">
-                <span>attempts {jobStatusQuery.data.attempts}/{jobStatusQuery.data.max_attempts}</span>
-                {jobStatusQuery.data.last_failure_kind ? <span>{jobStatusQuery.data.last_failure_kind}</span> : null}
-                {jobStatusQuery.data.next_retry_at ? (
-                  <span>retry {new Date(jobStatusQuery.data.next_retry_at).toLocaleString()}</span>
-                ) : null}
-              </div>
-            ) : null}
-            {jobStatusQuery.data &&
-            (jobStatusQuery.data.status === "pending" ||
-              jobStatusQuery.data.status === "running") ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => { void cancelJobMutation.mutateAsync(jobStatusQuery.data.id); }}
-                disabled={cancelJobMutation.isPending}
-              >
-                <Square className="mr-2 h-4 w-4" />
-                Cancel job
-              </Button>
-            ) : null}
-            {jobStatusQuery.data ? (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => { void navigate({ to: "/jobs/$jobId", params: { jobId: jobStatusQuery.data.id } }); }}
-                >
-                  View Details
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => { void rerunJobMutation.mutateAsync(jobStatusQuery.data.id); }}
-                  disabled={rerunJobMutation.isPending}
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Rerun
-                </Button>
-              </div>
-            ) : null}
-            {jobStatusQuery.data?.error ? (
-              <pre className="max-h-72 overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-                {jobStatusQuery.data.error}
-              </pre>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {selectedResult ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Badge variant={selectedResult.ok ? "success" : "danger"}>{selectedResult.ok ? "Completed" : "Failed"}</Badge>
-              Execution result
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {structuredResult ? (
-              <div className="rounded-md border border-border bg-card p-3">
-                <p className="mb-2 text-sm font-medium">Structured result</p>
-                {structuredResult}
-              </div>
-            ) : null}
-            <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
-              {selectedResult.stdout || "(no output)"}
-            </pre>
-            {selectedResult.stderr ? (
-              <pre className="max-h-72 overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-                {selectedResult.stderr}
-              </pre>
-            ) : null}
-          </CardContent>
-        </Card>
+      {selectedJobId ? (
+        <section className="surface-enter">
+          <h2 className="mb-2 text-sm font-semibold">Job Detail</h2>
+          <InlineJobPanel
+            jobId={selectedJobId}
+            moduleName={selectedModule}
+            onRerun={(j: ModuleJob) => { setSelectedJobId(j.id); void jobsQuery.refetch(); }}
+          />
+        </section>
       ) : null}
 
       {mutationError ? (

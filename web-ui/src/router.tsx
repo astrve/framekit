@@ -1,23 +1,5 @@
 import { createRoute, createRouter, lazyRouteComponent } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { rootRoute } from "@/routes/root";
-
-function LegacyModulesRedirect() {
-  useEffect(() => {
-    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    if (current.startsWith("/modules")) {
-      const next = `/jobs${current.slice("/modules".length)}`;
-      window.location.replace(next || "/jobs");
-      return;
-    }
-    if (current === "/configuration") {
-      window.location.replace("/jobs");
-      return;
-    }
-    window.location.replace("/jobs");
-  }, []);
-  return null;
-}
 
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -37,28 +19,10 @@ const modulesRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/modules"), "ModulesPage"),
 });
 
-const configurationRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/configuration",
-  component: LegacyModulesRedirect,
-});
-
 const moduleJobDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/jobs/$jobId",
   component: lazyRouteComponent(() => import("@/routes/module-job-detail"), "ModuleJobDetailPage"),
-});
-
-const legacyModulesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/modules",
-  component: LegacyModulesRedirect,
-});
-
-const legacyModuleJobDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/modules/$jobId",
-  component: LegacyModulesRedirect,
 });
 
 const settingsSetupRoute = createRoute({
@@ -91,11 +55,6 @@ const batchRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/batch"), "BatchPage"),
 });
 
-const moduleStudioRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/studio/$module",
-  component: lazyRouteComponent(() => import("@/routes/module-studio"), "ModuleStudioPage"),
-});
 
 const studiosRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -175,20 +134,22 @@ const rollbackRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/rollback"), "RollbackPage"),
 });
 
+const releasesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/releases",
+  component: lazyRouteComponent(() => import("@/routes/releases"), "ReleasesPage"),
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   doctorRoute,
   modulesRoute,
-  legacyModulesRoute,
-  configurationRoute,
   moduleJobDetailRoute,
-  legacyModuleJobDetailRoute,
   settingsSetupRoute,
   seedboxRoute,
   uploadRoute,
   pipelineRoute,
   batchRoute,
-  moduleStudioRoute,
   studiosRoute,
   dedicatedModuleRoute,
   logsRoute,
@@ -202,6 +163,7 @@ const routeTree = rootRoute.addChildren([
   webhooksRoute,
   intakeRoute,
   rollbackRoute,
+  releasesRoute,
 ]);
 
 export const router = createRouter({

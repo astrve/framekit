@@ -59,7 +59,15 @@ export function parseSubSteps(moduleName: string, stdout: string, stderr: string
       break;
     }
   }
-  return steps.slice(-10);
+  const trimmed = steps.slice(-10);
+  // Steps are emitted when each phase starts; earlier phases are completed.
+  for (let i = 0; i < trimmed.length - 1; i++) {
+    const step = trimmed[i];
+    if (step && step.status === "running") {
+      trimmed[i] = { label: step.label, status: "done" };
+    }
+  }
+  return trimmed;
 }
 
 export function runTimeline(job: ModuleJob | null | undefined): [

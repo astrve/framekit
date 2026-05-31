@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ouro.core.models.metadata import MetadataLookupRequest
-from ouro.modules.metadata.providers.trakt import TraktProvider
-from ouro.modules.metadata.rate_limiter import RateLimiter
+from swirrl.core.models.metadata import MetadataLookupRequest
+from swirrl.modules.metadata.providers.trakt import TraktProvider
+from swirrl.modules.metadata.rate_limiter import RateLimiter
 
 
 @pytest.fixture
@@ -194,7 +194,7 @@ class TestTraktMovieDetails:
 
     def test_fetch_movie_success(self, trakt_provider, mock_http_client):
         """Test successful movie details fetch."""
-        from ouro.core.models.metadata import MetadataCandidate
+        from swirrl.core.models.metadata import MetadataCandidate
 
         mock_http_client.request.return_value = MagicMock(
             status_code=200,
@@ -233,8 +233,8 @@ class TestTraktMovieDetails:
 
     def test_fetch_movie_not_found(self, trakt_provider, mock_http_client):
         """Test movie details fetch when not found."""
-        from ouro.core.http import HttpStatusError
-        from ouro.core.models.metadata import MetadataCandidate
+        from swirrl.core.http import HttpStatusError
+        from swirrl.core.models.metadata import MetadataCandidate
 
         mock_http_client.request.side_effect = HttpStatusError(
             "Not found",
@@ -259,7 +259,7 @@ class TestTraktEpisodeDetails:
 
     def test_fetch_episode_success(self, trakt_provider, mock_http_client):
         """Test successful episode details fetch."""
-        from ouro.core.models.metadata import MetadataCandidate
+        from swirrl.core.models.metadata import MetadataCandidate
 
         # Mock show details and episode details
         mock_http_client.request.side_effect = [
@@ -347,7 +347,7 @@ class TestTraktErrorHandling:
 
     def test_handle_401_unauthorized(self, trakt_provider, mock_http_client):
         """Test handling of 401 unauthorized error."""
-        from ouro.core.http import HttpAuthError
+        from swirrl.core.http import HttpAuthError
 
         mock_http_client.request.side_effect = HttpAuthError(
             "Unauthorized",
@@ -384,7 +384,7 @@ class TestTraktSeasonDetails:
 
     def test_fetch_season_success(self, trakt_provider, mock_http_client):
         """Test successful season details fetch."""
-        from ouro.core.models.metadata import MetadataCandidate
+        from swirrl.core.models.metadata import MetadataCandidate
 
         mock_http_client.request.return_value = MagicMock(
             status_code=200,

@@ -8,8 +8,8 @@ import json
 
 import pytest
 
-import ouro.core.security.keyring as keyring_module
-from ouro.core.security import KeyStorage, KeyStorageError
+import swirrl.core.security.keyring as keyring_module
+from swirrl.core.security import KeyStorage, KeyStorageError
 
 
 class TestKeyStorageFileMode:

@@ -1,8 +1,8 @@
-"""Unit tests for :mod:`ouro.modules.validate.service`.
+"""Unit tests for :mod:`swirrl.modules.validate.service`.
 
 Covers ``ValidationResult`` accounting, the ``ValidationService`` orchestrator
 and each ``_check_*`` private helper. Media-info dependent checks
-monkeypatch :func:`ouro.modules.validate.service.probe_media_file` so
+monkeypatch :func:`swirrl.modules.validate.service.probe_media_file` so
 the suite stays fast and never invokes ``mediainfo``/``ffprobe``.
 """
 
@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from ouro.modules.validate import service as validate_service
-from ouro.modules.validate.service import (
+from swirrl.modules.validate import service as validate_service
+from swirrl.modules.validate.service import (
     ValidationIssue,
     ValidationResult,
     ValidationRules,
